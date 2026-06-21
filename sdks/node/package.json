@@ -1,0 +1,20 @@
+{
+  "name": "llmux",
+  "version": "0.1.0",
+  "description": "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "homepage": "https://llmux.to",
+  "keywords": ["llm", "gateway", "openai", "anthropic", "gemini", "proxy", "litellm"],
+  "files": ["index.js", "index.d.ts", "bin/"],
+  "peerDependencies": {
+    "openai": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "openai": { "optional": true }
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}

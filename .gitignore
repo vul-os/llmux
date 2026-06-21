@@ -1,0 +1,26 @@
+# Build artifacts
+/dist/
+# Bundled binaries placed into language packages for local dev / CI release
+/sdks/python/llmux/bin/
+/sdks/node/bin/
+
+# Local config & logs
+llmux.json
+*.log
+usage.jsonl
+catalog.json
+
+# Python
+__pycache__/
+*.egg-info/
+.venv/
+/sdks/python/dist/
+/sdks/python/build/
+
+# Node
+node_modules/
+# NOTE: web/dist is intentionally committed — it is embedded into the Go binary
+# via go:embed, so `go build` works without a Node toolchain. CI rebuilds it.
+
+# OS
+.DS_Store

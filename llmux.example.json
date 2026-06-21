@@ -1,0 +1,63 @@
+{
+  "server": {
+    "addr": ":4000",
+    "master_key": ""
+  },
+
+  "postgres": "",
+  "redis": "",
+  "_comment_state": "Set postgres (DSN) + redis (host:port) for multi-replica correctness: keys/spend in Postgres, rate limits + cache in Redis. Example: postgres://user@localhost:5432/llmux?sslmode=disable",
+
+  "providers": [
+    { "name": "openai",     "type": "passthrough", "base_url": "https://api.openai.com/v1",            "api_key_env": "OPENAI_API_KEY" },
+    { "name": "anthropic",  "type": "anthropic",   "base_url": "https://api.anthropic.com/v1",          "api_key_env": "ANTHROPIC_API_KEY" },
+    { "name": "gemini",     "type": "gemini",      "base_url": "https://generativelanguage.googleapis.com/v1beta", "api_key_env": "GEMINI_API_KEY" },
+    { "name": "deepseek",   "type": "passthrough", "base_url": "https://api.deepseek.com/v1",           "api_key_env": "DEEPSEEK_API_KEY" },
+    { "name": "openrouter", "type": "passthrough", "base_url": "https://openrouter.ai/api/v1",          "api_key_env": "OPENROUTER_API_KEY" },
+    { "name": "cohere",     "type": "cohere",      "base_url": "https://api.cohere.com/v2",             "api_key_env": "COHERE_API_KEY" },
+    { "name": "bedrock",    "type": "bedrock",     "headers": { "region": "us-east-1" } },
+    { "name": "azure",      "type": "azure",       "base_url": "https://my-resource.openai.azure.com",  "api_key_env": "AZURE_API_KEY", "headers": { "api-version": "2024-10-21" } }
+  ],
+
+  "routes": [
+    { "model": "gpt-4o",                      "provider": "openai" },
+    { "model": "claude-3-5-sonnet",           "provider": "anthropic", "target_model": "claude-3-5-sonnet-latest" },
+    { "model": "gemini-1.5-pro",              "provider": "gemini",    "target_model": "gemini-1.5-pro" },
+
+    { "model": "smart", "provider": "openai", "target_model": "gpt-4o", "fallbacks": ["anthropic"] },
+
+    {
+      "model": "cheapest",
+      "strategy": "least-cost",
+      "candidates": [
+        { "provider": "openai",    "model": "gpt-4o-mini" },
+        { "provider": "deepseek",  "model": "deepseek-chat" },
+        { "provider": "gemini",    "model": "gemini-1.5-flash" }
+      ]
+    },
+
+    { "model": "*", "provider": "openrouter" }
+  ],
+
+  "drop_params": [],
+  "retry":  { "max_retries": 2, "backoff_ms": 200 },
+  "cache":  { "enabled": true, "ttl_seconds": 300, "max_entries": 10000 },
+
+  "keys": [
+    { "key": "sk-team-a", "name": "team-a", "budget_usd": 100, "rpm": 600, "allowed_models": ["gpt-4o", "cheapest"] }
+  ],
+
+  "pricing": {
+    "sync_interval_minutes": 360,
+    "catalog_path": "catalog.json",
+    "sources": [
+      "https://openrouter.ai/api/v1/models",
+      "https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json"
+    ],
+    "azure_pricing": false,
+    "override_path": "",
+    "overrides": {
+      "openai/gpt-4o": { "provider": "openai", "input_per_mtok": 2.5, "output_per_mtok": 10.0, "context_window": 128000 }
+    }
+  }
+}

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="7" fill="#0a0b0e"/>
+  <!-- multiplexer: inputs on the left converge into one output -->
+  <g stroke="#ff8c42" stroke-width="1.6" fill="none" stroke-linecap="round">
+    <path d="M5 8 H13"/><path d="M5 13 H13"/><path d="M5 19 H13"/><path d="M5 24 H13"/>
+  </g>
+  <!-- mux trapezoid -->
+  <path d="M13 6 L21 11 L21 21 L13 26 Z" fill="#161922" stroke="#ff8c42" stroke-width="1.6" stroke-linejoin="round"/>
+  <!-- output channel -->
+  <path d="M21 16 H27" stroke="#46e6c9" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+  <circle cx="27" cy="16" r="1.8" fill="#46e6c9"/>
+</svg>
