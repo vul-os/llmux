@@ -1,43 +1,106 @@
 <p align="center">
-  <img src="assets/logo.svg" width="340" alt="llmux — the LLM multiplexer" />
+  <img src="assets/logo.svg" width="380" alt="llmux — the LLM multiplexer" />
+</p>
+
+<h3 align="center">One OpenAI-compatible gateway for every provider, in every language.</h3>
+
+<p align="center">
+  A single Go binary that speaks the OpenAI API and routes to any LLM behind it —<br/>
+  routing, fallbacks, budgets, caching, and live cost, with zero per-language code.
 </p>
 
 <p align="center">
-  <b>The LLM multiplexer.</b> One OpenAI-compatible gateway for <b>every provider</b>, in <b>every language</b>.
+  <img src="https://img.shields.io/badge/license-MIT-4fe3c8?style=flat-square" alt="MIT" />
+  <img src="https://img.shields.io/badge/Go-1.25-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go 1.25" />
+  <img src="https://img.shields.io/badge/tests-349%20passing-ff9a4d?style=flat-square" alt="tests" />
+  <img src="https://img.shields.io/badge/%2Drace-clean-4fe3c8?style=flat-square" alt="race clean" />
+  <img src="https://img.shields.io/badge/binary-single%20static-ff9a4d?style=flat-square" alt="single binary" />
 </p>
 
 <p align="center">
-  <a href="#quick-start">Quickstart</a> ·
+  <a href="#quickstart"><b>Quickstart</b></a> ·
+  <a href="#features">Features</a> ·
+  <a href="#where-llmux-fits">Comparison</a> ·
   <a href="SUPPORT.md">Providers</a> ·
   <a href="PARITY.md">Parity</a> ·
-  <a href="https://llmux.to">Cloud</a> ·
-  MIT
+  <a href="https://llmux.to">Cloud</a>
 </p>
 
 <p align="center">
-  <img src="assets/landing.jpg" width="860" alt="llmux landing" />
+  <img src="assets/landing.jpg" width="880" alt="llmux landing" />
 </p>
 
-llmux is a single Go binary that speaks the **OpenAI-compatible HTTP API** and
-routes to any LLM provider behind it. Because every language already ships a
-mature OpenAI client that accepts a custom `base_url`, llmux works in **every
-language on day one with zero per-language code** — point your existing OpenAI
-SDK at llmux and get routing, fallbacks, budgets, caching, and live cost
-tracking underneath.
+---
 
+llmux works in **every language on day one with zero per-language code**. Every
+ecosystem already ships a mature OpenAI client that accepts a custom `base_url` —
+point it at llmux and you get a control plane underneath: provider routing,
+fallback chains, per-key budgets, response caching, and real cost in every
+response.
+
+```text
+  any-language app ──(OpenAI SDK, base_url = llmux)──▶  ┌─────────┐ ──▶ OpenAI
+                                                        │         │ ──▶ Anthropic
+                                                        │  llmux  │ ──▶ Gemini · Cohere · Bedrock · Azure
+                                                        │   mux   │ ──▶ DeepSeek · Groq · xAI · Mistral …
+                                                        └─────────┘ ──▶ 100+ via passthrough
 ```
-  any-language app ──(OpenAI SDK, base_url=llmux)──▶ llmux ──▶ OpenAI
-                                                          ├──▶ Anthropic
-                                                          ├──▶ Gemini
-                                                          ├──▶ DeepSeek / Groq / xAI / OpenRouter / Ollama …
-                                                          └──▶ 100+ via passthrough
+
+---
+
+## Quickstart
+
+```bash
+make build
+export OPENAI_API_KEY=...        # providers are auto-detected from env
+export ANTHROPIC_API_KEY=...
+./dist/llmux                     # gateway on :4000  (dashboard at /ui)
 ```
 
-> Open source (MIT), self-host free forever · home: [llmux.to](https://llmux.to)
+Point **any** OpenAI client at it — the model string selects the provider:
 
-### Built-in dashboard & live docs
+```python
+from openai import OpenAI
+client = OpenAI(base_url="http://localhost:4000/v1", api_key="x")
 
-A web dashboard + docs ship **inside the binary** at `/ui` (no extra service):
+client.chat.completions.create(
+    model="anthropic/claude-3-5-sonnet",   # any provider, one client
+    messages=[{"role": "user", "content": "hi"}],
+)
+```
+
+### Or embed it locally — no server to run
+
+Each language package bundles the binary and starts it as a local sidecar (Go
+runs it in-process). Integrate in any language without standing up a server:
+
+```python
+import llmux
+client = llmux.OpenAI()                     # spawns the gateway, returns an OpenAI client
+client.chat.completions.create(model="gemini-1.5-pro", messages=[...])
+```
+
+```js
+const llmux = require("llmux");
+const client = await llmux.OpenAI();
+await client.chat.completions.create({ model: "gpt-4o", messages: [...] });
+```
+
+```go
+local, _ := llmux.Start(llmux.Options{})    // in-process, no subprocess
+defer local.Close()
+// point any OpenAI Go client at local.OpenAIBaseURL()
+```
+
+See [`sdks/`](sdks/) for details.
+
+---
+
+## Built-in dashboard & live docs
+
+A web dashboard **and** rendered docs ship **inside the binary** at `/ui` — no
+separate Node server at runtime. Usage by model, virtual-key budgets, and the
+live price catalog, embedded via `go:embed`.
 
 <p align="center">
   <img src="assets/dashboard.jpg" width="49%" alt="llmux dashboard" />
@@ -46,7 +109,45 @@ A web dashboard + docs ship **inside the binary** at `/ui` (no extra service):
 
 ---
 
-## Why this design
+## Features
+
+| Area | What you get |
+|------|--------------|
+| **Any language** | OpenAI-compatible REST + **byte-identical** SSE; works with every OpenAI SDK unchanged |
+| **Providers** | Passthrough (OpenAI, DeepSeek, Groq, Mistral, Together, Fireworks, xAI, OpenRouter, Ollama/vLLM) + native adapters (Anthropic, Gemini, Cohere, AWS Bedrock, Azure OpenAI) with tool-calling, vision & streaming translation |
+| **Routing** | Aliases, `provider/model` prefix, **prefix wildcards** (`claude-*`), catch-all, fallback chains, retries, and **least-cost** selection |
+| **Live cost** | Price catalog auto-synced from OpenRouter + LiteLLM; **micro-dollar** accounting; cost in every response `usage` block; `/v1/models` from the catalog |
+| **Governance** | Virtual keys with per-key budgets, rate limits, and model allow-lists; spend in Postgres, limits in Redis |
+| **Caching** | Exact-match (LRU + TTL) **and** semantic (embedding-similarity); in-memory or shared via Redis |
+| **Hardening** | Cancellation, upstream timeouts, body limits, rate-limit header relay, OpenAI-canonical error normalization, `drop_params` |
+| **Ops** | Prometheus `/metrics`, structured logs + `X-Request-ID`, JSONL usage log, admin endpoints, health check, single static binary, Docker |
+| **Dashboard** | Vite + React app (landing · docs · admin) embedded in the binary at `/ui` |
+
+---
+
+## Where llmux fits
+
+Honest positioning. llmux is best-in-class for **self-hosted, single-binary**
+deployments and is engineered for correctness — but it is younger than the
+incumbents on breadth and battle-testing, and we say so.
+
+| Capability | llmux | LiteLLM | OpenRouter |
+|---|:---:|:---:|:---:|
+| Single binary, no runtime | ✅ one Go binary | ❌ Python app | — hosted SaaS |
+| Drop-in OpenAI API, any language | ✅ | ✅ proxy | ✅ API |
+| Self-host, bring your own keys | ✅ | ✅ | ❌ |
+| Routing + fallback + least-cost | ✅ | ✅ | ◑ auto only |
+| Exact + semantic caching | ✅ | ✅ | ❌ |
+| Live cost in every response | ✅ | ◑ | ✅ |
+| Provider breadth | ◑ 6 + passthrough | ✅ 100+ | ✅ 300+ |
+| Battle-tested maturity | ◑ new | ✅ | ✅ |
+
+> ✅ yes · ◑ partial · ❌ no. Adapters ship **beta/experimental** until verified
+> against live provider APIs — see [PARITY.md](PARITY.md).
+
+---
+
+## Why gateway-first
 
 LiteLLM is **library-first** (a Python SDK), which structurally traps it in
 Python. llmux is **gateway-first**: the OpenAI HTTP schema is the canonical
@@ -54,165 +155,59 @@ interface, providers are adapters behind it, and the language ecosystems already
 wrote the clients. We write the gateway once; you get every language free.
 
 Three rules keep "any language" true as features grow:
-1. The OpenAI HTTP schema is the canonical interface — provider quirks never leak.
-2. Routing / fallback / budget controls ride on standard fields + `extra_headers`
-   / `metadata`, so no custom client is ever needed.
-3. Streaming is **byte-identical** to OpenAI SSE, so every language's stream
-   parser just works.
+
+1. The OpenAI HTTP schema is the canonical contract — provider quirks never leak.
+2. Routing / budget controls ride on standard fields + `extra_headers` / `metadata` — no custom client is ever needed.
+3. Streaming is **byte-identical** to OpenAI SSE — every language's stream parser just works.
 
 ---
 
-## Quick start
+## Pricing catalog — free, live, and route-correct
 
-### Run the gateway
+A seed ships built-in so cost works offline. At runtime llmux auto-syncs from
+pluggable **sources** and merges them by **precedence** so cost is correct per route:
 
-```bash
-make build
-export OPENAI_API_KEY=...        # providers auto-detected from env
-export ANTHROPIC_API_KEY=...
-./dist/llmux                      # listens on :4000
-# or: ./dist/llmux -config llmux.example.json
+```text
+override (manual pin) > provider pricing API > LiteLLM (direct) > OpenRouter (margin) > built-in seed
 ```
 
-Now point **any** OpenAI client at it:
-
-```python
-from openai import OpenAI
-client = OpenAI(base_url="http://localhost:4000/v1", api_key="x")
-client.chat.completions.create(
-    model="claude-3-5-sonnet",            # any provider, one client
-    messages=[{"role": "user", "content": "hi"}],
-)
-```
-
-### Or embed it locally — no server to run
-
-Each language package bundles the binary and starts it for you as a local
-sidecar (Go runs it in-process). This is the local wedge: integrate in any
-language without standing up a server.
-
-**Python**
-```python
-import llmux
-client = llmux.OpenAI()                    # spawns the gateway, returns an OpenAI client
-client.chat.completions.create(model="gemini-1.5-pro", messages=[...])
-```
-
-**Node**
-```js
-const llmux = require("llmux");
-const client = await llmux.OpenAI();
-await client.chat.completions.create({ model: "gpt-4o", messages: [...] });
-```
-
-**Go** (in-process, no subprocess)
-```go
-local, _ := llmux.Start(llmux.Options{})
-defer local.Close()
-// point any OpenAI Go client at local.OpenAIBaseURL()
-```
-
-See [`sdks/`](sdks/) for details.
-
-### Web dashboard
-
-Open **`http://localhost:4000/ui`** — a Vite + React app (landing, docs, and an
-admin/usage dashboard for keys, spend, usage-by-model, and the model catalog).
-It's built once and **embedded into the gateway binary** (`go:embed`), so
-self-hosters get it with zero extra setup. The same app is the basis for the
-`llmux.to` site. Rebuild it with `make web`. (Mirrors how LiteLLM ships its React
-admin UI inside the OSS proxy; SSO/RBAC/audit are reserved for `ee/`.)
-
----
-
-## Features
-
-| Area | What |
-|------|------|
-| **Any language** | OpenAI-compatible REST + SSE; works with every OpenAI SDK unchanged |
-| **Providers** | Passthrough (OpenAI, DeepSeek, Groq, Mistral, Together, Fireworks, xAI, OpenRouter, Ollama/vLLM) + adapters (Anthropic, Gemini, Cohere, AWS Bedrock) with full tool-calling, vision, and streaming translation |
-| **Embeddings** | `/v1/embeddings` via passthrough, Gemini, and Cohere |
-| **Routing** | Aliases, `provider/model` prefix, catch-all, fallback chains, **least-cost** selection |
-| **Reliability** | Automatic retries with backoff; provider failover |
-| **Cost** | Live price catalog (auto-synced from OpenRouter + LiteLLM's open JSON); cost in every response `usage` block; `/v1/models` from the catalog |
-| **Governance** | Virtual keys with per-key budgets, rate limits, and model allow-lists |
-| **Performance** | Exact-match response cache (LRU + TTL) |
-| **Ops** | Prometheus `/metrics`, structured access logs + `X-Request-ID`, JSONL usage log, admin endpoints (`/admin/keys`, `/admin/usage`), persistent spend (`key_store_path`), health check, single static binary, Docker |
-| **CLI** | `llmux serve\|version\|models\|catalog\|keys` |
-| **Web dashboard** | Vite + React app (landing, docs, admin/usage) **embedded in the binary**, served at `/ui` — no separate Node server at runtime |
+- **Route-aware:** a call routed *through* OpenRouter is costed at its
+  margin-inclusive price; a **direct** BYO-key call prefers the authoritative
+  direct price — so you're never over-charged on direct routes.
+- **Manual overrides** (inline or hot-reloaded JSON) always win.
+- **Disk cache** for instant warm starts and offline survival.
+- **Open export:** `GET /v1/catalog.json` republishes the merged catalog.
 
 ---
 
 ## API
 
-- `POST /v1/chat/completions` — chat (streaming + non-streaming)
-- `POST /v1/embeddings` — embeddings
-- `POST /v1/completions` · `/v1/moderations` · `/v1/images/generations` · `/v1/audio/speech` · `/v1/rerank` · `/v1/responses` — modality routes (forwarded to OpenAI-compatible providers)
-- `GET  /v1/models` — catalog-backed model list with pricing + capabilities
-- `GET  /health` — health + provider list
-- `GET  /metrics` — Prometheus metrics
-
-Model selection:
-- a configured route/alias (`"claude-3-5-sonnet"`)
-- `provider/model` prefix (`"anthropic/claude-3-5-sonnet"`)
-- a strategy alias (e.g. `"cheapest"` → least-cost across candidates)
-
----
-
-## Configuration
-
-Zero-config: with provider env vars set, llmux auto-detects providers and routes
-by `provider/model` prefix. For routing, fallbacks, budgets, and caching, pass a
-JSON config — see [`llmux.example.json`](llmux.example.json).
-
-Key env vars: `LLMUX_ADDR`, `LLMUX_SOCKET`, `LLMUX_CONFIG`, `LLMUX_MASTER_KEY`,
-`LLMUX_USAGE_LOG`, plus the provider keys (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
-`GEMINI_API_KEY`, …).
-
----
-
-## Pricing catalog — free, more live than LiteLLM, and route-correct
-
-A small catalog ships built-in so cost works offline. At runtime llmux auto-syncs
-from pluggable **sources** and merges them by **precedence** so cost is correct
-per route:
-
-```
-override (manual pin)  >  provider pricing API (Azure/…)  >  LiteLLM (direct)  >  OpenRouter (margin)  >  built-in seed
-```
-
-- **Route-aware:** a call routed *through* OpenRouter is costed at OpenRouter's
-  (margin-inclusive) price; a **direct** BYO-key call prefers the authoritative
-  direct price — so you're never over-charged on direct routes.
-- **Manual overrides** (inline or a JSON file, hot-reloaded) always win — pin
-  prices for private models or correct a stale feed in one line.
-- **Disk cache** (`catalog_path`) gives instant warm starts and offline survival.
-- **Open export:** `GET /v1/catalog.json` republishes the merged catalog so others
-  can consume it — fresher than a PR-gated file.
-
-Cost appears in every response's `usage.cost` block and is charged against the
-calling key's budget. Adding a source is one `Source` implementation
-(`Name`/`Priority`/`Fetch`).
+| Endpoint | Purpose |
+|---|---|
+| `POST /v1/chat/completions` | chat — streaming + non-streaming |
+| `POST /v1/embeddings` | embeddings |
+| `POST /v1/completions` · `/moderations` · `/images/generations` · `/audio/speech` · `/rerank` · `/responses` | modality routes (forwarded) |
+| `GET /v1/models` | catalog-backed model list with pricing + capabilities |
+| `GET /v1/catalog.json` | merged price catalog export |
+| `GET /health` · `GET /metrics` | health + Prometheus metrics |
 
 ---
 
 ## Architecture
 
-```
-core/                MIT/Apache — the open gateway
+```text
+core/                MIT — the open gateway
   openai/            canonical wire types (the contract)
-  config/            config loader (env + JSON)
   server/            HTTP gateway, streaming, auth, metrics, usage
   provider/          Provider interface + SSE utils
     passthrough/     OpenAI-shaped upstreams
-    anthropic/       Anthropic Messages adapter
-    gemini/          Gemini generateContent adapter
-  providers/         adapter wiring
+    anthropic/ gemini/ cohere/ bedrock/ azure/   native adapters
   router/            routing + least-cost
   keys/              virtual keys, budgets, rate limits
-  cache/             exact-match response cache
+  cache/             exact + semantic response cache
   pricing/           catalog + live sync + cost
 cmd/llmux/           the binary (server + local sidecar)
+web/                 Vite + React UI (embedded at /ui)
 sdks/                thin language packages (python, node, go)
 ee/                  enterprise/cloud (open-core)
 ```
@@ -226,13 +221,15 @@ one codebase, two distribution modes.
 
 ```bash
 make build      # build the binary
-make test       # run all Go tests
-make sdk-bins   # build the binary into each language package for local dev
+make web        # rebuild the embedded web UI
+make test       # all Go tests (-race)
 make docker     # build the Docker image
 ```
+
+---
 
 ## License
 
 **MIT** — see [LICENSE](LICENSE). The whole project is open source under MIT;
-monetization is the hosted **llmux Cloud**, not a different code license. See
-[ee/README.md](ee/README.md) for the Cloud/enterprise direction.
+monetization is the hosted **[llmux Cloud](https://llmux.to)**, not a different
+code license. See [ee/README.md](ee/README.md) for the Cloud/enterprise direction.

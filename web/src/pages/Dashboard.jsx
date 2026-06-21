@@ -17,8 +17,14 @@ function useAsync(fn, deps) {
 
 const money = (n) => "$" + (Number(n) || 0).toFixed(4);
 
+const TABS = ["usage", "keys", "models"];
+
 export default function Dashboard() {
-  const [tab, setTab] = useState("usage");
+  const [tab, setTabState] = useState(() => {
+    const h = (typeof location !== "undefined" ? location.hash.replace("#", "") : "");
+    return TABS.includes(h) ? h : "usage";
+  });
+  const setTab = (t) => { setTabState(t); if (typeof history !== "undefined") history.replaceState(null, "", "#" + t); };
   const [refresh, setRefresh] = useState(0);
   const [base, setBaseInput] = useState(getBase());
   const [key, setKeyInput] = useState(getMasterKey());
@@ -43,7 +49,7 @@ export default function Dashboard() {
       <Health refresh={refresh} />
 
       <div className="tabs-row">
-        {["usage", "keys", "models"].map((t) => (
+        {TABS.map((t) => (
           <button key={t} className={"tab" + (t === tab ? " active" : "")} onClick={() => setTab(t)}>{t}</button>
         ))}
       </div>
