@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"sync"
@@ -13,6 +14,7 @@ import (
 type UsageRecord struct {
 	Time       string  `json:"time"`
 	KeyName    string  `json:"key,omitempty"`
+	AccountID  string  `json:"account_id,omitempty"`
 	Model      string  `json:"model"`
 	Stream     bool    `json:"stream"`
 	Prompt     int     `json:"prompt_tokens"`
@@ -58,11 +60,14 @@ func (s *Server) SetUsageLogger(l UsageLogger) {
 	}
 }
 
-// logUsage builds and emits a usage record from a response.
-func (s *Server) logUsage(keyName, model string, stream, cached bool, usage *openai.Usage) {
+// logUsage builds and emits a usage record from a response. It reads the key
+// name and resolved account id from the request context so usage is attributed
+// to the Vulos account, not just the key label.
+func (s *Server) logUsage(ctx context.Context, model string, stream, cached bool, usage *openai.Usage) {
 	rec := UsageRecord{
 		Time:    time.Now().UTC().Format(time.RFC3339),
-		KeyName: keyName, Model: model, Stream: stream, Cached: cached,
+		KeyName: keyName(ctx), AccountID: accountFrom(ctx),
+		Model: model, Stream: stream, Cached: cached,
 	}
 	if usage != nil {
 		rec.Prompt = usage.PromptTokens

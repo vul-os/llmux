@@ -62,7 +62,7 @@ func (s *Server) unaryChat(w http.ResponseWriter, r *http.Request, req *openai.C
 		if hit, ok := s.cache.Get(cacheKey); ok {
 			w.Header().Set("X-LLMux-Cache", "hit")
 			s.metrics.incCacheHit()
-			s.logUsage(keyName(r.Context()), req.Model, false, true, hit.Usage)
+			s.logUsage(r.Context(), req.Model, false, true, hit.Usage)
 			writeRawJSON(w, hit.Body) // pre-serialized body; no re-marshal
 			return
 		}
@@ -87,7 +87,7 @@ func (s *Server) unaryChat(w http.ResponseWriter, r *http.Request, req *openai.C
 	fillResponseDefaults(resp, req.Model)
 	s.attachCost(req.Model, usedProvider, resp.Usage)
 	s.recordSpend(r.Context(), resp.Usage)
-	s.logUsage(keyName(r.Context()), req.Model, false, false, resp.Usage)
+	s.logUsage(r.Context(), req.Model, false, false, resp.Usage)
 
 	// Serialize once: write it and (if caching) store the bytes — a hit then
 	// replays the body verbatim with no re-marshal and no shared response pointer.
@@ -172,7 +172,7 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, req *openai.
 
 	if started {
 		s.recordSpend(r.Context(), lastUsage)
-		s.logUsage(keyName(r.Context()), req.Model, true, false, lastUsage)
+		s.logUsage(r.Context(), req.Model, true, false, lastUsage)
 		sse.done()
 		return
 	}

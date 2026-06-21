@@ -8,6 +8,9 @@
   "redis": "",
   "_comment_state": "Set postgres (DSN) + redis (host:port) for multi-replica correctness: keys/spend in Postgres, rate limits + cache in Redis. Example: postgres://user@localhost:5432/llmux?sslmode=disable",
 
+  "cp": { "cp_url": "", "cp_shared_secret": "" },
+  "_comment_cp": "OPTIONAL Vulos control-plane integration. Leave cp_url empty for standalone (default: static keys, no cp). When set (or via env LLMUX_CP_URL / LLMUX_CP_SECRET) the gateway resolves identity, gates budget, and reports usage to cp via X-Relay-Auth. The core never imports the cp adapter; it is wired only by the binary.",
+
   "providers": [
     { "name": "openai",     "type": "passthrough", "base_url": "https://api.openai.com/v1",            "api_key_env": "OPENAI_API_KEY" },
     { "name": "anthropic",  "type": "anthropic",   "base_url": "https://api.anthropic.com/v1",          "api_key_env": "ANTHROPIC_API_KEY" },

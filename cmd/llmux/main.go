@@ -16,6 +16,7 @@ import (
 
 	"github.com/llmux/llmux/core/config"
 	"github.com/llmux/llmux/core/server"
+	"github.com/llmux/llmux/integration/cp"
 )
 
 // version is the binary version string.
@@ -84,15 +85,37 @@ func runServe(args []string) {
 		log.Fatalf("llmux: init error: %v", err)
 	}
 
-	// Optional JSONL usage log for billing/analytics.
+	// Build the usage logger(s). JSONL logging (if configured) is preserved and
+	// the optional cp sink composes on top of it — never replaces it.
+	var loggers []server.UsageLogger
 	if path := os.Getenv("LLMUX_USAGE_LOG"); path != "" {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			log.Fatalf("llmux: cannot open usage log %s: %v", path, err)
 		}
 		defer f.Close()
-		srv.SetUsageLogger(server.NewJSONLUsageLogger(f))
+		loggers = append(loggers, server.NewJSONLUsageLogger(f))
 		log.Printf("llmux: usage log -> %s", path)
+	}
+
+	// OPTIONAL control-plane (cp) integration. Wired ONLY here, ONLY when a cp
+	// URL is configured (config file `cp.cp_url` or env LLMUX_CP_URL). The core
+	// gateway never imports integration/cp; with cp unset the gateway stays
+	// fully standalone (static keys, no network calls to cp).
+	if cpCfg := cp.New(cfg.CP.URL, cfg.CP.SharedSecret); cpCfg.Enabled() {
+		srv.SetIdentity(cp.NewIdentity(cpCfg))
+		srv.SetBudgetGate(cp.NewBudgetGate(cpCfg))
+		loggers = append(loggers, cp.NewUsageLogger(cpCfg))
+		log.Printf("llmux: control plane integration on (%s)", cpCfg.BaseURL)
+	}
+
+	switch len(loggers) {
+	case 0:
+		// keep the server's default NopUsageLogger
+	case 1:
+		srv.SetUsageLogger(loggers[0])
+	default:
+		srv.SetUsageLogger(cp.NewMultiUsageLogger(loggers...))
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)

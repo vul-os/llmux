@@ -35,7 +35,10 @@ type Server struct {
 	cfg            *config.Config
 	registry       *provider.Registry
 	router         *router.Router
-	keys           keys.Store
+	keys             keys.Store
+	identity         Identity
+	budget           BudgetGate
+	externalIdentity bool
 	cache          cache.Cache
 	catalog        *pricing.Catalog
 	pricingSources []pricing.Source
@@ -109,6 +112,8 @@ func New(cfg *config.Config) (*Server, error) {
 		registry:       reg,
 		router:         router.New(cfg.Routes, reg, catalog),
 		keys:           keyStore,
+		identity:       staticIdentity{keys: keyStore},
+		budget:         staticBudgetGate{keys: keyStore},
 		catalog:        catalog,
 		pricingSources: sources,
 		usage:          NopUsageLogger{},
@@ -313,25 +318,36 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 			return
 		}
 
-		if len(s.cfg.Keys) > 0 {
-			k, ok := s.keys.Lookup(token)
+		if s.identityActive() {
+			// Resolve token -> account via the Identity seam. The standalone
+			// default is keys.Lookup (account id = key name); the cp adapter
+			// resolves against the control plane.
+			p, ok := s.identity.Resolve(r.Context(), token)
 			if !ok {
 				writeError(w, http.StatusUnauthorized,
 					openai.NewError("invalid api key", "invalid_request_error", "invalid_api_key"))
 				return
 			}
-			if s.keys.OverBudget(token) {
+			// Gate by the account's LLM budget via the BudgetGate seam. Static
+			// default = per-key budget; cp = central entitlements (fail-open on
+			// transport error, explicit deny enforced).
+			if d := s.budget.Check(r.Context(), p); d.Denied {
 				writeError(w, http.StatusPaymentRequired,
-					openai.NewError("budget exceeded for key "+k.Name, "insufficient_quota", "budget_exceeded"))
+					openai.NewError(d.Reason, "insufficient_quota", "budget_exceeded"))
 				return
 			}
-			if !s.keys.Allow(token) {
+			// Per-minute rate limiting stays a static-key concern (cp principals
+			// carry no local key/bucket and are simply not RPM-gated here).
+			if p.Key != nil && !s.keys.Allow(token) {
 				writeError(w, http.StatusTooManyRequests,
-					openai.NewError("rate limit exceeded for key "+k.Name, "rate_limit_error", "rate_limit_exceeded"))
+					openai.NewError("rate limit exceeded for key "+p.Key.Name, "rate_limit_error", "rate_limit_exceeded"))
 				return
 			}
-			r = r.WithContext(withKey(r.Context(), k))
-			next.ServeHTTP(w, r)
+			ctx := withAccount(r.Context(), p.AccountID)
+			if p.Key != nil {
+				ctx = withKey(ctx, p.Key)
+			}
+			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
 

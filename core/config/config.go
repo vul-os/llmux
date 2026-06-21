@@ -44,6 +44,21 @@ type Config struct {
 	DropParams []string `json:"drop_params"`
 
 	LogLevel string `json:"log_level"`
+
+	// CP optionally points llmux at a Vulos control plane ("cp" / vulos-cloud)
+	// for central identity/budget/usage. Empty = standalone (the default): the
+	// gateway uses its static keys and never talks to cp. This config is read by
+	// the composition root (cmd/llmux) to wire the OPTIONAL integration/cp
+	// adapter; the core gateway never imports it.
+	CP CPConfig `json:"cp"`
+}
+
+// CPConfig configures the optional control-plane integration.
+type CPConfig struct {
+	// URL is the cp base URL (e.g. https://cp.vulos.to). Empty = standalone.
+	URL string `json:"cp_url"`
+	// SharedSecret authenticates outbound cp calls via the X-Relay-Auth header.
+	SharedSecret string `json:"cp_shared_secret"`
 }
 
 // RetryConfig controls automatic retries and provider fallback.
@@ -351,6 +366,12 @@ func (c *Config) applyEnv() {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.Pricing.SyncIntervalMinutes = n
 		}
+	}
+	if v := os.Getenv("LLMUX_CP_URL"); v != "" {
+		c.CP.URL = v
+	}
+	if v := os.Getenv("LLMUX_CP_SECRET"); v != "" {
+		c.CP.SharedSecret = v
 	}
 }
 
