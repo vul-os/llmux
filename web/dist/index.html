@@ -28,10 +28,20 @@
       src/styles.css). Distinctive and characterful without shipping a webfont,
       and avoids the Inter sameness of generic React apps — matches the Vulos suite.
     -->
-    <script type="module" crossorigin src="/ui/assets/index-BgcqUO4c.js"></script>
-    <link rel="stylesheet" crossorigin href="/ui/assets/index-DrXspOxS.css">
+    <script type="module" crossorigin src="/ui/assets/index-D3DDh-b5.js"></script>
+    <link rel="stylesheet" crossorigin href="/ui/assets/index-CpR50XsN.css">
   </head>
   <body>
     <div id="root"></div>
+    <!-- Set the saved theme before first paint to avoid a flash. An explicit
+         choice (light/dark) wins; otherwise we defer to prefers-color-scheme. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("llmux_theme");
+          if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
   </body>
 </html>

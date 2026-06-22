@@ -4,6 +4,31 @@
 
 const BASE_KEY = "llmux_api_base";
 const MASTER_KEY = "llmux_master_key";
+const THEME_KEY = "llmux_theme";
+
+// Theme: an explicit "light"/"dark" choice is persisted and reflected on
+// <html data-theme>. With no saved choice we return "system" and leave the
+// attribute off so prefers-color-scheme drives the palette (see styles.css).
+export function getTheme() {
+  const t = localStorage.getItem(THEME_KEY);
+  return t === "light" || t === "dark" ? t : "system";
+}
+export function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === "light" || theme === "dark") {
+    root.setAttribute("data-theme", theme);
+    localStorage.setItem(THEME_KEY, theme);
+  } else {
+    root.removeAttribute("data-theme");
+    localStorage.removeItem(THEME_KEY);
+  }
+}
+// Effective light/dark, resolving "system" against the OS preference.
+export function resolvedTheme() {
+  const t = getTheme();
+  if (t !== "system") return t;
+  return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
 
 export function getBase() {
   return localStorage.getItem(BASE_KEY) || "";

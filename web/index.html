@@ -31,6 +31,16 @@
   </head>
   <body>
     <div id="root"></div>
+    <!-- Set the saved theme before first paint to avoid a flash. An explicit
+         choice (light/dark) wins; otherwise we defer to prefers-color-scheme. -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("llmux_theme");
+          if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

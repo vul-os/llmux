@@ -1,6 +1,7 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Routes, Route, NavLink, Link } from "react-router-dom";
 import { Logo } from "./components/Logo.jsx";
+import { getTheme, applyTheme, resolvedTheme } from "./api.js";
 import Landing from "./pages/Landing.jsx";
 
 // Code-split: the landing (entry) stays light; markdown/highlight + dashboard
@@ -10,6 +11,53 @@ const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 
 const GH = "https://github.com/vul-os/llmux";
 const VULOS = "https://vulos.org";
+
+function SunIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2v2.4M12 19.6V22M2 12h2.4M19.6 12H22M4.6 4.6l1.7 1.7M17.7 17.7l1.7 1.7M19.4 4.6l-1.7 1.7M6.3 17.7l-1.7 1.7" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M20 14.5A8 8 0 1 1 9.5 4a6.3 6.3 0 0 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+// Cycles light → dark → system. Reflects the choice on <html data-theme> and
+// re-renders when the OS preference changes while on "system".
+function ThemeToggle() {
+  const [theme, setTheme] = useState(getTheme);
+  const [, force] = useState(0);
+
+  useEffect(() => {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = () => { if (getTheme() === "system") force((n) => n + 1); };
+    mq.addEventListener?.("change", onChange);
+    return () => mq.removeEventListener?.("change", onChange);
+  }, []);
+
+  const cycle = () => {
+    const next = theme === "light" ? "dark" : theme === "dark" ? "system" : "light";
+    applyTheme(next);
+    setTheme(next);
+  };
+
+  const dark = resolvedTheme() === "dark";
+  const label = theme === "system" ? "Theme: system" : theme === "dark" ? "Theme: dark" : "Theme: light";
+  return (
+    <button className="theme-toggle" onClick={cycle} aria-label={label} title={label}>
+      {dark ? <MoonIcon /> : <SunIcon />}
+      {theme === "system" && <span className="theme-auto" aria-hidden="true">A</span>}
+    </button>
+  );
+}
 
 function GitHubIcon() {
   return (
@@ -39,6 +87,7 @@ export default function App() {
             <a className="nav-icon hide-sm" href={GH} target="_blank" rel="noreferrer" aria-label="GitHub">
               <GitHubIcon /><span>Star</span>
             </a>
+            <ThemeToggle />
             <a className="btn primary sm" href={VULOS} target="_blank" rel="noreferrer">
               Vulos Cloud <span aria-hidden="true">→</span>
             </a>
