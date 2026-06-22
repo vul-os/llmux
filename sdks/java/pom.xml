@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>to.llmux</groupId>
+  <artifactId>llmux</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+
+  <name>llmux</name>
+  <description>The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.</description>
+  <url>https://llmux.to</url>
+
+  <licenses>
+    <license>
+      <name>MIT</name>
+    </license>
+  </licenses>
+
+  <properties>
+    <maven.compiler.release>11</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencies>
+    <!--
+      The core sidecar uses only the JDK (ProcessBuilder + java.net.http).
+      The convenience OpenAI client is OPTIONAL: add com.openai:openai-java
+      yourself and construct it with Llmux.openaiBaseUrl(). It is declared
+      <optional> so it is not pulled into downstream classpaths transitively.
+    -->
+    <dependency>
+      <groupId>com.openai</groupId>
+      <artifactId>openai-java</artifactId>
+      <version>0.31.0</version>
+      <optional>true</optional>
+    </dependency>
+  </dependencies>
+</project>
