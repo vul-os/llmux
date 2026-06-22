@@ -1,0 +1,21 @@
+[package]
+name = "llmux"
+version = "0.1.0"
+edition = "2021"
+description = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
+license = "MIT"
+homepage = "https://llmux.to"
+repository = "https://github.com/llmux/llmux"
+keywords = ["llm", "gateway", "openai", "anthropic", "proxy"]
+categories = ["api-bindings"]
+
+[features]
+default = []
+# Convenience constructor returning a configured async-openai client.
+async-openai = ["dep:async-openai"]
+
+[dependencies]
+async-openai = { version = "0.23", optional = true }
+
+# No HTTP crate needed for the health poll: we use a tiny std::net GET. The
+# `async-openai` feature pulls in the popular OpenAI client only when requested.
