@@ -103,7 +103,10 @@ func runServe(args []string) {
 	// URL is configured (config file `cp.cp_url` or env LLMUX_CP_URL). The core
 	// gateway never imports integration/cp; with cp unset the gateway stays
 	// fully standalone (static keys, no network calls to cp).
-	cpCfg := cp.New(cfg.CP.URL, cfg.CP.SharedSecret).WithRPM(cfg.CP.RPM)
+	cpCfg := cp.New(cfg.CP.URL, cfg.CP.SharedSecret).
+		WithRPM(cfg.CP.RPM).
+		WithDegradedFailOpen(cfg.CP.DegradedFailOpen).
+		WithDegradedRPM(cfg.CP.DegradedRPM)
 	if cfg.CP.EntitlementTTLSeconds > 0 {
 		cpCfg = cpCfg.WithEntitlementTTL(time.Duration(cfg.CP.EntitlementTTLSeconds) * time.Second)
 	}

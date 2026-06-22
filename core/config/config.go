@@ -65,6 +65,18 @@ type CPConfig struct {
 	// EntitlementTTLSeconds bounds how long a fetched entitlement is cached and
 	// reused if cp becomes unreachable (last-known-good). 0 = a 30s default.
 	EntitlementTTLSeconds int `json:"cp_entitlement_ttl_seconds"`
+	// DegradedFailOpen, when true, makes the budget gate fail fully OPEN when cp
+	// is unreachable AND nothing is cached for the account (cold cache). This was
+	// the historical behavior but it allows unbounded concurrency against real
+	// provider keys during a cp outage. It is OFF by default: the default
+	// degraded posture is bounded (DegradedRPM). Self-hosters who accept the
+	// spend risk can opt back into fail-open.
+	DegradedFailOpen bool `json:"cp_degraded_fail_open"`
+	// DegradedRPM is the conservative per-account requests-per-minute cap applied
+	// ONLY in cold-cache degraded mode (cp unreachable, no cached entitlement),
+	// when DegradedFailOpen is false. 0 selects a built-in conservative default.
+	// This bounds spend during a cp outage instead of failing fully open.
+	DegradedRPM int `json:"cp_degraded_rpm"`
 }
 
 // RetryConfig controls automatic retries and provider fallback.
@@ -382,6 +394,14 @@ func (c *Config) applyEnv() {
 	if v := os.Getenv("LLMUX_CP_RPM"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.CP.RPM = n
+		}
+	}
+	if v := os.Getenv("LLMUX_CP_DEGRADED_FAIL_OPEN"); v != "" {
+		c.CP.DegradedFailOpen = v == "1" || strings.EqualFold(v, "true")
+	}
+	if v := os.Getenv("LLMUX_CP_DEGRADED_RPM"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.CP.DegradedRPM = n
 		}
 	}
 }

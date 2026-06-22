@@ -8,8 +8,9 @@
   "redis": "",
   "_comment_state": "Set postgres (DSN) + redis (host:port) for multi-replica correctness: keys/spend in Postgres, rate limits + cache in Redis. Example: postgres://user@localhost:5432/llmux?sslmode=disable",
 
-  "cp": { "cp_url": "", "cp_shared_secret": "" },
+  "cp": { "cp_url": "", "cp_shared_secret": "", "cp_degraded_fail_open": false, "cp_degraded_rpm": 0 },
   "_comment_cp": "OPTIONAL Vulos control-plane integration. Leave cp_url empty for standalone (default: static keys, no cp). When set (or via env LLMUX_CP_URL / LLMUX_CP_SECRET) the gateway resolves identity, gates budget, and reports usage to cp via X-Relay-Auth. The core never imports the cp adapter; it is wired only by the binary.",
+  "_comment_cp_degraded": "Degraded-mode posture when cp is unreachable AND no entitlement is cached (cold cache). DEFAULT bounds spend: requests are capped at cp_degraded_rpm per account per minute (0 = built-in conservative default of 20/min). Set cp_degraded_fail_open=true (or env LLMUX_CP_DEGRADED_FAIL_OPEN=1) to instead fail fully OPEN (unbounded) during a cp outage — only if you accept the spend risk.",
 
   "providers": [
     { "name": "openai",     "type": "passthrough", "base_url": "https://api.openai.com/v1",            "api_key_env": "OPENAI_API_KEY" },

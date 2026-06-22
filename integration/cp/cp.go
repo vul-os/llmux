@@ -47,6 +47,14 @@ type Config struct {
 	RPM int
 	// EntitlementTTL bounds how long a fetched entitlement is cached/reused.
 	EntitlementTTL time.Duration
+	// DegradedFailOpen, when true, allows a request with NO bound when cp is
+	// unreachable and nothing is cached (cold cache). Default false: cold-cache
+	// degraded mode is bounded by DegradedRPM instead of failing fully open.
+	DegradedFailOpen bool
+	// DegradedRPM is the conservative per-account RPM cap enforced ONLY in
+	// cold-cache degraded mode when DegradedFailOpen is false. 0 = a built-in
+	// conservative default (defaultDegradedRPM).
+	DegradedRPM int
 }
 
 // Enabled reports whether the cp adapter should be wired (a base URL is set).
@@ -65,6 +73,12 @@ func (c Config) WithRPM(rpm int) Config { c.RPM = rpm; return c }
 
 // WithEntitlementTTL returns a copy with the entitlement cache TTL set.
 func (c Config) WithEntitlementTTL(d time.Duration) Config { c.EntitlementTTL = d; return c }
+
+// WithDegradedFailOpen returns a copy with the cold-cache fail-open posture set.
+func (c Config) WithDegradedFailOpen(b bool) Config { c.DegradedFailOpen = b; return c }
+
+// WithDegradedRPM returns a copy with the cold-cache degraded RPM cap set.
+func (c Config) WithDegradedRPM(rpm int) Config { c.DegradedRPM = rpm; return c }
 
 func (c Config) client() *http.Client { return &http.Client{Timeout: 5 * time.Second} }
 
@@ -141,6 +155,12 @@ const defaultEntitlementTTL = 30 * time.Second
 // at most (in-flight requests x reservationHold) USD above the cp budget.
 const reservationHold = 0.05
 
+// defaultDegradedRPM is the conservative per-account requests-per-minute cap
+// enforced in cold-cache degraded mode (cp unreachable, nothing cached) when the
+// operator has not explicitly opted into fail-open. It bounds spend during a cp
+// outage instead of allowing unbounded concurrency against real provider keys.
+const defaultDegradedRPM = 20
+
 // BudgetGate gates a request by the account's central LLM entitlements.
 //
 // Beyond the raw cp check it adds three safety layers that the audit flagged:
@@ -162,7 +182,16 @@ type BudgetGate struct {
 	mu       sync.Mutex
 	inflight map[string]float64       // account -> reserved in-flight USD
 	rpm      map[string]*rpmWindow    // account -> per-minute request window
+	degraded map[string]*rpmWindow    // account -> per-minute window for degraded mode
 	cache    map[string]entCacheEntry // account -> last-known entitlement
+}
+
+// degradedRPM is the effective cold-cache degraded RPM cap (configured or default).
+func (b *BudgetGate) degradedRPM() int {
+	if b.cfg.DegradedRPM > 0 {
+		return b.cfg.DegradedRPM
+	}
+	return defaultDegradedRPM
 }
 
 type rpmWindow struct {
@@ -187,6 +216,7 @@ func NewBudgetGate(cfg Config) *BudgetGate {
 		ttl:      ttl,
 		inflight: map[string]float64{},
 		rpm:      map[string]*rpmWindow{},
+		degraded: map[string]*rpmWindow{},
 		cache:    map[string]entCacheEntry{},
 	}
 }
@@ -211,9 +241,20 @@ func (b *BudgetGate) Check(ctx context.Context, p server.Principal) server.Budge
 
 	ent, ok := b.fetchEntitlement(ctx, p.AccountID)
 	if !ok {
-		// Cold cache and cp unreachable: fail open but flag it. We cannot place a
-		// reservation without a budget figure, so no hold is held here.
-		log.Printf("cp: entitlement unavailable for %s (cp outage, cold cache) — allowing degraded", p.AccountID)
+		// Cold cache and cp unreachable: we have no budget figure, so we cannot
+		// place a real reservation. The DEFAULT posture bounds spend with a
+		// conservative per-account RPM cap rather than failing fully open
+		// (unbounded concurrency against real provider keys). Operators can opt
+		// into the historical fail-open behavior via DegradedFailOpen.
+		if b.cfg.DegradedFailOpen {
+			log.Printf("cp: entitlement unavailable for %s (cp outage, cold cache) — failing OPEN (operator opt-in)", p.AccountID)
+			return server.BudgetDecision{}
+		}
+		if !b.allowDegraded(p.AccountID) {
+			log.Printf("cp: entitlement unavailable for %s (cp outage, cold cache) — degraded RPM cap hit, denying", p.AccountID)
+			return server.BudgetDecision{RateLimited: true, Reason: "control plane unavailable; degraded rate limit for account " + p.AccountID}
+		}
+		log.Printf("cp: entitlement unavailable for %s (cp outage, cold cache) — allowing under degraded RPM cap (%d/min)", p.AccountID, b.degradedRPM())
 		return server.BudgetDecision{}
 	}
 
@@ -263,6 +304,27 @@ func (b *BudgetGate) allowRPM(account string) bool {
 		return true
 	}
 	if w.count >= b.cfg.RPM {
+		return false
+	}
+	w.count++
+	return true
+}
+
+// allowDegraded enforces the conservative cold-cache degraded per-account RPM
+// cap. Returns false when the account has exceeded the degraded cap this minute.
+// It uses a window map separate from the steady-state RPM so the two caps don't
+// interfere.
+func (b *BudgetGate) allowDegraded(account string) bool {
+	limit := b.degradedRPM()
+	now := time.Now().Unix() / 60
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	w := b.degraded[account]
+	if w == nil || w.window != now {
+		b.degraded[account] = &rpmWindow{window: now, count: 1}
+		return true
+	}
+	if w.count >= limit {
 		return false
 	}
 	w.count++
@@ -343,7 +405,22 @@ const usageMaxAttempts = 5
 // response path and survives transient cp failures via a bounded in-memory retry
 // queue with exponential backoff. On a crash the in-memory queue is lost (the
 // JSONL logger remains the durable record); steady-state transient 5xx/timeouts
-// no longer silently drop billing.
+// no longer silently drop billing. Each record carries an idempotency key (see
+// usageBody.IdempotencyKey / the Idempotency-Key header) so any retry — including
+// a future ledger replay — is deduped by cp and billed at most once.
+//
+// TODO(billing-reconcile): the only fully durable revenue record today is the
+// JSONL ledger written by core/server's JSONLUsageLogger. If cp is down past the
+// bounded queue / max attempts, or the process crashes with records still
+// queued, those records are durably in JSONL but never reach cp. A reconciler
+// would, on (re)connect: tail the JSONL ledger, replay any record whose
+// idempotency key cp has not acknowledged, and persist a high-water cursor so it
+// resumes after a crash. cp already dedupes by Idempotency-Key, so replay is
+// safe. This was scoped OUT of the current change because it needs a shared
+// ledger path + ack/cursor store that spans the core (JSONL) and cp packages —
+// a larger refactor than the targeted billing-integrity fixes here. The
+// idempotency key added in this change is the prerequisite that makes that
+// replay safe to build later.
 type UsageLogger struct {
 	cfg  Config
 	http *http.Client
@@ -352,6 +429,7 @@ type UsageLogger struct {
 
 type usageItem struct {
 	raw     []byte
+	key     string // idempotency key (also sent as a header so cp can dedupe retries)
 	attempt int
 }
 
@@ -363,11 +441,15 @@ func NewUsageLogger(cfg Config) *UsageLogger {
 }
 
 type usageBody struct {
-	Product   string  `json:"product"`
-	AccountID string  `json:"account_id"`
-	Kind      string  `json:"kind"`
-	Count     int     `json:"count"`
-	CostUSD   float64 `json:"cost_usd"`
+	// IdempotencyKey uniquely identifies this usage record so cp dedupes retries
+	// (the same key is also sent in the Idempotency-Key header). Empty when the
+	// source record carried no id.
+	IdempotencyKey string  `json:"idempotency_key,omitempty"`
+	Product        string  `json:"product"`
+	AccountID      string  `json:"account_id"`
+	Kind           string  `json:"kind"`
+	Count          int     `json:"count"`
+	CostUSD        float64 `json:"cost_usd"`
 }
 
 // Log implements server.UsageLogger. It enqueues the finalized cost for delivery
@@ -379,17 +461,18 @@ func (u *UsageLogger) Log(rec server.UsageRecord) {
 		return
 	}
 	body := usageBody{
-		Product:   product,
-		AccountID: rec.AccountID,
-		Kind:      "llm_tokens",
-		Count:     rec.Total,
-		CostUSD:   rec.CostUSD,
+		IdempotencyKey: rec.ID,
+		Product:        product,
+		AccountID:      rec.AccountID,
+		Kind:           "llm_tokens",
+		Count:          rec.Total,
+		CostUSD:        rec.CostUSD,
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return
 	}
-	u.enqueue(usageItem{raw: raw, attempt: 0})
+	u.enqueue(usageItem{raw: raw, key: rec.ID, attempt: 0})
 }
 
 // enqueue pushes an item, dropping the oldest queued item if the buffer is full
@@ -417,7 +500,7 @@ func (u *UsageLogger) enqueue(it usageItem) {
 // exponential backoff until usageMaxAttempts.
 func (u *UsageLogger) worker() {
 	for it := range u.ch {
-		if u.post(it.raw) {
+		if u.post(it.raw, it.key) {
 			continue
 		}
 		it.attempt++
@@ -438,8 +521,10 @@ func (u *UsageLogger) worker() {
 	}
 }
 
-// post performs one usage POST; returns true on a 2xx (delivered).
-func (u *UsageLogger) post(raw []byte) bool {
+// post performs one usage POST; returns true on a 2xx (delivered). The
+// idempotency key (when present) is sent as both the Idempotency-Key header and
+// in the body so cp dedupes retries of the same record.
+func (u *UsageLogger) post(raw []byte, key string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u.cfg.BaseURL+"/api/usage", bytes.NewReader(raw))
@@ -447,6 +532,9 @@ func (u *UsageLogger) post(raw []byte) bool {
 		return false
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if key != "" {
+		req.Header.Set("Idempotency-Key", key)
+	}
 	u.cfg.auth(req)
 	resp, err := u.http.Do(req)
 	if err != nil {
