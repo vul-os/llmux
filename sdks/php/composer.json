@@ -1,0 +1,19 @@
+{
+  "name": "llmux/llmux",
+  "description": "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.",
+  "type": "library",
+  "license": "MIT",
+  "homepage": "https://llmux.to",
+  "keywords": ["llm", "gateway", "openai", "anthropic", "gemini", "proxy", "litellm"],
+  "require": {
+    "php": ">=7.4"
+  },
+  "suggest": {
+    "openai-php/client": "For the Llmux::openai() convenience client pointed at the local gateway"
+  },
+  "autoload": {
+    "psr-4": {
+      "Llmux\\": "src/"
+    }
+  }
+}
