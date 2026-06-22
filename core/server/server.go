@@ -113,7 +113,7 @@ func New(cfg *config.Config) (*Server, error) {
 		router:         router.New(cfg.Routes, reg, catalog),
 		keys:           keyStore,
 		identity:       staticIdentity{keys: keyStore},
-		budget:         staticBudgetGate{keys: keyStore},
+		budget:         newStaticBudgetGate(keyStore),
 		catalog:        catalog,
 		pricingSources: sources,
 		usage:          NopUsageLogger{},

@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"sync"
 
 	"github.com/llmux/llmux/core/keys"
 )
@@ -97,19 +98,80 @@ func (s staticIdentity) Resolve(_ context.Context, token string) (Principal, boo
 	return Principal{Token: token, AccountID: k.Name, Tier: "static", Key: k}, true
 }
 
-// staticBudgetGate gates by the static per-key budget (keys.OverBudget).
-type staticBudgetGate struct{ keys keys.Store }
+// staticReservationHold is the per-request in-flight cost reserved against a
+// static key's budget while a request is outstanding. Like the cp gate, the real
+// cost isn't known until the request finishes, so a nominal hold bounds how far
+// concurrent requests can overshoot a near-exhausted budget: at most
+// (in-flight requests x staticReservationHold) USD above the configured budget.
+const staticReservationHold = 0.05
 
-// Check implements BudgetGate using keys.OverBudget.
-func (s staticBudgetGate) Check(_ context.Context, p Principal) BudgetDecision {
+// staticBudgetGate gates by the static per-key budget (keys.OverBudget). It adds
+// an in-flight reservation layer (mirroring the cp gate) so that N concurrent
+// requests near the budget limit can't all pass the OverBudget check before any
+// of them has recorded spend, and overshoot the BudgetUSD cap.
+type staticBudgetGate struct {
+	keys keys.Store
+
+	mu       sync.Mutex
+	inflight map[string]float64 // key token -> reserved in-flight USD
+}
+
+// newStaticBudgetGate builds the static gate with its reservation map.
+func newStaticBudgetGate(store keys.Store) *staticBudgetGate {
+	return &staticBudgetGate{keys: store, inflight: map[string]float64{}}
+}
+
+// Check implements BudgetGate using keys.OverBudget plus an in-flight reservation
+// so concurrent requests can't collectively overshoot the key's budget.
+func (s *staticBudgetGate) Check(_ context.Context, p Principal) BudgetDecision {
+	name := p.AccountID
+	if p.Key != nil {
+		name = p.Key.Name
+	}
+	// Hard deny: spend already at/over the configured budget.
 	if s.keys.OverBudget(p.Token) {
-		name := p.AccountID
-		if p.Key != nil {
-			name = p.Key.Name
-		}
 		return BudgetDecision{Denied: true, Reason: "budget exceeded for key " + name}
 	}
-	return BudgetDecision{}
+	// Unlimited budget (BudgetUSD<=0) needs no reservation: nothing to overshoot.
+	budget := budgetForKey(p)
+	if budget <= 0 {
+		return BudgetDecision{}
+	}
+	// Reservation: deny when recorded spend + outstanding in-flight holds would
+	// reach the budget, else place a hold and release it on completion.
+	remaining := budget - s.keys.Spend(p.Token)
+	s.mu.Lock()
+	remaining -= s.inflight[p.Token]
+	if remaining <= 0 {
+		s.mu.Unlock()
+		return BudgetDecision{Denied: true, Reason: "budget exceeded for key " + name}
+	}
+	s.inflight[p.Token] += staticReservationHold
+	s.mu.Unlock()
+
+	token := p.Token
+	return BudgetDecision{Release: func() { s.releaseStatic(token) }}
+}
+
+// releaseStatic frees one request's reservation hold for a key token.
+func (s *staticBudgetGate) releaseStatic(token string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v := s.inflight[token] - staticReservationHold
+	if v <= 0 {
+		delete(s.inflight, token)
+		return
+	}
+	s.inflight[token] = v
+}
+
+// budgetForKey returns the configured BudgetUSD for the principal's key, or 0
+// (unlimited) when no key applies.
+func budgetForKey(p Principal) float64 {
+	if p.Key != nil {
+		return p.Key.BudgetUSD
+	}
+	return 0
 }
 
 // releaseDecision frees any reservation a gate placed for an allowed request.

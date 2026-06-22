@@ -4,9 +4,12 @@ import (
 	"context"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/llmux/llmux/core/config"
+	"github.com/llmux/llmux/core/keys"
 )
 
 // keyedServer builds a server with one static key configured.
@@ -38,8 +41,8 @@ func TestStandaloneIdentityUnchanged(t *testing.T) {
 	if _, ok := s.identity.(staticIdentity); !ok {
 		t.Fatalf("default identity = %T, want staticIdentity", s.identity)
 	}
-	if _, ok := s.budget.(staticBudgetGate); !ok {
-		t.Fatalf("default budget = %T, want staticBudgetGate", s.budget)
+	if _, ok := s.budget.(*staticBudgetGate); !ok {
+		t.Fatalf("default budget = %T, want *staticBudgetGate", s.budget)
 	}
 
 	p, ok := s.identity.Resolve(context.Background(), "sk-good")
@@ -89,6 +92,68 @@ func TestStandaloneBudgetDeny(t *testing.T) {
 	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != 402 {
 		t.Fatalf("status=%d want 402 body=%s", rec.Code, rec.Body.String())
+	}
+}
+
+// TestStaticBudgetReservationBoundsConcurrency verifies the static gate places
+// an in-flight reservation so that many concurrent requests near the budget
+// limit can't ALL pass the OverBudget check before any has recorded spend (which
+// previously let them overshoot BudgetUSD). With budget=0.10 and a per-request
+// hold of staticReservationHold (0.05), at most ceil(0.10/0.05)=2 requests can
+// be admitted while none has yet recorded spend; the rest are denied.
+func TestStaticBudgetReservationBoundsConcurrency(t *testing.T) {
+	store := keys.NewMemStore([]config.KeyConfig{{Key: "sk", Name: "team", BudgetUSD: 0.10}})
+	g := newStaticBudgetGate(store)
+	p := Principal{Token: "sk", AccountID: "team"}
+	if k, ok := store.Lookup("sk"); ok {
+		p.Key = k
+	}
+
+	const n = 50
+	var allowed, denied int64
+	var wg sync.WaitGroup
+	var holds []func()
+	var hmu sync.Mutex
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			d := g.Check(context.Background(), p)
+			if d.Denied {
+				atomic.AddInt64(&denied, 1)
+				return
+			}
+			atomic.AddInt64(&allowed, 1)
+			// Hold the reservation (don't release) to model in-flight requests
+			// that have not yet recorded spend.
+			if d.Release != nil {
+				hmu.Lock()
+				holds = append(holds, d.Release)
+				hmu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+
+	// Without the reservation layer, all 50 would pass (spend is still 0). With
+	// it, the in-flight holds bound concurrent admits to the budget/hold ratio.
+	maxAllowed := int64(0.10/staticReservationHold) + 1 // small slack for float edge
+	if allowed > maxAllowed {
+		t.Fatalf("allowed=%d exceeds reservation bound (~%d); reservation not enforced", allowed, maxAllowed)
+	}
+	if allowed == n {
+		t.Fatalf("all %d concurrent requests passed — reservation absent (would overshoot budget)", n)
+	}
+	if allowed+denied != n {
+		t.Fatalf("allowed(%d)+denied(%d) != %d", allowed, denied, n)
+	}
+
+	// Releasing the holds frees budget again for subsequent requests.
+	for _, r := range holds {
+		r()
+	}
+	if d := g.Check(context.Background(), p); d.Denied {
+		t.Fatalf("after releasing holds, a fresh request should pass (spend still under budget): %q", d.Reason)
 	}
 }
 
