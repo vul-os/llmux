@@ -11,8 +11,27 @@ import javascript from "highlight.js/lib/languages/javascript";
 import typescript from "highlight.js/lib/languages/typescript";
 import json from "highlight.js/lib/languages/json";
 import go from "highlight.js/lib/languages/go";
+import ruby from "highlight.js/lib/languages/ruby";
+import php from "highlight.js/lib/languages/php";
+import java from "highlight.js/lib/languages/java";
+import csharp from "highlight.js/lib/languages/csharp";
+import rust from "highlight.js/lib/languages/rust";
+import cpp from "highlight.js/lib/languages/cpp";
+import c from "highlight.js/lib/languages/c";
+import swift from "highlight.js/lib/languages/swift";
+import kotlin from "highlight.js/lib/languages/kotlin";
+import elixir from "highlight.js/lib/languages/elixir";
+import r from "highlight.js/lib/languages/r";
+import dart from "highlight.js/lib/languages/dart";
 
-const HL = { languages: { bash, sh: bash, python, javascript, js: javascript, typescript, json, go } };
+const HL = {
+  languages: {
+    bash, sh: bash, shell: bash, python, javascript, js: javascript,
+    typescript, ts: typescript, json, go,
+    ruby, rb: ruby, php, java, csharp, cs: csharp, rust, rs: rust,
+    cpp, "c++": cpp, c, swift, kotlin, kt: kotlin, elixir, ex: elixir, r, dart,
+  },
+};
 
 import quickstart from "../../docs/quickstart.md?raw";
 import providers from "../../docs/providers.md?raw";

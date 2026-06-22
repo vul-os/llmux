@@ -156,6 +156,33 @@ resp = client.chat.completions.create(
 print(resp.usage)                           # includes per-request cost
 ```
 
+```javascript
+import OpenAI from "openai";
+
+const client = new OpenAI({ baseURL: "http://localhost:4000/v1", apiKey: "sk-team-a" });
+const res = await client.chat.completions.create({
+  model: "cheapest",
+  messages: [{ role: "user", content: "hi" }],
+});
+console.log(res.choices[0].message.content);
+```
+
+```go
+cfg := openai.DefaultConfig("sk-team-a")          // github.com/sashabaranov/go-openai
+cfg.BaseURL = "http://localhost:4000/v1"
+res, _ := openai.NewClientWithConfig(cfg).CreateChatCompletion(context.Background(),
+    openai.ChatCompletionRequest{
+        Model:    "cheapest",
+        Messages: []openai.ChatCompletionMessage{{Role: "user", Content: "hi"}},
+    })
+fmt.Println(res.Choices[0].Message.Content)
+```
+
+> **17+ languages** — copy-paste examples for Python, Node, TypeScript, Go, Ruby,
+> PHP, Java, C#, Rust, **C++**, **C**, Swift, Kotlin, Elixir, R, and Dart are in
+> the [Quickstart docs](web/docs/quickstart.md) (and at `/ui/docs` in the running
+> gateway).
+
 Add `"stream": true` for byte-identical OpenAI SSE. List available models and their pricing with `GET /v1/models`, or from the CLI:
 
 ```bash
