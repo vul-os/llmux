@@ -1,0 +1,21 @@
+<svg width="100%" viewBox="0 0 680 240" role="img" xmlns="http://www.w3.org/2000/svg" style="">
+<title style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">llmux icon</title>
+<desc style="fill:rgb(0, 0, 0);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto">The llmux app icon: a multiplexer glyph in white on a rounded teal tile.</desc>
+
+<defs>
+<symbol id="mux" viewBox="0 0 76 72">
+<g fill="currentColor" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+<circle cx="8" cy="18" r="2.6" stroke="none"/>
+<circle cx="8" cy="36" r="2.6" stroke="none"/>
+<circle cx="8" cy="54" r="2.6" stroke="none"/>
+<line x1="11" y1="18" x2="30" y2="18" fill="none"/>
+<line x1="11" y1="36" x2="30" y2="36" fill="none"/>
+<line x1="11" y1="54" x2="30" y2="54" fill="none"/>
+<path d="M30 12 L54 26 L54 46 L30 60 Z" fill="none"/>
+<line x1="54" y1="36" x2="71" y2="36" fill="none"/>
+</g>
+</symbol>
+</defs>
+<rect x="262" y="40" width="156" height="156" rx="36" style="fill:rgb(45, 212, 191);stroke:none;color:rgb(0, 0, 0);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/>
+<g style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"><use href="#mux" x="287" y="71" width="106" height="100" style="fill:rgb(0, 0, 0);stroke:none;color:rgb(255, 255, 255);stroke-width:1px;stroke-linecap:butt;stroke-linejoin:miter;opacity:1;font-family:&quot;Anthropic Sans&quot;, -apple-system, BlinkMacSystemFont, &quot;Segoe UI&quot;, sans-serif;font-size:16px;font-weight:400;text-anchor:start;dominant-baseline:auto"/></g>
+</svg>
