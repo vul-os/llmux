@@ -1,11 +1,19 @@
-# llmux
+<div align="center">
 
-**One OpenAI-compatible endpoint for every LLM provider.**
+<img src="assets/llmux-logo.svg" alt="llmux" width="340" />
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-0f6a6c.svg)](LICENSE)
+### One OpenAI-compatible endpoint for every LLM provider.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-2DD4BF.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Tests](https://img.shields.io/badge/tests-passing-4f7a4d)](TESTING.md)
+[![Tests](https://img.shields.io/badge/tests-passing-14B8A6)](TESTING.md)
+
+<br/>
+
+<img src="docs/screenshots/landing.png" alt="llmux landing page — every model, every language, one channel" width="860" />
+
+</div>
 
 llmux is a single Go binary that speaks the **OpenAI HTTP API** and routes every request to the provider behind it — OpenAI, Anthropic, Azure OpenAI, AWS Bedrock, Cohere, Gemini, or any OpenAI-shaped upstream via passthrough. Because every language already ships a mature OpenAI client that accepts a custom `base_url`, you point your existing SDK at llmux and get **routing, fallbacks, per-key budgets, caching, and live cost** underneath — with zero per-language code.
 
@@ -56,6 +64,31 @@ web/                 Vite + React admin SPA, embedded at /ui
 ```
 
 The OpenAI HTTP schema is the canonical contract: providers are adapters behind it, routing and budget controls ride on standard fields plus `extra_headers` / `metadata`, and the streaming format is byte-identical to OpenAI. The `core` packages never import `integration/cp`; the control-plane adapter is wired only by `cmd/llmux` and only when `LLMUX_CP_URL` is set — delete it and the standalone build still works.
+
+---
+
+## Screenshots
+
+The admin dashboard ships *inside* the binary and is served at `/ui` — no separate service, no extra deploy. Below: live usage by model, virtual keys with per-key budgets and spend, and the merged price catalog.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dashboard-usage.png" alt="Dashboard — usage by model with request counts, tokens, and live cost" /></td>
+    <td width="50%"><img src="docs/screenshots/dashboard-keys.png" alt="Dashboard — virtual keys with budgets, spend, and rate limits" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Usage</b> — requests, tokens, and cost, per model</sub></td>
+    <td align="center"><sub><b>Keys</b> — per-key budgets, spend, and RPM</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/dashboard-models.png" alt="Dashboard — the live model price catalog with input/output cost and context window" /></td>
+    <td width="50%"><img src="docs/screenshots/docs.png" alt="Built-in documentation served from the binary" /></td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Models</b> — the live, merged price catalog</sub></td>
+    <td align="center"><sub><b>Docs</b> — quickstart, served from the binary</sub></td>
+  </tr>
+</table>
 
 ---
 
