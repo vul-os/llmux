@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/llmux-logo.svg" alt="llmux" width="340" />
+<img src="assets/llmux-logo.png" alt="llmux" width="340" />
 
 ### One OpenAI-compatible endpoint for every LLM provider.
 
