@@ -2,34 +2,42 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light dark" />
-    <!-- theme-color tracks the paper background (light) and ink (dark) so the
-         mobile chrome doesn't fight the warm-neutral palette. -->
-    <meta name="theme-color" content="#fbf9f5" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#131110" media="(prefers-color-scheme: dark)" />
-    <meta name="description" content="llmux — the Vulos LLM gateway. One OpenAI-compatible gateway for every provider, in every language. Routing, fallbacks, budgets, caching, and live cost in a single Go binary. Part of the Vulos OS suite." />
+
+    <!-- Favicons / app icon: the teal multiplexer tile (public/). SVG is the
+         primary mark; PNGs cover Safari/iOS and legacy browsers. -->
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+
+    <!-- Dark-first teal theme. theme-color = brand bg (#0A0F1A dark / #F8FAFA
+         light); color-scheme advertises the dark-default palette. -->
+    <meta name="color-scheme" content="dark light" />
+    <meta name="theme-color" content="#0A0F1A" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#F8FAFA" media="(prefers-color-scheme: light)" />
+
+    <meta name="description" content="llmux is the Vulos LLM gateway: one OpenAI-compatible endpoint for every provider, in every language. Routing, fallbacks, budgets, caching, and live cost in a single Go binary. Part of the Vulos OS suite." />
     <title>llmux — the Vulos LLM gateway</title>
 
     <!-- Open Graph / Twitter -->
     <meta property="og:type" content="website" />
     <meta property="og:title" content="llmux — the Vulos LLM gateway" />
-    <meta property="og:description" content="One OpenAI-compatible gateway for every provider, in every language. Part of the Vulos OS suite." />
+    <meta property="og:description" content="One OpenAI-compatible gateway for every provider, in every language. Routing, fallbacks, budgets, caching, and live cost in a single Go binary. Part of the Vulos OS suite." />
     <meta property="og:url" content="https://vulos.org" />
-    <meta property="og:image" content="https://vulos.org/og.jpg" />
+    <meta property="og:image" content="https://vulos.org/llmux.png" />
+    <meta property="og:image:alt" content="llmux — the Vulos LLM gateway" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="llmux — the Vulos LLM gateway" />
-    <meta name="twitter:description" content="One OpenAI-compatible gateway for every provider, in every language." />
-    <meta name="twitter:image" content="https://vulos.org/og.jpg" />
+    <meta name="twitter:description" content="One OpenAI-compatible gateway for every provider, in every language. Part of the Vulos OS suite." />
+    <meta name="twitter:image" content="https://vulos.org/llmux.png" />
 
     <!--
-      Fonts: OS-native grotesque + serif via ui-sans-serif / ui-serif (see
-      src/styles.css). Distinctive and characterful without shipping a webfont,
-      and avoids the Inter sameness of generic React apps — matches the Vulos suite.
+      Fonts: Inter / Geist sans for UI, JetBrains / Geist mono for code, tables,
+      and the llmux wordmark (see src/tokens.css). Falls back to OS faces so the
+      app stays fast without a blocking webfont.
     -->
-    <script type="module" crossorigin src="/ui/assets/index-D3DDh-b5.js"></script>
-    <link rel="stylesheet" crossorigin href="/ui/assets/index-CpR50XsN.css">
+    <script type="module" crossorigin src="/ui/assets/index-myS4yE0i.js"></script>
+    <link rel="stylesheet" crossorigin href="/ui/assets/index-iFTQnu_Q.css">
   </head>
   <body>
     <div id="root"></div>
