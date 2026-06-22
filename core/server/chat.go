@@ -178,6 +178,18 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, req *openai.
 		return
 	}
 	if lastErr != nil && started {
+		// Tokens were already served to the client before the stream failed
+		// (client disconnect / pipe failure / mid-stream upstream error). Meter
+		// what was served so far rather than billing nobody: prefer the upstream's
+		// last reported usage, else fall back to the streamed-text estimate.
+		metered := lastUsage
+		if metered == nil {
+			metered = estimateStreamUsage(req, contentChars)
+			s.attachCost(req.Model, usedProvider, metered)
+		}
+		s.recordSpend(r.Context(), metered)
+		s.logUsage(r.Context(), req.Model, true, false, metered)
+
 		body := openai.NewError(lastErr.Error(), "upstream_error", "")
 		if pe := asProviderError(lastErr); pe != nil && pe.Body != nil {
 			body = pe.Body

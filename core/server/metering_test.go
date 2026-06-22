@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -220,6 +222,109 @@ func TestStreamMetersViaEstimate(t *testing.T) {
 	if !r.Stream {
 		t.Fatalf("record should be marked streaming: %+v", r)
 	}
+}
+
+// TestForwardLargeStreamMeteredByEstimate: a streamed forward whose final usage
+// chunk lands BEYOND the bounded meter tap (maxMeterTapBytes). Previously this
+// silently billed cost_usd:0; now it must be metered via the served-bytes
+// estimate so large forwards aren't free.
+func TestForwardLargeStreamMeteredByEstimate(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fl := w.(http.Flusher)
+		// Emit well over maxMeterTapBytes (1 MiB) of content so the usage chunk
+		// at the end is past the tap window.
+		chunk := []byte("data: {\"id\":\"c\",\"object\":\"text_completion\",\"choices\":[{\"text\":\"" + strings.Repeat("x", 4000) + "\"}]}\n\n")
+		written := 0
+		for written < (maxMeterTapBytes + 256*1024) {
+			w.Write(chunk)
+			written += len(chunk)
+			fl.Flush()
+		}
+		// Final usage chunk — beyond the tap, so it won't be parsed.
+		fmt.Fprint(w, "data: {\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1,\"total_tokens\":2}}\n\n")
+		fmt.Fprint(w, "data: [DONE]\n\n")
+		fl.Flush()
+	}))
+	defer up.Close()
+	s, cl := newMeteredServer(t, up)
+	priceModel(t, s, "openai/gpt-3.5-turbo-instruct")
+
+	rec := doPost(s, "/v1/completions", `{"model":"openai/gpt-3.5-turbo-instruct","stream":true,"prompt":"hi"}`)
+	if rec.Code != 200 {
+		t.Fatalf("status=%d", rec.Code)
+	}
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	if len(cl.recs) != 1 {
+		t.Fatalf("expected 1 metered record for large forward stream, got %d", len(cl.recs))
+	}
+	r := cl.recs[0]
+	if r.Total <= 0 || r.CostUSD <= 0 {
+		t.Fatalf("large forward stream not metered (silent cost=0 regression): %+v", r)
+	}
+	if !r.Stream {
+		t.Fatalf("record should be marked streaming: %+v", r)
+	}
+}
+
+// TestStreamMetersOnClientDisconnect: tokens are served, then the client side
+// fails mid-stream (write error after the first chunk). The request must STILL
+// be metered for what was served so far — not billed to nobody.
+func TestStreamMetersOnClientDisconnect(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		fl := w.(http.Flusher)
+		// Several content chunks, no usage chunk; the client will drop after one.
+		for i := 0; i < 5; i++ {
+			w.Write([]byte("data: {\"id\":\"1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"the quick brown fox \"}}]}\n\n"))
+			fl.Flush()
+		}
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	defer up.Close()
+	s, cl := newMeteredServer(t, up)
+	priceModel(t, s, "openai/gpt-4o")
+
+	// failingWriter accepts the first SSE write, then errors — modeling a client
+	// disconnect / broken pipe mid-stream.
+	fw := &failingWriter{hdr: http.Header{}, failAfter: 1}
+	body := `{"model":"openai/gpt-4o","stream":true,"messages":[{"role":"user","content":"hi there"}]}`
+	s.Handler().ServeHTTP(fw, httptest.NewRequest("POST", "/v1/chat/completions", strings.NewReader(body)))
+
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	if len(cl.recs) != 1 {
+		t.Fatalf("expected 1 metered record after mid-stream disconnect, got %d", len(cl.recs))
+	}
+	r := cl.recs[0]
+	if r.Total <= 0 || r.CostUSD <= 0 {
+		t.Fatalf("served tokens not metered on disconnect: %+v", r)
+	}
+	if !r.Stream {
+		t.Fatalf("record should be marked streaming: %+v", r)
+	}
+}
+
+// failingWriter is an http.ResponseWriter+Flusher whose Write starts failing
+// after failAfter successful writes, modeling a client disconnect mid-stream.
+type failingWriter struct {
+	hdr       http.Header
+	writes    int
+	failAfter int
+	status    int
+}
+
+func (f *failingWriter) Header() http.Header { return f.hdr }
+func (f *failingWriter) WriteHeader(s int)   { f.status = s }
+func (f *failingWriter) Flush()              {}
+func (f *failingWriter) Write(p []byte) (int, error) {
+	f.writes++
+	if f.writes > f.failAfter {
+		return 0, io.ErrClosedPipe
+	}
+	return len(p), nil
 }
 
 // --- helpers ----------------------------------------------------------------

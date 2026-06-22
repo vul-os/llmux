@@ -12,6 +12,9 @@ import (
 
 // UsageRecord is one logged request's usage and cost.
 type UsageRecord struct {
+	// ID is a unique per-record identifier used as an idempotency key by usage
+	// sinks (e.g. cp) so retries dedupe and a record is billed at most once.
+	ID         string  `json:"id"`
 	Time       string  `json:"time"`
 	KeyName    string  `json:"key,omitempty"`
 	AccountID  string  `json:"account_id,omitempty"`
@@ -65,6 +68,7 @@ func (s *Server) SetUsageLogger(l UsageLogger) {
 // to the Vulos account, not just the key label.
 func (s *Server) logUsage(ctx context.Context, model string, stream, cached bool, usage *openai.Usage) {
 	rec := UsageRecord{
+		ID:      genID("usage-"),
 		Time:    time.Now().UTC().Format(time.RFC3339),
 		KeyName: keyName(ctx), AccountID: accountFrom(ctx),
 		Model: model, Stream: stream, Cached: cached,

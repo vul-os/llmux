@@ -82,16 +82,27 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 	// a usage record so it is auditable even when the catalog has no price (the
 	// record then carries tokens=0, cost=0, with the model). Upstream errors carry
 	// no spend, so they are relayed but not metered.
-	usage := copyForwardMetered(w, fr)
+	usage, served := copyForwardMetered(w, fr)
 	if status < 200 || status >= 300 {
 		return
 	}
+	stream := isStreamRequest(raw)
 	if usage == nil {
-		usage = &openai.Usage{}
+		// No usage parsed from the (bounded) tap. For a streamed forward this can
+		// mean the upstream's usage chunk landed beyond maxMeterTapBytes on a large
+		// stream — billing it as cost=0 would silently drop revenue. Estimate from
+		// the prompt text + total bytes actually served so large forwards are still
+		// metered. Non-streamed bodies with no usage (e.g. images/audio) stay a
+		// zero-token auditable line.
+		if stream && served > 0 {
+			usage = estimateForwardUsage(raw, served)
+		} else {
+			usage = &openai.Usage{}
+		}
 	}
 	s.attachCost(model, t.Provider.Name(), usage)
 	s.recordSpend(r.Context(), usage)
-	s.logUsage(r.Context(), model, isStreamRequest(raw), false, usage)
+	s.logUsage(r.Context(), model, stream, false, usage)
 }
 
 // isStreamRequest best-effort reports whether the request body asked to stream.
@@ -124,9 +135,11 @@ const maxMeterTapBytes = 1 << 20 // 1 MiB
 
 // copyForwardMetered relays the upstream response byte-for-byte (flushing for
 // SSE) while tapping a bounded copy of the body so it can parse any reported
-// usage. It returns the parsed usage, or nil when the upstream reported none.
-// Relaying is never blocked or altered by the tap.
-func copyForwardMetered(w http.ResponseWriter, fr *provider.ForwardResponse) *openai.Usage {
+// usage. It returns the parsed usage (nil when the upstream reported none) and
+// the TOTAL number of body bytes served (used to estimate metering for large
+// streams whose usage chunk fell beyond the bounded tap). Relaying is never
+// blocked or altered by the tap.
+func copyForwardMetered(w http.ResponseWriter, fr *provider.ForwardResponse) (*openai.Usage, int) {
 	for k, vs := range fr.Header {
 		if hopByHop(k) {
 			continue
@@ -139,10 +152,12 @@ func copyForwardMetered(w http.ResponseWriter, fr *provider.ForwardResponse) *op
 	flusher, _ := w.(http.Flusher)
 
 	var tap bytes.Buffer
+	served := 0
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := fr.Body.Read(buf)
 		if n > 0 {
+			served += n
 			w.Write(buf[:n])
 			if flusher != nil {
 				flusher.Flush()
@@ -157,9 +172,46 @@ func copyForwardMetered(w http.ResponseWriter, fr *provider.ForwardResponse) *op
 	}
 	// Only meter usage on a successful upstream status (errors carry no spend).
 	if fr.Status < 200 || fr.Status >= 300 {
-		return nil
+		return nil, served
 	}
-	return extractUsage(tap.Bytes())
+	return extractUsage(tap.Bytes()), served
+}
+
+// estimateForwardUsage approximates token usage for a streamed forward whose
+// upstream did not surface a parseable usage object within the bounded tap (e.g.
+// a large stream whose final usage chunk landed past maxMeterTapBytes). It is a
+// deliberate floor — prompt from the request text, completion from the served
+// byte count — so large forwards are metered rather than silently billed as
+// cost=0. A real usage object, when parsed, always wins.
+func estimateForwardUsage(reqRaw []byte, servedBytes int) *openai.Usage {
+	prompt := charsToTokens(promptCharsFromBody(reqRaw))
+	completion := charsToTokens(servedBytes)
+	return &openai.Usage{
+		PromptTokens:     prompt,
+		CompletionTokens: completion,
+		TotalTokens:      prompt + completion,
+	}
+}
+
+// promptCharsFromBody best-effort sums the character length of prompt-like text
+// in a forwarded request body (chat messages, a prompt string, or input). Used
+// only for the estimate floor, so a loose heuristic is acceptable.
+func promptCharsFromBody(raw []byte) int {
+	var doc struct {
+		Prompt   json.RawMessage `json:"prompt"`
+		Input    json.RawMessage `json:"input"`
+		Messages []struct {
+			Content json.RawMessage `json:"content"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return 0
+	}
+	n := len(doc.Prompt) + len(doc.Input)
+	for _, m := range doc.Messages {
+		n += len(m.Content)
+	}
+	return n
 }
 
 // extractUsage finds an OpenAI-style usage object in a forwarded response body.
