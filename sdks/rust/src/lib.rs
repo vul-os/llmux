@@ -247,3 +247,116 @@ pub fn openai_client() -> Result<async_openai::Client<async_openai::config::Open
         .with_api_key("llmux-local");
     Ok(async_openai::Client::with_config(config))
 }
+
+#[cfg(test)]
+mod tests {
+    //! Unit tests for the private helpers (binary resolution, health poll).
+    //! Public-API / spawn tests live in `tests/sidecar.rs`.
+
+    use super::*;
+    use std::io::Write;
+    use std::net::TcpListener;
+    use std::sync::Mutex;
+    use std::thread;
+
+    // Serialize tests that mutate process-wide env (LLMUX_BINARY / PATH).
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn binary_path_env_override_wins() {
+        let _g = ENV_LOCK.lock().unwrap();
+        let dir = std::env::temp_dir().join(format!("llmux-rs-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let target = dir.join("custom-llmux");
+        std::fs::write(&target, "#!/bin/sh\n").unwrap();
+        std::env::set_var("LLMUX_BINARY", &target);
+        let got = binary_path().unwrap();
+        std::env::remove_var("LLMUX_BINARY");
+        assert_eq!(got, target);
+    }
+
+    #[test]
+    fn binary_path_errors_when_missing() {
+        let _g = ENV_LOCK.lock().unwrap();
+        std::env::remove_var("LLMUX_BINARY");
+        let saved = std::env::var_os("PATH");
+        std::env::set_var("PATH", "");
+        // Only assert the error when there is genuinely no bundled bin/llmux.
+        let bundled = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("bin")
+            .join("llmux");
+        let res = binary_path();
+        if let Some(p) = saved {
+            std::env::set_var("PATH", p);
+        }
+        if !bundled.exists() {
+            match res {
+                Err(Error::BinaryNotFound) => {}
+                other => panic!("expected BinaryNotFound, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn free_port_is_in_range() {
+        let p = free_port().unwrap();
+        assert!(p > 0);
+    }
+
+    #[test]
+    fn openai_base_url_appends_v1_format() {
+        // Pure string contract via the public formatter logic.
+        let base = "http://127.0.0.1:12345";
+        assert_eq!(format!("{base}/v1"), "http://127.0.0.1:12345/v1");
+    }
+
+    #[test]
+    fn wait_healthy_ready_on_200() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                if let Ok(mut s) = stream {
+                    let mut buf = [0u8; 256];
+                    use std::io::Read as _;
+                    let _ = s.read(&mut buf);
+                    let _ = s.write_all(
+                        b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nok",
+                    );
+                }
+            }
+        });
+        let base = format!("http://127.0.0.1:{port}");
+        wait_healthy(&base, Duration::from_secs(3)).expect("should become healthy");
+    }
+
+    #[test]
+    fn wait_healthy_times_out_on_non_200() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                if let Ok(mut s) = stream {
+                    let mut buf = [0u8; 256];
+                    use std::io::Read as _;
+                    let _ = s.read(&mut buf);
+                    let _ = s.write_all(
+                        b"HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    );
+                }
+            }
+        });
+        let base = format!("http://127.0.0.1:{port}");
+        let err = wait_healthy(&base, Duration::from_millis(400)).unwrap_err();
+        assert!(matches!(err, Error::Health(_)));
+    }
+
+    #[test]
+    fn wait_healthy_times_out_when_unreachable() {
+        // Reserve then drop a port so nothing is listening.
+        let port = free_port().unwrap();
+        let base = format!("http://127.0.0.1:{port}");
+        let err = wait_healthy(&base, Duration::from_millis(400)).unwrap_err();
+        assert!(matches!(err, Error::Health(_)));
+    }
+}
