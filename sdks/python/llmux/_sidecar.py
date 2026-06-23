@@ -101,7 +101,9 @@ def start(
         try:
             _wait_healthy(_base, timeout)
         except Exception:
-            stop()
+            # _lock is already held here; use the unlocked variant to avoid a
+            # self-deadlock on the non-reentrant lock.
+            _stop_locked()
             raise
         atexit.register(stop)
         return _base
@@ -121,12 +123,17 @@ def openai_base_url() -> str:
 
 def stop() -> None:
     """Stop the sidecar if running."""
-    global _proc
     with _lock:
-        if _proc is not None and _proc.poll() is None:
-            _proc.terminate()
-            try:
-                _proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                _proc.kill()
-        _proc = None
+        _stop_locked()
+
+
+def _stop_locked() -> None:
+    """Terminate the child and clear state. Caller must hold ``_lock``."""
+    global _proc
+    if _proc is not None and _proc.poll() is None:
+        _proc.terminate()
+        try:
+            _proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _proc.kill()
+    _proc = None
