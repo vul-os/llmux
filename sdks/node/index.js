@@ -71,12 +71,17 @@ async function start(opts = {}) {
 
   _proc = spawn(binaryPath(), [], { env, stdio: "inherit" });
   _proc.on("exit", () => { if (_proc && _proc.exitCode !== null) _proc = null; });
+  // Capture spawn failures (e.g. ENOENT for a missing binary) so they surface
+  // as a rejected start() rather than an uncaught 'error' event.
+  let spawnError = null;
+  _proc.on("error", (e) => { spawnError = e; });
   _base = `http://${addr}`;
   try {
+    if (spawnError) throw spawnError;
     await waitHealthy(_base, opts.timeoutMs || 10000);
   } catch (e) {
     stop();
-    throw e;
+    throw spawnError || e;
   }
   return _base;
 }
