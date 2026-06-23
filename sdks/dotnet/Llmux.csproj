@@ -24,6 +24,12 @@
     </ItemGroup>
   -->
 
+  <!-- Keep the test project out of the library compilation. -->
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <None Remove="tests/**" />
+  </ItemGroup>
+
   <!-- Ship the bundled binary if present (gitignored in this repo). -->
   <ItemGroup>
     <None Include="bin/**" Pack="true" PackagePath="contentFiles/any/any/bin" Condition="Exists('bin')">
