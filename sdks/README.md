@@ -32,6 +32,28 @@ convenience constructor returns a client already pointed at the gateway
 (Ruby → `ruby-openai`, PHP → `openai-php/client`, Rust → `async-openai` behind a
 feature, Java → `openai-java`, .NET → the official `OpenAI` nuget).
 
+## Go: embed in-process
+
+Go doesn't spawn the binary — it imports the gateway package and runs it
+in-process, no subprocess required. Same `core/` server the binary uses:
+
+```go
+import "github.com/llmux/llmux/sdks/go/llmux"
+
+local, err := llmux.Start(llmux.Options{}) // auto-detects providers from env; ephemeral port
+if err != nil {
+	log.Fatal(err)
+}
+defer local.Close()
+
+// point any OpenAI-compatible Go client at the embedded gateway
+cfg := openai.DefaultConfig("llmux-local")        // github.com/sashabaranov/go-openai
+cfg.BaseURL = local.OpenAIBaseURL()               // → http://127.0.0.1:<port>/v1
+```
+
+`Options` lets you pass an explicit `*config.Config`, override `Addr`, or set
+`ReadyTimeout`; `Start` blocks until `/health` is serving.
+
 ## Binary distribution
 
 For local development, run `make sdk-bins` to build the binary into each
