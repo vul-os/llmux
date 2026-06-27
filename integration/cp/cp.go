@@ -55,6 +55,11 @@ type Config struct {
 	// cold-cache degraded mode when DegradedFailOpen is false. 0 = a built-in
 	// conservative default (defaultDegradedRPM).
 	DegradedRPM int
+	// IdentityCacheMax caps the number of last-known-good identity entries
+	// retained. The cache is pruned lazily on insert (expired entries swept,
+	// oldest evicted past the cap) so it stays bounded by distinct-token churn.
+	// 0 = a built-in default (defaultIdentityCacheMax).
+	IdentityCacheMax int
 }
 
 // Enabled reports whether the cp adapter should be wired (a base URL is set).
@@ -80,6 +85,10 @@ func (c Config) WithDegradedFailOpen(b bool) Config { c.DegradedFailOpen = b; re
 // WithDegradedRPM returns a copy with the cold-cache degraded RPM cap set.
 func (c Config) WithDegradedRPM(rpm int) Config { c.DegradedRPM = rpm; return c }
 
+// WithIdentityCacheMax returns a copy with the last-known-good identity cache
+// size cap set (0 = built-in default).
+func (c Config) WithIdentityCacheMax(n int) Config { c.IdentityCacheMax = n; return c }
+
 func (c Config) client() *http.Client { return &http.Client{Timeout: 5 * time.Second} }
 
 func (c Config) auth(req *http.Request) {
@@ -97,6 +106,13 @@ func (c Config) auth(req *http.Request) {
 // being admitted quickly once cp recovers.
 const defaultIdentityTTL = 30 * time.Second
 
+// defaultIdentityCacheMax bounds how many last-known-good identity entries are
+// retained. Without a cap the cache grows unbounded by distinct-token count over
+// the process lifetime; with it, the cache is pruned lazily on insert (expired
+// entries swept, then oldest evicted past the cap). Overridable via
+// Config.IdentityCacheMax.
+const defaultIdentityCacheMax = 4096
+
 // Identity resolves a bearer token to a Vulos account via cp.
 //
 // It mirrors the BudgetGate's last-known-good behavior so a brief cp outage
@@ -109,6 +125,7 @@ type Identity struct {
 	cfg  Config
 	http *http.Client
 	ttl  time.Duration
+	max  int // cap on retained last-known-good entries (<=0 disables the cap)
 
 	mu    sync.Mutex
 	cache map[string]idCacheEntry // token -> last successfully-resolved principal
@@ -125,7 +142,11 @@ func NewIdentity(cfg Config) *Identity {
 	if cfg.EntitlementTTL > 0 {
 		ttl = cfg.EntitlementTTL
 	}
-	return &Identity{cfg: cfg, http: cfg.client(), ttl: ttl, cache: map[string]idCacheEntry{}}
+	max := defaultIdentityCacheMax
+	if cfg.IdentityCacheMax > 0 {
+		max = cfg.IdentityCacheMax
+	}
+	return &Identity{cfg: cfg, http: cfg.client(), ttl: ttl, max: max, cache: map[string]idCacheEntry{}}
 }
 
 type resolveRequest struct {
@@ -176,6 +197,9 @@ func (i *Identity) Resolve(ctx context.Context, token string) (server.Principal,
 		p := server.Principal{Token: token, AccountID: r.AccountID, Tier: r.Tier}
 		i.mu.Lock()
 		i.cache[token] = idCacheEntry{p: p, at: time.Now()}
+		// Lazy sweep: drop expired entries and bound the cache size so it can't
+		// grow unbounded by distinct-token count over the process lifetime.
+		i.pruneCacheLocked()
 		i.mu.Unlock()
 		return p, true
 	}
@@ -192,6 +216,39 @@ func (i *Identity) Resolve(ctx context.Context, token string) (server.Principal,
 	delete(i.cache, token)
 	i.mu.Unlock()
 	return server.Principal{}, false
+}
+
+// pruneCacheLocked bounds the last-known-good identity cache. It first sweeps
+// every entry whose age has passed the TTL (those can never be served again, so
+// retaining them only leaks memory), then, if the cache still exceeds the size
+// cap, evicts the oldest entries until it fits. Callers must hold i.mu.
+//
+// This preserves the existing semantics exactly: pruning only removes entries
+// that are already unusable (expired) or, under memory pressure, the oldest
+// ones; it never serves an entry that lastKnownGood/Resolve would have rejected.
+func (i *Identity) pruneCacheLocked() {
+	now := time.Now()
+	for tok, ce := range i.cache {
+		if now.Sub(ce.at) >= i.ttl {
+			delete(i.cache, tok)
+		}
+	}
+	if i.max <= 0 {
+		return
+	}
+	// Over the cap even after the expiry sweep (lots of fresh distinct tokens):
+	// evict the oldest entries until within the cap.
+	for len(i.cache) > i.max {
+		var oldestTok string
+		var oldestAt time.Time
+		first := true
+		for tok, ce := range i.cache {
+			if first || ce.at.Before(oldestAt) {
+				oldestTok, oldestAt, first = tok, ce.at, false
+			}
+		}
+		delete(i.cache, oldestTok)
+	}
 }
 
 // lastKnownGood returns a previously-confirmed principal for token when one was

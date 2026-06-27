@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -152,6 +153,74 @@ func TestIdentityLastKnownGoodTTLBounded(t *testing.T) {
 	time.Sleep(40 * time.Millisecond)
 	if _, ok := id.Resolve(context.Background(), "sk-tok"); ok {
 		t.Fatal("expired last-known-good must not be admitted")
+	}
+}
+
+// cacheLen reports the current size of the identity last-known-good cache.
+func (i *Identity) cacheLen() int {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return len(i.cache)
+}
+
+// TestIdentityCachePrunesExpired proves the last-known-good cache does not grow
+// unbounded: entries whose TTL has lapsed are swept on the next insert rather
+// than lingering forever (one entry per distinct token, leaking memory).
+func TestIdentityCachePrunesExpired(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body resolveRequest
+		json.NewDecoder(r.Body).Decode(&body)
+		// Echo a distinct account per token so each is a real cache entry.
+		json.NewEncoder(w).Encode(resolveResponse{AccountID: "acct_" + body.Key, Tier: "pro"})
+	}))
+	defer srv.Close()
+
+	id := NewIdentity(New(srv.URL, "").WithEntitlementTTL(20 * time.Millisecond))
+	// Populate the cache with several distinct tokens.
+	for _, tok := range []string{"a", "b", "c", "d"} {
+		if _, ok := id.Resolve(context.Background(), tok); !ok {
+			t.Fatalf("resolve %q failed", tok)
+		}
+	}
+	if got := id.cacheLen(); got != 4 {
+		t.Fatalf("cache size after warmup = %d, want 4", got)
+	}
+	// Let every entry age past the TTL, then resolve one more token. The insert's
+	// lazy sweep must drop the 4 expired entries, leaving only the fresh one.
+	time.Sleep(40 * time.Millisecond)
+	if _, ok := id.Resolve(context.Background(), "e"); !ok {
+		t.Fatal("resolve \"e\" failed")
+	}
+	if got := id.cacheLen(); got != 1 {
+		t.Fatalf("expired entries not pruned: cache size = %d, want 1", got)
+	}
+}
+
+// TestIdentityCacheBoundedBySizeCap proves the cache stays bounded even when many
+// distinct tokens are resolved within the TTL: past the configured cap the oldest
+// entries are evicted, so the cache can never exceed the cap.
+func TestIdentityCacheBoundedBySizeCap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body resolveRequest
+		json.NewDecoder(r.Body).Decode(&body)
+		json.NewEncoder(w).Encode(resolveResponse{AccountID: "acct_" + body.Key, Tier: "pro"})
+	}))
+	defer srv.Close()
+
+	// Long TTL (entries stay fresh) but a tiny size cap: growth is bounded by the
+	// cap via oldest-eviction, not by token count.
+	id := NewIdentity(New(srv.URL, "").WithEntitlementTTL(time.Hour).WithIdentityCacheMax(3))
+	for i := 0; i < 50; i++ {
+		tok := "tok-" + strconv.Itoa(i)
+		if _, ok := id.Resolve(context.Background(), tok); !ok {
+			t.Fatalf("resolve %q failed", tok)
+		}
+		if got := id.cacheLen(); got > 3 {
+			t.Fatalf("cache exceeded cap: size = %d after %d inserts, want <= 3", got, i+1)
+		}
+	}
+	if got := id.cacheLen(); got != 3 {
+		t.Fatalf("final cache size = %d, want exactly cap=3", got)
 	}
 }
 
