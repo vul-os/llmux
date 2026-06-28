@@ -37,7 +37,7 @@ func TestUsage(t *testing.T) {
 
 // TestVersionConstant guards the version string the `version` subcommand prints.
 func TestVersionConstant(t *testing.T) {
-	if version == "" {
+	if Version == "" {
 		t.Fatal("version must be non-empty")
 	}
 }
