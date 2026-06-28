@@ -14,17 +14,18 @@ This is the same open-core seam llmux already uses for the control plane:
 standalone llmux works with BYOK and/or local config and **no control plane**;
 central billing is an adapter layered on top.
 
-```text
-                         ┌───────────────────────── llmux gateway ─────────────────────────┐
- product (lilmail AI,    │  authMW: resolve Bearer → account (Identity seam)                 │
- office AI, …)           │     │                                                            │
-   POST /v1/chat/...  ───┼────▶│  route model → provider                                    │
-   Authorization:        │     │     │                                                      │
-     Bearer <token>      │     │     ├── BYOK key for (account, provider)?  ── yes ─▶ call provider with
-                         │     │     │                                          ACCOUNT key · UNMETERED
-                         │     │     └── no ──────────────────────────────▶ call provider with
-                         │     │                                                CENTRAL key · METERED ──▶ POST {cp}/api/usage
-                         └──────────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    product["product (lilmail AI, office AI, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
+
+    subgraph gateway["llmux gateway"]
+        auth["authMW: resolve Bearer → account (Identity seam)"] --> route["route model → provider"]
+        route --> byok{"BYOK key for (account, provider)?"}
+    end
+
+    byok -->|yes| acct["call provider with ACCOUNT key · UNMETERED"]
+    byok -->|no| central["call provider with CENTRAL key · METERED"]
+    central --> usage["POST {cp}/api/usage"]
 ```
 
 ---

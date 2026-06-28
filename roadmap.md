@@ -23,12 +23,14 @@ OpenAI-compatible HTTP API** (REST + SSE streaming). This solves "all languages"
   client at `https://llmux.to/v1` (or their self-hosted instance) — and get
   every provider, routing, fallbacks, budgets, and caching underneath.
 
-```
-  any-language app ──(OpenAI SDK, base_url=llmux)──▶ llmux gateway ──▶ OpenAI
-                                                                  ├──▶ Anthropic
-                                                                  ├──▶ Gemini
-                                                                  ├──▶ DeepSeek
-                                                                  └──▶ … 100+
+```mermaid
+flowchart LR
+    app["any-language app"] -->|"OpenAI SDK, base_url=llmux"| gw["llmux gateway"]
+    gw --> openai["OpenAI"]
+    gw --> anthropic["Anthropic"]
+    gw --> gemini["Gemini"]
+    gw --> deepseek["DeepSeek"]
+    gw --> more["… 100+"]
 ```
 
 **We write the gateway once; the language ecosystems already wrote the clients.**

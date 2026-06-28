@@ -36,12 +36,14 @@ It's **self-hosted, open source, has no telemetry**, and ships its admin
 dashboard *inside* the binary. An optional control-plane seam adds centralized
 billing when you want it, and is invisible when you don't.
 
-```text
-  any OpenAI client ──(base_url = llmux)──▶  ┌─────────┐ ──▶ OpenAI · Azure
-                                             │         │ ──▶ Anthropic
-                                             │  llmux  │ ──▶ Gemini · Cohere · Bedrock
-                                             │   mux   │ ──▶ DeepSeek · Groq · OpenRouter …
-                                             └─────────┘ ──▶ 100+ via passthrough
+```mermaid
+flowchart LR
+    client["any OpenAI client"] -->|"base_url = llmux"| mux["llmux mux"]
+    mux --> p1["OpenAI · Azure"]
+    mux --> p2["Anthropic"]
+    mux --> p3["Gemini · Cohere · Bedrock"]
+    mux --> p4["DeepSeek · Groq · OpenRouter …"]
+    mux --> p5["100+ via passthrough"]
 ```
 
 ## Quick start
