@@ -103,10 +103,23 @@ func NewTransportError(provider string, err error) *Error {
 		Body: openai.NewError("upstream request failed", "upstream_error", "")}
 }
 
+// noRedirect is a CheckRedirect hook that blocks HTTP redirect following.
+// Provider endpoints must never redirect the gateway to another host: allowing
+// automatic redirects opens an SSRF vector where a malicious or compromised
+// upstream could redirect an outbound POST to an internal metadata service
+// (e.g. 169.254.169.254). Returning http.ErrUseLastResponse makes the client
+// return the 3xx response unchanged; the provider adapter then treats the
+// non-200 status as an upstream error.
+func noRedirect(_ *http.Request, _ []*http.Request) error {
+	return http.ErrUseLastResponse
+}
+
 // DefaultHTTPClient is the shared client for upstream calls. Streaming uses no
 // overall timeout (handled via context); non-streaming callers may set their own.
-var DefaultHTTPClient = &http.Client{Timeout: 600 * time.Second}
+// Redirects are blocked (see noRedirect) to prevent redirect-based SSRF.
+var DefaultHTTPClient = &http.Client{Timeout: 600 * time.Second, CheckRedirect: noRedirect}
 
 // StreamHTTPClient has no client-level timeout so long streams aren't cut off;
 // cancellation is driven by the request context.
-var StreamHTTPClient = &http.Client{}
+// Redirects are blocked (see noRedirect) to prevent redirect-based SSRF.
+var StreamHTTPClient = &http.Client{CheckRedirect: noRedirect}
