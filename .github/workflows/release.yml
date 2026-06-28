@@ -1,0 +1,87 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build embedded web UI
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Verify tag matches declared version
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          go build -ldflags "-X main.Version=${VERSION}" -o /tmp/llmux-check ./cmd/llmux
+          BIN_VER=$(/tmp/llmux-check --version)
+          if [ "${BIN_VER}" != "${VERSION}" ]; then
+            echo "ERROR: binary reports version '${BIN_VER}' but tag is '${TAG}'"
+            exit 1
+          fi
+          echo "Version check passed: ${VERSION}"
+
+      - name: Build release binaries
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#v}"
+          LDFLAGS="-s -w -X main.Version=${VERSION}"
+          mkdir -p builds/llmux
+
+          cp llmux.example.json builds/llmux/llmux.example.json
+
+          # linux/amd64
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
+          cd builds && zip -r "llmux_${VERSION}_linux_amd64.zip" llmux/ && cd ..
+          rm builds/llmux/llmux
+
+          # linux/arm64
+          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
+          cd builds && zip -r "llmux_${VERSION}_linux_arm64.zip" llmux/ && cd ..
+          rm builds/llmux/llmux
+
+          # darwin/amd64
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
+          cd builds && zip -r "llmux_${VERSION}_darwin_amd64.zip" llmux/ && cd ..
+          rm builds/llmux/llmux
+
+          # darwin/arm64 (Apple Silicon)
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
+          cd builds && zip -r "llmux_${VERSION}_darwin_arm64.zip" llmux/ && cd ..
+          rm builds/llmux/llmux
+
+          # Source archive
+          git archive --format=zip HEAD -o "builds/llmux_${VERSION}_source.zip"
+
+          rm -rf builds/llmux
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: builds/*
+          generate_release_notes: true

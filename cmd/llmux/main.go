@@ -21,14 +21,23 @@ import (
 	"github.com/llmux/llmux/integration/cp"
 )
 
-// version is the binary version string.
-var version = "0.1.0"
+// Version is the binary version string; set at build time via
+// -ldflags "-X main.Version=x.y.z".
+var Version = "dev"
 
 func main() {
 	// Determine the subcommand. Default to "serve" so bare-flag invocations
 	// (e.g. `llmux -config x.json`) keep working unchanged.
 	sub := "serve"
 	args := os.Args[1:]
+
+	// Handle --version before subcommand detection (starts with '-', so it
+	// would otherwise fall through to runServe and be rejected as unknown flag).
+	if len(args) > 0 && args[0] == "--version" {
+		fmt.Println(Version)
+		return
+	}
+
 	if len(args) > 0 && len(args[0]) > 0 && args[0][0] != '-' {
 		sub = args[0]
 		args = args[1:]
@@ -38,7 +47,7 @@ func main() {
 	case "serve":
 		runServe(args)
 	case "version":
-		fmt.Println(version)
+		fmt.Println(Version)
 	case "models":
 		runModels(args)
 	case "catalog":
