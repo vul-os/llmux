@@ -13,6 +13,18 @@ by virtual key or master key); operators are trusted (they set provider configs)
 ## Posture (after the H5 review)
 
 Fixed:
+- **Virtual keys hashed at rest** (`sha256`). The `llmux_keys.key` Postgres
+  column stores `hex(sha256(rawToken))`; Redis rate-limit keys use
+  `llmux:rl:<sha256>:<window>` and the Redis response-cache keyspace uses
+  `llmux:cache:<sha256>:…`. A Postgres dump or Redis SCAN/MONITOR never
+  yields a live bearer credential. Lookup and rate-limit enforcement hash
+  on the fly before every DB/Redis call, so existing callers are unaffected.
+  Migration note: existing plaintext rows in `llmux_keys` must be re-seeded
+  (run the server once with the same key config — `NewPGStore` upserts the
+  hashed row; the old plaintext row, if present, becomes a dead entry that
+  can be cleared with `DELETE FROM llmux_keys WHERE length(key) < 64`).
+  Tests: `TestPGStoreKeyHashedAtRest`, `TestRedisLimiterKeyHashedAtRest`,
+  `TestCacheScopeHashesToken`, `TestHashTokenDeterministic`.
 - **Constant-time master-key compare** (`crypto/subtle`) for `/admin`, `/metrics`,
   and the API master key — no timing oracle.
 - **No internal detail in error responses.** Transport errors (which contain the

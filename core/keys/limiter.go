@@ -46,6 +46,8 @@ func NewRedisLimiter(rdb *redis.Client) *RedisLimiter { return &RedisLimiter{rdb
 
 // Allow implements Limiter using a per-minute fixed window (INCR + EXPIRE).
 // On Redis error it fails open (allows) so a Redis outage never hard-blocks traffic.
+// The Redis key uses sha256(token) instead of the raw bearer token so that a
+// Redis SCAN/MONITOR never exposes live credentials.
 func (r *RedisLimiter) Allow(token string, rpm int) bool {
 	if rpm <= 0 {
 		return true
@@ -53,7 +55,7 @@ func (r *RedisLimiter) Allow(token string, rpm int) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 	window := time.Now().Unix() / 60
-	key := fmt.Sprintf("llmux:rl:%s:%d", token, window)
+	key := fmt.Sprintf("llmux:rl:%s:%d", HashToken(token), window)
 	n, err := r.rdb.Incr(ctx, key).Result()
 	if err != nil {
 		return true // fail open

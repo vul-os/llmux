@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/llmux/llmux/core/cache"
+	"github.com/llmux/llmux/core/keys"
 	"github.com/llmux/llmux/core/openai"
 )
 
@@ -42,14 +43,16 @@ func (e serverEmbedder) Embed(ctx context.Context, text string) ([]float64, erro
 // the request was authenticated by a static key or resolved by the control
 // plane.
 //
-//   - Static key: the key's secret (unique per virtual key).
+//   - Static key: sha256(key.Key) — unique per virtual key, never the raw token.
+//     Using the hash ensures a Redis SCAN/MONITOR of the cache keyspace never
+//     exposes live bearer credentials (at-rest secret protection).
 //   - CP-resolved principal (no static Key): the resolved account id. Without
 //     this, every cp principal would scope to "" and could be served another
 //     account's cached — and, with semantic caching, merely SIMILAR — content.
 //   - Genuinely unauthenticated (open/local mode): "" (a single shared scope).
 func cacheScope(ctx context.Context) string {
 	if k := keyFrom(ctx); k != nil {
-		return k.Key
+		return keys.HashToken(k.Key)
 	}
 	return accountFrom(ctx)
 }

@@ -71,37 +71,35 @@ CREATE TABLE IF NOT EXISTS llmux_keys (
 }
 
 // seed upserts config keys (preserving existing spend) and caches them.
+// The Postgres "key" column stores sha256(rawToken) so that a PG dump never
+// exposes live bearer credentials. The in-memory map is keyed by the raw
+// token for fast O(1) Lookup; DB operations hash on the fly.
 func (s *PGStore) seed(ctx context.Context, cfgs []config.KeyConfig) error {
 	for _, c := range cfgs {
 		models := c.AllowedModels
 		if models == nil {
 			models = []string{} // NOT NULL array column
 		}
+		h := HashToken(c.Key)
 		_, err := s.pool.Exec(ctx, `
 INSERT INTO llmux_keys (key, name, budget_usd, rpm, allowed_models)
 VALUES ($1,$2,$3,$4,$5)
 ON CONFLICT (key) DO UPDATE SET
   name=EXCLUDED.name, budget_usd=EXCLUDED.budget_usd,
   rpm=EXCLUDED.rpm, allowed_models=EXCLUDED.allowed_models`,
-			c.Key, c.Name, c.BudgetUSD, c.RPM, models)
+			h, c.Name, c.BudgetUSD, c.RPM, models)
 		if err != nil {
 			return fmt.Errorf("seed key: %w", err)
 		}
-	}
-	// Load all keys into the in-memory cache.
-	rows, err := s.pool.Query(ctx, `SELECT key, name, budget_usd, rpm, allowed_models FROM llmux_keys`)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		k := &Key{}
-		if err := rows.Scan(&k.Key, &k.Name, &k.BudgetUSD, &k.RPM, &k.AllowedModels); err != nil {
-			return err
+		// Populate the in-memory cache with the raw token as the map key.
+		// Key.Key holds the raw token so callers (admin listing, cacheScope, etc.)
+		// always deal in raw tokens; only DB/Redis paths hash.
+		s.keys[c.Key] = &Key{
+			Key: c.Key, Name: c.Name, BudgetUSD: c.BudgetUSD,
+			RPM: c.RPM, AllowedModels: models,
 		}
-		s.keys[k.Key] = k
 	}
-	return rows.Err()
+	return nil
 }
 
 // Lookup implements Store (from the in-memory key cache).
@@ -133,18 +131,21 @@ func (s *PGStore) Allow(token string) bool {
 }
 
 // AddSpend implements Store (atomic increment in Postgres).
+// token is the raw bearer token; it is hashed before the DB UPDATE so the
+// plaintext credential is never written to the spend row.
 func (s *PGStore) AddSpend(token string, usd float64) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = s.pool.Exec(ctx, `UPDATE llmux_keys SET spend_usd = spend_usd + $2 WHERE key=$1`, token, usd)
+	_, _ = s.pool.Exec(ctx, `UPDATE llmux_keys SET spend_usd = spend_usd + $2 WHERE key=$1`, HashToken(token), usd)
 }
 
 // Spend implements Store.
+// token is the raw bearer token; it is hashed before the DB SELECT.
 func (s *PGStore) Spend(token string) float64 {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	var v float64
-	_ = s.pool.QueryRow(ctx, `SELECT spend_usd FROM llmux_keys WHERE key=$1`, token).Scan(&v)
+	_ = s.pool.QueryRow(ctx, `SELECT spend_usd FROM llmux_keys WHERE key=$1`, HashToken(token)).Scan(&v)
 	return v
 }
 
