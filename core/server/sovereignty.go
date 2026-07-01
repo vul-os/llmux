@@ -22,7 +22,8 @@ func (s *Server) enforceSovereignty(provName string) error {
 	if !d.Allowed {
 		s.metrics.incEgressBlocked()
 		s.log.Warn("sovereignty: blocked egress",
-			"provider", provName, "locality", string(d.Locality), "base_url", d.BaseURL)
+			"provider", provName, "tier", string(d.Tier), "label", d.Label(),
+			"locality", string(d.Locality), "base_url", d.BaseURL)
 		return &provider.Error{
 			StatusCode: http.StatusForbidden,
 			Provider:   provName,
@@ -32,32 +33,39 @@ func (s *Server) enforceSovereignty(provName string) error {
 				"sovereignty_error", "egress_not_allowed"),
 		}
 	}
-	if d.Locality == sovereign.Egress {
-		// Allowed, but observable: label every off-box call.
-		s.log.Info("sovereignty: egress permitted (operator opt-in)",
-			"provider", provName, "base_url", d.BaseURL)
+	if d.Tier != sovereign.TierLocal {
+		// Permitted but off-box: label every such call with its tier so
+		// sovereign/brokered/external traffic is always observable, never silent.
+		s.log.Info("sovereignty: off-box call permitted",
+			"provider", provName, "tier", string(d.Tier), "label", d.Label(),
+			"locality", string(d.Locality), "base_url", d.BaseURL)
 	}
 	return nil
 }
 
 // logSovereignty prints the sovereignty posture at startup so operators can see
-// exactly which providers are on-box and which are permitted to leave it.
+// exactly which tier each provider runs in and which off-box tiers are permitted.
 func logSovereignty(p *sovereign.Policy) {
-	var local, egressOK, egressBlocked []string
+	var local, sovereignT, brokeredOK, externalOK, blocked []string
 	for _, d := range p.Decisions() {
 		switch {
-		case d.Locality == sovereign.Local:
+		case d.Tier == sovereign.TierLocal:
 			local = append(local, d.Provider)
-		case d.Allowed:
-			egressOK = append(egressOK, d.Provider)
-		default:
-			egressBlocked = append(egressBlocked, d.Provider)
+		case d.Tier == sovereign.TierSovereign:
+			sovereignT = append(sovereignT, d.Provider)
+		case !d.Allowed:
+			blocked = append(blocked, d.Provider)
+		case d.Tier == sovereign.TierBrokered:
+			brokeredOK = append(brokeredOK, d.Provider)
+		default: // external, allowed via allow_egress
+			externalOK = append(externalOK, d.Provider)
 		}
 	}
-	log.Printf("llmux sovereignty: local(on-box)=%v egress-allowed=%v egress-blocked=%v",
-		local, egressOK, egressBlocked)
-	if len(egressBlocked) > 0 {
-		log.Printf("llmux sovereignty: %d provider(s) are non-local and BLOCKED by default; "+
-			"set \"allow_egress\": true on a provider to permit off-box calls", len(egressBlocked))
+	log.Printf("llmux sovereignty (where your AI runs): local=%v sovereign=%v brokered-allowed=%v external-allowed=%v blocked=%v",
+		local, sovereignT, brokeredOK, externalOK, blocked)
+	if len(blocked) > 0 {
+		log.Printf("llmux sovereignty: %d off-box provider(s) BLOCKED by default; "+
+			"mark a trusted pool \"tier\": \"sovereign\", opt a broker in with \"allow_brokered\": true, "+
+			"or set \"allow_egress\": true to permit external off-box calls", len(blocked))
 	}
 }

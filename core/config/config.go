@@ -208,6 +208,22 @@ type ProviderConfig struct {
 	// always allowed. This is llmux's sovereignty gate: without it, a non-local
 	// provider is DENIED at dispatch and nothing leaves the box. See core/sovereign.
 	AllowEgress bool `json:"allow_egress,omitempty"`
+
+	// Tier is the operator's explicit sovereignty tier declaration for this
+	// provider — "where your AI runs". One of "local", "sovereign", "brokered",
+	// "external", or "" (auto = derive from locality: loopback→local, else
+	// external). A loopback endpoint is ALWAYS classified local regardless of
+	// this field; sovereign/brokered are trust declarations that only apply to
+	// off-box endpoints. See core/sovereign for classification + enforcement.
+	Tier string `json:"tier,omitempty"`
+
+	// AllowBrokered is the operator's opt-in to permit calls to a provider
+	// classified in the "brokered" tier (a named third party under a no-train
+	// agreement). AllowEgress also permits brokered calls (it is the broader
+	// escape hatch); AllowBrokered permits brokered WITHOUT unlocking raw
+	// external egress. Ignored for local/sovereign (always allowed) and for
+	// external (requires AllowEgress).
+	AllowBrokered bool `json:"allow_brokered,omitempty"`
 }
 
 // ResolveKey returns the effective API key, reading APIKeyEnv if APIKey is empty.
@@ -587,6 +603,11 @@ func (c *Config) Validate() error {
 		case TypePassthrough, TypeAnthropic, TypeGemini, TypeCohere, TypeBedrock, TypeAzure:
 		default:
 			return fmt.Errorf("provider %q: unknown type %q", p.Name, p.Type)
+		}
+		switch p.Tier {
+		case "", "local", "sovereign", "brokered", "external":
+		default:
+			return fmt.Errorf("provider %q: invalid tier %q (want one of local, sovereign, brokered, external, or empty)", p.Name, p.Tier)
 		}
 	}
 	for _, r := range c.Routes {

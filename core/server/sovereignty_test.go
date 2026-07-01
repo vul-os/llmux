@@ -147,6 +147,72 @@ func TestSovereignEgressOptInReaches(t *testing.T) {
 	}
 }
 
+// TestSovereignSovereignTierServesWithoutOptIn proves the new tier semantics: a
+// provider the operator declared "sovereign" (inside the sovereignty boundary)
+// is allowed with NO opt-in flag — same as local — and reaches the upstream.
+func TestSovereignSovereignTierServesWithoutOptIn(t *testing.T) {
+	var hits int32
+	up := countingUpstream(t, &hits)
+	defer up.Close()
+
+	// Off-box URL, marked sovereign, no allow_egress / allow_brokered.
+	pol := sovereign.NewPolicy([]config.ProviderConfig{
+		{Name: "mock", BaseURL: "https://pool.eu.vulos.net/v1", Tier: "sovereign"},
+	})
+	s := buildServer(t, up.URL, pol)
+
+	if d := s.sovereign.Check("mock"); d.Tier != sovereign.TierSovereign || !d.Allowed {
+		t.Fatalf("sovereign provider should be allowed with no opt-in; got %+v", d)
+	}
+	resp := doChat(t, s, "anything")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("sovereign request should succeed; got %d", resp.StatusCode)
+	}
+	if n := atomic.LoadInt32(&hits); n != 1 {
+		t.Fatalf("sovereign upstream should have been called once; hits=%d", n)
+	}
+}
+
+// TestSovereignBrokeredBlockedUntilOptIn proves brokered is default-deny: the
+// SAME brokered provider is blocked without opt-in, then reaches the upstream
+// once allow_brokered is set. Only the opt-in flag differs.
+func TestSovereignBrokeredBlockedUntilOptIn(t *testing.T) {
+	var hits int32
+	up := countingUpstream(t, &hits)
+	defer up.Close()
+
+	// Blocked: brokered without opt-in.
+	blocked := sovereign.NewPolicy([]config.ProviderConfig{
+		{Name: "mock", BaseURL: "https://broker.example.com/v1", Tier: "brokered"},
+	})
+	s := buildServer(t, up.URL, blocked)
+	resp := doChat(t, s, "anything")
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("brokered without opt-in must be blocked; got %d", resp.StatusCode)
+	}
+	var e openai.ErrorResponse
+	json.NewDecoder(resp.Body).Decode(&e)
+	if e.Error.Code != "egress_not_allowed" {
+		t.Fatalf("brokered block should use the same 403 shape; got code=%q", e.Error.Code)
+	}
+	if n := atomic.LoadInt32(&hits); n != 0 {
+		t.Fatalf("blocked brokered request must NOT reach the network; hits=%d", n)
+	}
+
+	// Allowed: same provider, allow_brokered opt-in.
+	allowed := sovereign.NewPolicy([]config.ProviderConfig{
+		{Name: "mock", BaseURL: "https://broker.example.com/v1", Tier: "brokered", AllowBrokered: true},
+	})
+	s2 := buildServer(t, up.URL, allowed)
+	resp2 := doChat(t, s2, "anything")
+	if resp2.StatusCode != http.StatusOK {
+		t.Fatalf("opted-in brokered should succeed; got %d", resp2.StatusCode)
+	}
+	if n := atomic.LoadInt32(&hits); n != 1 {
+		t.Fatalf("opted-in brokered should reach the upstream once; hits=%d", n)
+	}
+}
+
 func doForward(t *testing.T, s *Server, path, model string) *http.Response {
 	t.Helper()
 	body, _ := json.Marshal(map[string]any{"model": model, "prompt": "hi"})

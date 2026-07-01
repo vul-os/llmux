@@ -426,8 +426,9 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		d := s.sovereign.Check(p.Name)
 		provs = append(provs, map[string]any{
 			"name": p.Name, "type": string(p.Type), "stability": providers.Stability(p.Type),
-			// Sovereignty posture: where this provider's traffic goes and whether
-			// it may be called at all.
+			// Sovereignty posture: which tier this provider runs in ("where your
+			// AI runs"), its honest label, and whether it may be called at all.
+			"tier": string(d.Tier), "tier_label": d.Label(),
 			"locality": string(d.Locality), "egress_allowed": d.Allowed,
 		})
 	}
@@ -436,6 +437,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"providers": provs,
 		"sovereignty": map[string]any{
 			"default":        "local",
+			"tiers":          s.sovereign.TierSummary(),
 			"egress_allowed": s.sovereign.AllowedEgress(),
 		},
 	})
