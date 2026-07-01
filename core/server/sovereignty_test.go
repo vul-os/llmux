@@ -146,3 +146,37 @@ func TestSovereignEgressOptInReaches(t *testing.T) {
 		t.Fatalf("opted-in egress should reach the upstream once; hits=%d", n)
 	}
 }
+
+func doForward(t *testing.T, s *Server, path, model string) *http.Response {
+	t.Helper()
+	body, _ := json.Marshal(map[string]any{"model": model, "prompt": "hi"})
+	req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(string(body)))
+	w := httptest.NewRecorder()
+	s.Handler().ServeHTTP(w, req)
+	return w.Result()
+}
+
+// TestSovereignBlocksEgressOnForwardRoutes is a regression for the bypass where
+// the modality/forward routes (/v1/completions, /moderations, /rerank, …) did
+// NOT run enforceSovereignty and would forward prompts to a blocked, non-opted-in
+// remote provider. They must honor the same default-deny egress gate as chat.
+func TestSovereignBlocksEgressOnForwardRoutes(t *testing.T) {
+	var hits int32
+	up := countingUpstream(t, &hits)
+	defer up.Close()
+
+	blocked := sovereign.NewPolicy([]config.ProviderConfig{
+		{Name: "mock", BaseURL: "https://api.remote.example/v1", AllowEgress: false},
+	})
+	s := buildServer(t, up.URL, blocked)
+
+	for _, path := range []string{"/v1/completions", "/v1/moderations", "/v1/rerank"} {
+		resp := doForward(t, s, path, "anything")
+		if resp.StatusCode != http.StatusForbidden {
+			t.Fatalf("%s: forward egress must be blocked; got %d", path, resp.StatusCode)
+		}
+	}
+	if n := atomic.LoadInt32(&hits); n != 0 {
+		t.Fatalf("blocked forward routes must NOT reach the network; upstream hits=%d", n)
+	}
+}

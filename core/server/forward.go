@@ -63,6 +63,19 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 			"provider "+t.Provider.Name()+" does not support "+suffix, "invalid_request_error", "unsupported_endpoint"))
 		return
 	}
+	// Sovereignty gate: the modality/forward routes (/v1/completions, /responses,
+	// /images, /audio, /moderations, /rerank) must honor the same default-deny
+	// egress policy as chat/embeddings — never open a connection to a non-local
+	// provider the operator hasn't opted in. (Mirrors dispatch.go / chat.go.)
+	if err := s.enforceSovereignty(t.Provider.Name()); err != nil {
+		if pe, ok := err.(*provider.Error); ok {
+			writeError(w, pe.StatusCode, pe.Body)
+		} else {
+			writeError(w, http.StatusForbidden, openai.NewError(err.Error(), "sovereignty_error", "egress_not_allowed"))
+		}
+		return
+	}
+
 	// Rewrite the model field to the upstream target name.
 	body := rewriteModelField(raw, t.Model)
 
