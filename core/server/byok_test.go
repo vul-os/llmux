@@ -274,7 +274,10 @@ func TestBYOKAdminDisabled(t *testing.T) {
 	}
 	s, _ := New(cfg)
 	rec := httptest.NewRecorder()
-	s.Handler().ServeHTTP(rec, httptest.NewRequest("GET", "/admin/byok/acct_1", nil))
+	// Keyless /admin is loopback-only (fail closed); present as a local caller.
+	req := httptest.NewRequest("GET", "/admin/byok/acct_1", nil)
+	req.RemoteAddr = "127.0.0.1:12345"
+	s.Handler().ServeHTTP(rec, req)
 	if rec.Code != http.StatusNotImplemented {
 		t.Fatalf("disabled BYOK admin must be 501, got %d", rec.Code)
 	}

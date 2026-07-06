@@ -171,6 +171,15 @@ type ServerConfig struct {
 	// MasterKey, if set, is required as a bearer token on every request unless
 	// virtual keys are configured.
 	MasterKey string `json:"master_key"`
+
+	// InsecureKeyless opts INTO running keyless (no master key, no virtual keys)
+	// while bound to a NON-loopback TCP address — i.e. an OPEN proxy reachable by
+	// anyone who can connect, with /admin and /metrics unauthenticated. This is a
+	// deliberate footgun override: by default a keyless server refuses to bind a
+	// non-loopback address (fail closed) and a keyless loopback bind stays
+	// unauthenticated for dev ergonomics. Resolved from env LLMUX_INSECURE_KEYLESS
+	// (1/true). Leave false unless you fully understand the exposure.
+	InsecureKeyless bool `json:"insecure_keyless"`
 }
 
 // ProviderType enumerates how a provider is reached.
@@ -423,6 +432,9 @@ func (c *Config) merge(o *Config) {
 	if o.Server.MasterKey != "" {
 		c.Server.MasterKey = o.Server.MasterKey
 	}
+	if o.Server.InsecureKeyless {
+		c.Server.InsecureKeyless = true
+	}
 	if len(o.Providers) > 0 {
 		c.Providers = o.Providers
 	}
@@ -522,6 +534,9 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("LLMUX_MASTER_KEY"); v != "" {
 		c.Server.MasterKey = v
+	}
+	if v := os.Getenv("LLMUX_INSECURE_KEYLESS"); v != "" {
+		c.Server.InsecureKeyless = v == "1" || strings.EqualFold(v, "true")
 	}
 	if v := os.Getenv("LLMUX_LOG_LEVEL"); v != "" {
 		c.LogLevel = v

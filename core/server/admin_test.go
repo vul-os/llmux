@@ -12,6 +12,11 @@ import (
 func getAuth(s *Server, path, key string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", path, nil)
+	// Present as a loopback caller: keyless /admin + /metrics are loopback-only
+	// (fail closed), which models the local/dev operator these helpers stand in
+	// for. Non-loopback exposure is covered explicitly by the fail-open regression
+	// tests, which set a non-loopback RemoteAddr.
+	req.RemoteAddr = "127.0.0.1:12345"
 	if key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}

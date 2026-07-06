@@ -248,6 +248,30 @@ func (s *Server) Run(ctx context.Context) error {
 
 	var listeners []net.Listener
 	if s.cfg.Server.Addr != "" {
+		// FAIL CLOSED: a keyless gateway (no master key, no virtual keys, no cp
+		// identity) is an OPEN proxy — anyone who can connect can spend against the
+		// provider keys and read /admin + /metrics. That is only acceptable on
+		// loopback (the dev/sidecar default). If the configured bind is a
+		// non-loopback address, refuse to start unless the operator has explicitly
+		// opted into the insecure exposure. A keyless loopback bind is allowed with
+		// a loud warning so dev ergonomics are preserved.
+		if s.keyless() {
+			switch {
+			case addrIsLoopback(s.cfg.Server.Addr):
+				log.Printf("llmux: WARNING: no master key set — running as an OPEN gateway on loopback (%s). "+
+					"/admin and /metrics are UNAUTHENTICATED but reachable only from this machine. "+
+					"Set server.master_key (LLMUX_MASTER_KEY) before exposing a network address.", s.cfg.Server.Addr)
+			case s.cfg.Server.InsecureKeyless:
+				log.Printf("llmux: WARNING: no master key set and bound to a NON-loopback address (%s) with "+
+					"insecure_keyless opt-in — this is an OPEN proxy with UNAUTHENTICATED /admin and /metrics, "+
+					"reachable by anyone who can connect. Set server.master_key (LLMUX_MASTER_KEY) to protect it.", s.cfg.Server.Addr)
+			default:
+				return fmt.Errorf("refusing to start: no master key set (server.master_key / LLMUX_MASTER_KEY) "+
+					"and bound to a non-loopback address %q — this would be an OPEN proxy with unauthenticated "+
+					"/admin and /metrics. Set a master key, bind loopback (e.g. 127.0.0.1:4000), or set "+
+					"server.insecure_keyless (LLMUX_INSECURE_KEYLESS=1) to accept the exposure", s.cfg.Server.Addr)
+			}
+		}
 		ln, err := net.Listen("tcp", s.cfg.Server.Addr)
 		if err != nil {
 			return err
@@ -322,9 +346,18 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 		token := bearer(r)
 
 		// Admin endpoints require the master key (never a virtual key). When no
-		// master key is set (local mode), they're open like everything else.
+		// master key is set (local/dev mode) they are NOT globally open: they are
+		// restricted to loopback callers, so a non-loopback caller can never read
+		// keys/usage from a keyless box (fail closed). A configured master key is
+		// always required regardless of caller address.
 		if strings.HasPrefix(r.URL.Path, "/admin") {
-			if s.cfg.Server.MasterKey != "" && !s.masterKeyValid(token) {
+			if s.cfg.Server.MasterKey != "" {
+				if !s.masterKeyValid(token) {
+					writeError(w, http.StatusUnauthorized,
+						openai.NewError("admin endpoints require the master key", "invalid_request_error", "invalid_api_key"))
+					return
+				}
+			} else if !remoteIsLoopback(r) {
 				writeError(w, http.StatusUnauthorized,
 					openai.NewError("admin endpoints require the master key", "invalid_request_error", "invalid_api_key"))
 				return
@@ -401,13 +434,73 @@ func (s *Server) masterKeyValid(token string) bool {
 	return subtle.ConstantTimeCompare([]byte(token), []byte(s.cfg.Server.MasterKey)) == 1
 }
 
-// isAdmin reports whether the request is authorized for privileged disclosure.
-// With no master key configured (local mode), everything is treated as admin.
+// isAdmin reports whether the request is authorized for privileged disclosure
+// (the /health provider list and /metrics). With a master key configured it is
+// the only credential accepted. With NO master key (local/dev mode) privileged
+// disclosure is restricted to LOOPBACK callers — a non-loopback caller is never
+// treated as admin on a keyless box (fail closed), so /metrics and the topology
+// disclosure never leak to the network just because the key was left unset.
 func (s *Server) isAdmin(r *http.Request) bool {
 	if s.cfg.Server.MasterKey == "" {
-		return true
+		return remoteIsLoopback(r)
 	}
 	return s.masterKeyValid(bearer(r))
+}
+
+// keyless reports whether the gateway has NO credential wall at all: no master
+// key, no virtual keys, and no external (cp) identity. In that state every
+// request is served — an open proxy — which is only safe on loopback.
+func (s *Server) keyless() bool {
+	return s.cfg.Server.MasterKey == "" && !s.identityActive()
+}
+
+// addrIsLoopback reports whether a listen address (host:port, ":port", or a bare
+// host) binds only the loopback interface. It mirrors sovereign's loopback
+// classification and fails CLOSED: an empty/omitted host means the wildcard
+// (all interfaces, including public ones), a "0.0.0.0"/"::" host is the wildcard,
+// and any non-loopback IP/hostname is treated as network-reachable.
+func addrIsLoopback(addr string) bool {
+	host := addr
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		host = h
+	}
+	host = strings.TrimSpace(host)
+	if host == "" {
+		return false // ":4000" / empty host = wildcard bind = all interfaces
+	}
+	if host == "localhost" || strings.HasSuffix(strings.ToLower(host), ".localhost") {
+		return true
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return ip.IsLoopback()
+	}
+	return false // hostname we can't resolve to loopback: fail closed
+}
+
+// remoteIsLoopback reports whether the request originated from this machine's
+// loopback interface (or a unix socket, which has no network peer and is
+// filesystem-permission gated). It mirrors sovereign.LocalityOf's loopback
+// classification and fails CLOSED: an unparseable/empty RemoteAddr is treated
+// as non-loopback so a keyless box never discloses to an unidentifiable peer.
+func remoteIsLoopback(r *http.Request) bool {
+	addr := r.RemoteAddr
+	if addr == "" {
+		// A unix-socket listener leaves RemoteAddr empty (no network peer). Such a
+		// connection is owner-only by the 0600 socket perms, so treat it as local.
+		return true
+	}
+	host := addr
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		host = h
+	}
+	if host == "" {
+		return false // fail closed: cannot identify the peer
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return false // fail closed: unparseable peer address
+	}
+	return ip.IsLoopback()
 }
 
 // ---------------------------------------------------------------------------
