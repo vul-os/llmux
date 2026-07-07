@@ -3,10 +3,12 @@
 // choice is a 4-tier dial (most→least private):
 //
 //	local     — inference on THIS box (loopback / unix socket). Always allowed.
-//	sovereign — a Vulos-operated trusted endpoint (in-region, no-train, isolated),
-//	            declared by the operator. Allowed BY DEFAULT: it is inside the
-//	            sovereignty boundary by operator declaration.
-//	brokered  — a named third party under a no-train agreement, operator-configured.
+//	sovereign — an operator-declared endpoint the operator vouches for. It is NOT
+//	            Vulos-operated or Vulos-verified; Vulos attests nothing about it.
+//	            Allowed BY DEFAULT purely because the operator declared it inside
+//	            their sovereignty boundary (an unverified operator claim).
+//	brokered  — a named third party the operator has configured under a claimed
+//	            no-train agreement (operator-declared, not Vulos-verified).
 //	            Allowed ONLY when the operator opts in.
 //	external  — any other off-box endpoint (may mine/train). BLOCKED unless the
 //	            operator sets the allow_egress escape hatch.
@@ -49,11 +51,13 @@ type Tier string
 const (
 	// TierLocal: inference on THIS box (loopback / unix socket). Always allowed.
 	TierLocal Tier = "local"
-	// TierSovereign: a Vulos-operated trusted endpoint (in-region, no-train,
-	// isolated), operator-declared. Allowed by default.
+	// TierSovereign: an operator-declared endpoint the operator vouches for. NOT
+	// Vulos-operated or Vulos-verified — Vulos attests nothing about it. Allowed
+	// by default solely on the operator's (unverified) declaration.
 	TierSovereign Tier = "sovereign"
-	// TierBrokered: a named third party under a no-train agreement,
-	// operator-configured. Allowed only when opted in.
+	// TierBrokered: a named third party the operator configured under a claimed
+	// no-train agreement (operator-declared, not Vulos-verified). Allowed only
+	// when opted in.
 	TierBrokered Tier = "brokered"
 	// TierExternal: any other off-box endpoint (may mine/train). Blocked unless
 	// allow_egress. This is the fail-closed default for anything unclassifiable.
@@ -67,9 +71,9 @@ func (t Tier) Label() string {
 	case TierLocal:
 		return "On your device"
 	case TierSovereign:
-		return "Vulos sovereign · in-region, no-train"
+		return "Operator-declared endpoint (unverified)"
 	case TierBrokered:
-		return "Brokered · no-train"
+		return "Brokered · no-train (operator-configured)"
 	default:
 		return "External · not private"
 	}

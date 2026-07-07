@@ -114,8 +114,8 @@ func TestPolicyTiers(t *testing.T) {
 func TestTierLabels(t *testing.T) {
 	cases := map[Tier]string{
 		TierLocal:     "On your device",
-		TierSovereign: "Vulos sovereign · in-region, no-train",
-		TierBrokered:  "Brokered · no-train",
+		TierSovereign: "Operator-declared endpoint (unverified)",
+		TierBrokered:  "Brokered · no-train (operator-configured)",
 		TierExternal:  "External · not private",
 	}
 	for tier, label := range cases {

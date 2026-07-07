@@ -79,8 +79,8 @@ func TestTierOfInternalLocalNotAutoTrusted(t *testing.T) {
 func TestDecisionLabel(t *testing.T) {
 	cases := map[Tier]string{
 		TierLocal:     "On your device",
-		TierSovereign: "Vulos sovereign · in-region, no-train",
-		TierBrokered:  "Brokered · no-train",
+		TierSovereign: "Operator-declared endpoint (unverified)",
+		TierBrokered:  "Brokered · no-train (operator-configured)",
 		TierExternal:  "External · not private",
 	}
 	for tier, want := range cases {
