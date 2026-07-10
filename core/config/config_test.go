@@ -31,6 +31,9 @@ func clearLLMUXEnv(t *testing.T) {
 		"LLMUX_ADDR", "LLMUX_SOCKET", "LLMUX_MASTER_KEY", "LLMUX_LOG_LEVEL",
 		"LLMUX_POSTGRES", "LLMUX_REDIS", "LLMUX_SYNC_INTERVAL_MIN",
 		"DATABASE_URL", "VULOS_DATABASE_URL", "LLMUX_POSTGRES_SCHEMA",
+		"LLMUX_USAGE_LOG", "LLMUX_CP_URL", "LLMUX_CP_SECRET", "LLMUX_CP_RPM",
+		"LLMUX_CP_ENTITLEMENT_TTL_SECONDS", "LLMUX_CP_DEGRADED_FAIL_OPEN",
+		"LLMUX_CP_DEGRADED_RPM", "LLMUX_CP_USAGE_SPOOL_PATH",
 	} {
 		t.Setenv(k, "")
 		os.Unsetenv(k)
@@ -316,6 +319,156 @@ func TestLoad_EnvOverridesFile(t *testing.T) {
 	if c.Pricing.SyncIntervalMinutes != 12 {
 		t.Errorf("SyncIntervalMinutes = %d, want 12", c.Pricing.SyncIntervalMinutes)
 	}
+}
+
+// TestUsageLogPathDualBinding verifies LLMUX_USAGE_LOG can be set via config
+// file OR env var, and that env wins over the file (matching every other
+// dual-bound setting's resolution order).
+func TestUsageLogPathDualBinding(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+	t.Setenv("LLMUX_USAGE_LOG", "")
+
+	t.Run("config file alone", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server:       ServerConfig{Addr: ":4000"},
+			UsageLogPath: "/var/lib/llmux/usage-from-file.jsonl",
+		})
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.UsageLogPath != "/var/lib/llmux/usage-from-file.jsonl" {
+			t.Errorf("UsageLogPath = %q, want file value", c.UsageLogPath)
+		}
+	})
+
+	t.Run("env alone", func(t *testing.T) {
+		t.Setenv("LLMUX_USAGE_LOG", "/var/lib/llmux/usage-from-env.jsonl")
+		c, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.UsageLogPath != "/var/lib/llmux/usage-from-env.jsonl" {
+			t.Errorf("UsageLogPath = %q, want env value", c.UsageLogPath)
+		}
+	})
+
+	t.Run("env overrides file", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server:       ServerConfig{Addr: ":4000"},
+			UsageLogPath: "/var/lib/llmux/usage-from-file.jsonl",
+		})
+		t.Setenv("LLMUX_USAGE_LOG", "/var/lib/llmux/usage-from-env.jsonl")
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.UsageLogPath != "/var/lib/llmux/usage-from-env.jsonl" {
+			t.Errorf("UsageLogPath = %q, want env to override file", c.UsageLogPath)
+		}
+	})
+}
+
+// TestCPEntitlementTTLDualBinding verifies cp_entitlement_ttl_seconds can be
+// set via config file OR env var LLMUX_CP_ENTITLEMENT_TTL_SECONDS, and that
+// env wins over the file.
+func TestCPEntitlementTTLDualBinding(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+	t.Setenv("LLMUX_CP_ENTITLEMENT_TTL_SECONDS", "")
+
+	t.Run("config file alone", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server: ServerConfig{Addr: ":4000"},
+			CP:     CPConfig{EntitlementTTLSeconds: 45},
+		})
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.CP.EntitlementTTLSeconds != 45 {
+			t.Errorf("EntitlementTTLSeconds = %d, want 45 (from file)", c.CP.EntitlementTTLSeconds)
+		}
+	})
+
+	t.Run("env alone", func(t *testing.T) {
+		t.Setenv("LLMUX_CP_ENTITLEMENT_TTL_SECONDS", "90")
+		c, err := Load("")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.CP.EntitlementTTLSeconds != 90 {
+			t.Errorf("EntitlementTTLSeconds = %d, want 90 (from env)", c.CP.EntitlementTTLSeconds)
+		}
+	})
+
+	t.Run("env overrides file", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server: ServerConfig{Addr: ":4000"},
+			CP:     CPConfig{EntitlementTTLSeconds: 45},
+		})
+		t.Setenv("LLMUX_CP_ENTITLEMENT_TTL_SECONDS", "90")
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.CP.EntitlementTTLSeconds != 90 {
+			t.Errorf("EntitlementTTLSeconds = %d, want env (90) to override file (45)", c.CP.EntitlementTTLSeconds)
+		}
+	})
+
+	t.Run("non-numeric env is ignored, file value survives", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server: ServerConfig{Addr: ":4000"},
+			CP:     CPConfig{EntitlementTTLSeconds: 45},
+		})
+		t.Setenv("LLMUX_CP_ENTITLEMENT_TTL_SECONDS", "not-a-number")
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.CP.EntitlementTTLSeconds != 45 {
+			t.Errorf("EntitlementTTLSeconds = %d, want file value (45) preserved on bad env", c.CP.EntitlementTTLSeconds)
+		}
+	})
+}
+
+// TestCPUsageSpoolPathDualBinding verifies cp_usage_spool_path can be set via
+// config file OR env var LLMUX_CP_USAGE_SPOOL_PATH, and that env wins.
+func TestCPUsageSpoolPathDualBinding(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+	t.Setenv("LLMUX_CP_USAGE_SPOOL_PATH", "")
+
+	t.Run("config file alone", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server: ServerConfig{Addr: ":4000"},
+			CP:     CPConfig{UsageSpoolPath: "/var/lib/llmux/cp-usage-spool.json"},
+		})
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.CP.UsageSpoolPath != "/var/lib/llmux/cp-usage-spool.json" {
+			t.Errorf("UsageSpoolPath = %q, want file value", c.CP.UsageSpoolPath)
+		}
+	})
+
+	t.Run("env overrides file", func(t *testing.T) {
+		path := writeTempConfig(t, &Config{
+			Server: ServerConfig{Addr: ":4000"},
+			CP:     CPConfig{UsageSpoolPath: "/var/lib/llmux/cp-usage-spool-file.json"},
+		})
+		t.Setenv("LLMUX_CP_USAGE_SPOOL_PATH", "/var/lib/llmux/cp-usage-spool-env.json")
+		c, err := Load(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if c.CP.UsageSpoolPath != "/var/lib/llmux/cp-usage-spool-env.json" {
+			t.Errorf("UsageSpoolPath = %q, want env to override file", c.CP.UsageSpoolPath)
+		}
+	})
 }
 
 // TestPostgresDSNResolution covers the shared-Neon DSN precedence:

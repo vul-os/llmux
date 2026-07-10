@@ -34,6 +34,19 @@ rate cap rather than blocking all traffic:
 | `cp_degraded_rpm` | Per-account requests/minute allowed while the control plane is down |
 | `cp_degraded_fail_open` | Allow requests through unmetered if you accept the spend risk |
 
+## Usage delivery durability
+
+Reported usage is sent to cp by a bounded in-memory retry queue (fast path).
+To also survive an extended cp outage or a process crash, set a durable spool
+file:
+
+| Setting | Effect |
+|---|---|
+| `cp_usage_spool_path` / `LLMUX_CP_USAGE_SPOOL_PATH` | Persists every not-yet-acknowledged usage record to this file. A background reconciler retries anything still there (e.g. left over from a crash, or a record the fast path gave up on) until cp acknowledges it. Empty = in-memory-only (records that outlive the fast path's retries or a crash are lost from cp's perspective). |
+
+cp already dedupes every record by its idempotency key, so reconciled retries
+are always billed at most once.
+
 ## Isolation
 
 The control-plane adapter lives in `integration/cp` and is wired only by

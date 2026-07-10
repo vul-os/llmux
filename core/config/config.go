@@ -57,6 +57,13 @@ type Config struct {
 
 	LogLevel string `json:"log_level"`
 
+	// UsageLogPath, if set, appends every usage record as one JSON line
+	// (JSONL) to this file — a durable local ledger independent of any
+	// control-plane billing seam. Resolved (later wins) from this field or env
+	// LLMUX_USAGE_LOG; previously this was env-only with no config-file
+	// counterpart.
+	UsageLogPath string `json:"usage_log_path"`
+
 	// CP optionally points llmux at a Vulos control plane ("cp" / vulos-cloud)
 	// for central identity/budget/usage. Empty = standalone (the default): the
 	// gateway uses its static keys and never talks to cp. This config is read by
@@ -119,6 +126,15 @@ type CPConfig struct {
 	// when DegradedFailOpen is false. 0 selects a built-in conservative default.
 	// This bounds spend during a cp outage instead of failing fully open.
 	DegradedRPM int `json:"cp_degraded_rpm"`
+	// UsageSpoolPath, if set, durably persists cp's pending (not-yet-acked)
+	// usage records to this file so they survive a process restart or crash
+	// instead of relying solely on the bounded in-memory retry queue
+	// (integration/cp.UsageLogger). A background reconciler retries every
+	// un-acked record until cp acknowledges it (idempotent via
+	// Idempotency-Key), so an extended cp outage no longer silently drops
+	// billing records. Empty = no spool (in-memory-only, the historical
+	// behavior). Resolved from env LLMUX_CP_USAGE_SPOOL_PATH.
+	UsageSpoolPath string `json:"cp_usage_spool_path"`
 }
 
 // RetryConfig controls automatic retries and provider fallback.
@@ -453,6 +469,9 @@ func (c *Config) merge(o *Config) {
 	if o.LogLevel != "" {
 		c.LogLevel = o.LogLevel
 	}
+	if o.UsageLogPath != "" {
+		c.UsageLogPath = o.UsageLogPath
+	}
 	if o.Retry.MaxRetries != 0 {
 		c.Retry.MaxRetries = o.Retry.MaxRetries
 	}
@@ -510,6 +529,9 @@ func (c *Config) mergeCP(o *Config) {
 	if o.CP.DegradedRPM != 0 {
 		c.CP.DegradedRPM = o.CP.DegradedRPM
 	}
+	if o.CP.UsageSpoolPath != "" {
+		c.CP.UsageSpoolPath = o.CP.UsageSpoolPath
+	}
 }
 
 // mergeBYOK applies a file's BYOK block (later wins on set fields).
@@ -540,6 +562,9 @@ func (c *Config) applyEnv() {
 	}
 	if v := os.Getenv("LLMUX_LOG_LEVEL"); v != "" {
 		c.LogLevel = v
+	}
+	if v := os.Getenv("LLMUX_USAGE_LOG"); v != "" {
+		c.UsageLogPath = v
 	}
 	// Postgres DSN resolution (later wins). LLMUX_POSTGRES is the legacy,
 	// product-specific var and remains a working fallback. DATABASE_URL is the
@@ -584,6 +609,11 @@ func (c *Config) applyEnv() {
 			c.CP.RPM = n
 		}
 	}
+	if v := os.Getenv("LLMUX_CP_ENTITLEMENT_TTL_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.CP.EntitlementTTLSeconds = n
+		}
+	}
 	if v := os.Getenv("LLMUX_CP_DEGRADED_FAIL_OPEN"); v != "" {
 		c.CP.DegradedFailOpen = v == "1" || strings.EqualFold(v, "true")
 	}
@@ -591,6 +621,9 @@ func (c *Config) applyEnv() {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.CP.DegradedRPM = n
 		}
+	}
+	if v := os.Getenv("LLMUX_CP_USAGE_SPOOL_PATH"); v != "" {
+		c.CP.UsageSpoolPath = v
 	}
 	if v := os.Getenv("LLMUX_BYOK_KEK"); v != "" {
 		c.BYOK.KEK = v

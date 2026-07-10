@@ -132,8 +132,10 @@ func runServe(args []string) {
 
 	// Build the usage logger(s). JSONL logging (if configured) is preserved and
 	// the optional cp sink composes on top of it — never replaces it.
+	// UsageLogPath is resolved (later wins) from config file `usage_log_path`
+	// or env LLMUX_USAGE_LOG — both bind now; previously only the env var did.
 	var loggers []server.UsageLogger
-	if path := os.Getenv("LLMUX_USAGE_LOG"); path != "" {
+	if path := cfg.UsageLogPath; path != "" {
 		f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 		if err != nil {
 			log.Fatalf("llmux: cannot open usage log %s: %v", path, err)
@@ -150,7 +152,8 @@ func runServe(args []string) {
 	cpCfg := cp.New(cfg.CP.URL, cfg.CP.SharedSecret).
 		WithRPM(cfg.CP.RPM).
 		WithDegradedFailOpen(cfg.CP.DegradedFailOpen).
-		WithDegradedRPM(cfg.CP.DegradedRPM)
+		WithDegradedRPM(cfg.CP.DegradedRPM).
+		WithUsageSpoolPath(cfg.CP.UsageSpoolPath)
 	if cfg.CP.EntitlementTTLSeconds > 0 {
 		cpCfg = cpCfg.WithEntitlementTTL(time.Duration(cfg.CP.EntitlementTTLSeconds) * time.Second)
 	}
