@@ -60,6 +60,16 @@ type Config struct {
 	// oldest evicted past the cap) so it stays bounded by distinct-token churn.
 	// 0 = a built-in default (defaultIdentityCacheMax).
 	IdentityCacheMax int
+	// UsageSpoolPath, if set, durably persists the UsageLogger's pending
+	// (not-yet-acked) usage records to this file so they survive a process
+	// restart or crash instead of relying solely on the bounded in-memory
+	// retry queue. See usageSpool. Empty = no spool (the historical
+	// in-memory-only behavior).
+	UsageSpoolPath string
+	// ReconcileInterval controls how often the background reconciler (started
+	// only when UsageSpoolPath is set) retries every still-un-acked spooled
+	// usage record. 0 selects a built-in default (defaultReconcileInterval).
+	ReconcileInterval time.Duration
 }
 
 // Enabled reports whether the cp adapter should be wired (a base URL is set).
@@ -88,6 +98,14 @@ func (c Config) WithDegradedRPM(rpm int) Config { c.DegradedRPM = rpm; return c 
 // WithIdentityCacheMax returns a copy with the last-known-good identity cache
 // size cap set (0 = built-in default).
 func (c Config) WithIdentityCacheMax(n int) Config { c.IdentityCacheMax = n; return c }
+
+// WithUsageSpoolPath returns a copy with the durable usage-spool file path
+// set (empty disables the spool).
+func (c Config) WithUsageSpoolPath(path string) Config { c.UsageSpoolPath = path; return c }
+
+// WithReconcileInterval returns a copy with the spool reconciler interval set
+// (0 selects the built-in default).
+func (c Config) WithReconcileInterval(d time.Duration) Config { c.ReconcileInterval = d; return c }
 
 func (c Config) client() *http.Client { return &http.Client{Timeout: 5 * time.Second} }
 
@@ -523,33 +541,44 @@ func (b *BudgetGate) queryCP(ctx context.Context, account string) (entitlementRe
 const usageQueueDepth = 1024
 
 // usageMaxAttempts is the total number of POST attempts per record (1 initial +
-// retries) before the record is dropped.
+// retries) on the FAST in-memory retry path before that path gives up on the
+// record (see usageSpool for what happens next when the spool is enabled).
 const usageMaxAttempts = 5
 
-// UsageLogger reports finalized per-request cost to cp. It is non-blocking to the
-// response path and survives transient cp failures via a bounded in-memory retry
-// queue with exponential backoff. On a crash the in-memory queue is lost (the
-// JSONL logger remains the durable record); steady-state transient 5xx/timeouts
-// no longer silently drop billing. Each record carries an idempotency key (see
-// usageBody.IdempotencyKey / the Idempotency-Key header) so any retry — including
-// a future ledger replay — is deduped by cp and billed at most once.
+// defaultReconcileInterval is how often the background reconciler (started
+// only when Config.UsageSpoolPath is set) retries every still-un-acked
+// spooled usage record. It is intentionally much slower than the fast path's
+// backoff (max 5s) since its job is to survive an OUTAGE, not a blip.
+const defaultReconcileInterval = 30 * time.Second
+
+// UsageLogger reports finalized per-request cost to cp. It is non-blocking to
+// the response path and survives transient cp failures via a bounded
+// in-memory retry queue with exponential backoff (the FAST path). Each record
+// carries an idempotency key (see usageBody.IdempotencyKey / the
+// Idempotency-Key header) so any retry — fast-path or reconciled — is deduped
+// by cp and billed at most once.
 //
-// TODO(billing-reconcile): the only fully durable revenue record today is the
-// JSONL ledger written by core/server's JSONLUsageLogger. If cp is down past the
-// bounded queue / max attempts, or the process crashes with records still
-// queued, those records are durably in JSONL but never reach cp. A reconciler
-// would, on (re)connect: tail the JSONL ledger, replay any record whose
-// idempotency key cp has not acknowledged, and persist a high-water cursor so it
-// resumes after a crash. cp already dedupes by Idempotency-Key, so replay is
-// safe. This was scoped OUT of the current change because it needs a shared
-// ledger path + ack/cursor store that spans the core (JSONL) and cp packages —
-// a larger refactor than the targeted billing-integrity fixes here. The
-// idempotency key added in this change is the prerequisite that makes that
-// replay safe to build later.
+// DURABILITY (closes TODO(billing-reconcile)): when Config.UsageSpoolPath is
+// set, every record is durably written to an on-disk usageSpool BEFORE it is
+// handed to the fast path, and removed from the spool only once cp
+// acknowledges it (2xx). A background reconciler goroutine periodically
+// re-POSTs everything still in the spool. Together these mean a record is
+// dropped ONLY if: (a) the fast path never got to try it (queue full) AND (b)
+// the process crashes before the spool write for it happened — an
+// arbitrarily narrow window, vs. the previous "outlives 5 attempts or the
+// process restarts" loss modes. Without a configured spool path, the logger
+// keeps the historical in-memory-only behavior (fast path only; a record that
+// exhausts usageMaxAttempts or a queue-full drop is lost from cp's
+// perspective, though the separate optional JSONL ledger may still have it).
 type UsageLogger struct {
 	cfg  Config
 	http *http.Client
 	ch   chan usageItem
+	sp   *usageSpool // nil unless Config.UsageSpoolPath is set
+
+	stop     chan struct{}
+	stopOnce sync.Once
+	wg       sync.WaitGroup // tracks worker + reconcileLoop, so Close() can wait for both to fully exit
 }
 
 type usageItem struct {
@@ -558,11 +587,83 @@ type usageItem struct {
 	attempt int
 }
 
-// NewUsageLogger builds the cp UsageLogger and starts its retry worker.
+// NewUsageLogger builds the cp UsageLogger and starts its retry worker (and,
+// when Config.UsageSpoolPath is set, its durable spool + reconciler).
 func NewUsageLogger(cfg Config) *UsageLogger {
-	u := &UsageLogger{cfg: cfg, http: cfg.client(), ch: make(chan usageItem, usageQueueDepth)}
-	go u.worker()
+	u := &UsageLogger{cfg: cfg, http: cfg.client(), ch: make(chan usageItem, usageQueueDepth), stop: make(chan struct{})}
+	if path := strings.TrimSpace(cfg.UsageSpoolPath); path != "" {
+		sp, err := loadUsageSpool(path)
+		if err != nil {
+			log.Printf("cp: usage spool %s: load failed (%v) — continuing WITHOUT durable spool (in-memory-only billing delivery)", path, err)
+		} else {
+			u.sp = sp
+			// Replay anything left over from a previous run (e.g. queued but
+			// not yet acknowledged when the process crashed or restarted)
+			// through the normal fast-path queue immediately; the reconciler
+			// below is the ongoing backstop for whatever that doesn't clear.
+			for key, raw := range sp.pending() {
+				u.enqueue(usageItem{raw: raw, key: key, attempt: 0})
+			}
+			u.wg.Add(1)
+			go func() { defer u.wg.Done(); u.reconcileLoop() }()
+		}
+	}
+	u.wg.Add(1)
+	go func() { defer u.wg.Done(); u.worker() }()
 	return u
+}
+
+// reconcileLoop is the durability backstop: independently of the bounded fast
+// path (which gives up after usageMaxAttempts), it periodically re-POSTs
+// every record still present in the durable spool until cp acknowledges it.
+// This is what makes an extended cp outage — or a record the fast path
+// dropped for queue-full or gave-up-retrying — eventually reach cp once it
+// recovers, instead of disappearing once the fast path stops trying.
+func (u *UsageLogger) reconcileLoop() {
+	interval := u.cfg.ReconcileInterval
+	if interval <= 0 {
+		interval = defaultReconcileInterval
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-t.C:
+			u.reconcileOnce()
+		case <-u.stop:
+			return
+		}
+	}
+}
+
+// Close stops the logger's background goroutines (the fast-path worker and,
+// when a spool is configured, the reconciler ticker) and BLOCKS until both
+// have fully exited — including any reconcileOnce/post already in flight —
+// so that once Close returns, nothing is still touching the spool file or
+// making cp calls. It does not drain the in-memory queue or flush pending
+// spool writes beyond what already happened; it exists so tests and
+// graceful-shutdown callers don't leak goroutines (or race a subsequent
+// removal of the spool's directory) past the logger's useful lifetime. Not
+// required for correctness during normal operation — a live process simply
+// leaves these running for its whole lifetime. Safe to call more than once.
+func (u *UsageLogger) Close() {
+	u.stopOnce.Do(func() { close(u.stop) })
+	u.wg.Wait()
+}
+
+// reconcileOnce attempts one re-POST of every currently un-acked spooled
+// record. A cp that is still down simply leaves those records in the spool
+// for the next tick; cp already dedupes by Idempotency-Key so re-POSTing a
+// record the fast path also has in flight is safe (billed at most once).
+func (u *UsageLogger) reconcileOnce() {
+	if u.sp == nil {
+		return
+	}
+	for key, raw := range u.sp.pending() {
+		if u.post(raw, key) {
+			u.sp.ack(key)
+		}
+	}
 }
 
 type usageBody struct {
@@ -603,11 +704,20 @@ func (u *UsageLogger) Log(rec server.UsageRecord) {
 	if err != nil {
 		return
 	}
+	// Durability: record this BEFORE handing it to the in-memory fast path, so
+	// it survives a crash that happens immediately after this call returns.
+	// No-op when no spool is configured (UsageSpoolPath unset).
+	if u.sp != nil {
+		u.sp.add(rec.ID, raw)
+	}
 	u.enqueue(usageItem{raw: raw, key: rec.ID, attempt: 0})
 }
 
-// enqueue pushes an item, dropping the oldest queued item if the buffer is full
-// so the producer (request path) never blocks.
+// enqueue pushes an item onto the FAST in-memory path, dropping the oldest
+// queued item if the buffer is full so the producer (request path) never
+// blocks. A drop here is no longer a durability loss when a spool is
+// configured: Log() already wrote the record to the spool before calling
+// enqueue, so the reconciler will still deliver it eventually.
 func (u *UsageLogger) enqueue(it usageItem) {
 	select {
 	case u.ch <- it:
@@ -615,28 +725,52 @@ func (u *UsageLogger) enqueue(it usageItem) {
 		// Queue full: make room by discarding the oldest, then enqueue.
 		select {
 		case dropped := <-u.ch:
-			log.Printf("cp: usage queue full — dropping oldest record (depth=%d)", usageQueueDepth)
+			log.Printf("cp: usage queue full — dropping oldest record from the fast path (depth=%d)%s", usageQueueDepth, u.spoolNote())
 			_ = dropped
 		default:
 		}
 		select {
 		case u.ch <- it:
 		default:
-			log.Printf("cp: usage queue full — dropping record")
+			log.Printf("cp: usage queue full — dropping record from the fast path%s", u.spoolNote())
 		}
 	}
 }
 
+// spoolNote returns a short suffix clarifying whether a fast-path drop is
+// still durably recoverable via the spool/reconciler, for log messages.
+func (u *UsageLogger) spoolNote() string {
+	if u.sp != nil {
+		return " (durably spooled — the reconciler will retry it)"
+	}
+	return " (no usage spool configured — record is lost from cp's perspective)"
+}
+
 // worker drains the queue, POSTing each record and re-enqueuing failures with
-// exponential backoff until usageMaxAttempts.
+// exponential backoff until usageMaxAttempts. It exits when Close() is called
+// (or u.ch is closed, which nothing currently does in production use).
 func (u *UsageLogger) worker() {
-	for it := range u.ch {
+	for {
+		var it usageItem
+		select {
+		case v, ok := <-u.ch:
+			if !ok {
+				return
+			}
+			it = v
+		case <-u.stop:
+			return
+		}
+
 		if u.post(it.raw, it.key) {
+			if u.sp != nil {
+				u.sp.ack(it.key)
+			}
 			continue
 		}
 		it.attempt++
 		if it.attempt >= usageMaxAttempts {
-			log.Printf("cp: usage POST gave up after %d attempts — dropping record", it.attempt)
+			log.Printf("cp: usage POST gave up after %d attempts on the fast path%s", it.attempt, u.spoolNote())
 			continue
 		}
 		// Back off, then re-enqueue. Done in a goroutine so the worker keeps
@@ -646,7 +780,11 @@ func (u *UsageLogger) worker() {
 			if backoff > 5*time.Second {
 				backoff = 5 * time.Second
 			}
-			time.Sleep(backoff)
+			select {
+			case <-time.After(backoff):
+			case <-u.stop:
+				return
+			}
 			u.enqueue(it)
 		}(it)
 	}
