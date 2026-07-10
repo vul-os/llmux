@@ -52,7 +52,7 @@ allow-lists. See [Configuration](configuration.md).
 | `PUT /admin/byok/{account}/{provider}` | master key | Set (encrypt) an account's own provider key → that provider goes BYOK (unmetered). |
 | `DELETE /admin/byok/{account}/{provider}` | master key | Clear an account's BYOK key → revert to central (metered). |
 | `GET /metrics` | master key | Prometheus metrics. |
-| `GET /health` | none | Liveness probe. |
+| `GET /health` | none (minimal `{"status":"ok"}` for any caller); master key (or loopback when keyless) additionally unlocks the full provider/sovereignty topology | Liveness probe. |
 | `GET /ui`, `GET /ui/docs` | none | Embedded admin dashboard + docs. |
 
 ## Example

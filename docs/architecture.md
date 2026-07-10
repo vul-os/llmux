@@ -52,8 +52,10 @@ A blocked provider never opens a socket; the denial is logged and counted
 (`egress_blocked` metric), and every *permitted* off-box call is logged with its
 tier so egress is always observable, never silent. On failover, a blocked
 primary is skipped so a local fallback can still serve; if every target is
-blocked the 403 surfaces. The `/health` endpoint (master-key only) discloses the
-full posture: each provider's tier, label, and whether it may egress.
+blocked the 403 surfaces. `/health` itself is unauthenticated for every caller
+(a minimal `{"status":"ok"}`), but the full posture — each provider's tier,
+label, and whether it may egress — is disclosed only to the master key (or, on
+a keyless gateway, only to a loopback caller); see [API reference](api.md).
 
 Operators opt a provider in per-provider in the config (never globally):
 `"tier": "sovereign"`, `"allow_brokered": true`, or `"allow_egress": true`.
