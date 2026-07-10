@@ -190,6 +190,105 @@ func TestSovereignStreamChatBlocked(t *testing.T) {
 	}
 }
 
+// TestSovereignBlocksSemanticCacheEmbedder is the regression for the semantic
+// cache egress bypass: the semantic cache embeds EVERY chat prompt (on both
+// lookup and store) to compute its similarity key. If the configured embed
+// model routes to a non-local provider, the prompt text would silently egress
+// on every request — even one served by a purely local chat provider — because
+// the embedder called Provider.Embeddings directly, without the dispatch-time
+// sovereignty gate. This proves the embedder is now gated: a chat served by a
+// LOCAL provider must NOT cause the (blocked, remote) embed model to be dialed,
+// and no prompt text leaves the box via the cache. The request still succeeds
+// (an embed error is a cache miss, so caching simply no-ops), and the local
+// chat upstream serves it.
+func TestSovereignBlocksSemanticCacheEmbedder(t *testing.T) {
+	var chatHits, embedHits int32
+	chatUp := countingUpstream(t, &chatHits) // local chat provider (allowed)
+	defer chatUp.Close()
+	embedUp := fullUpstream(t, &embedHits) // remote embed provider (blocked)
+	defer embedUp.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{Addr: ":0"},
+		Providers: []config.ProviderConfig{
+			{Name: "localchat", Type: config.TypePassthrough, BaseURL: chatUp.URL + "/v1"},
+			{Name: "remoteembed", Type: config.TypePassthrough, BaseURL: embedUp.URL + "/v1"},
+		},
+		Routes: []config.RouteConfig{
+			{Model: "chat-model", Provider: "localchat"},
+			{Model: "embed-model", Provider: "remoteembed"},
+		},
+		Cache: config.CacheConfig{Semantic: true, EmbeddingModel: "embed-model"},
+	}
+	s, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// Policy: the local chat provider is allowed; the embed provider is a blocked
+	// external egress target (not opted in), even though its URL is loopback.
+	s.sovereign = sovereign.NewPolicy([]config.ProviderConfig{
+		{Name: "localchat", BaseURL: chatUp.URL + "/v1"},               // loopback → local, allowed
+		{Name: "remoteembed", BaseURL: "https://api.embed.example/v1"}, // external, blocked
+	})
+
+	// A normal chat request. With semantic caching on, the cache tries to embed
+	// the prompt on lookup (and would on store) — that embed must be blocked.
+	resp := doChat(t, s, "chat-model")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("local chat should still be served; got %d", resp.StatusCode)
+	}
+	if n := atomic.LoadInt32(&chatHits); n != 1 {
+		t.Fatalf("local chat upstream should serve once; hits=%d", n)
+	}
+	// The core guarantee: the blocked, remote embed model was NEVER dialed, so no
+	// prompt text left the box via the semantic cache.
+	if n := atomic.LoadInt32(&embedHits); n != 0 {
+		t.Fatalf("semantic-cache embedder must NOT reach the blocked remote embed provider; hits=%d", n)
+	}
+}
+
+// TestSovereignSemanticCacheEmbedderOptInReaches is the positive counterpart:
+// once the embed provider is opted in (allow_egress), the semantic cache is
+// allowed to embed prompts through it — proving the embedder gate is a gate,
+// not a hard wall.
+func TestSovereignSemanticCacheEmbedderOptInReaches(t *testing.T) {
+	var chatHits, embedHits int32
+	chatUp := countingUpstream(t, &chatHits)
+	defer chatUp.Close()
+	embedUp := fullUpstream(t, &embedHits)
+	defer embedUp.Close()
+
+	cfg := &config.Config{
+		Server: config.ServerConfig{Addr: ":0"},
+		Providers: []config.ProviderConfig{
+			{Name: "localchat", Type: config.TypePassthrough, BaseURL: chatUp.URL + "/v1"},
+			{Name: "remoteembed", Type: config.TypePassthrough, BaseURL: embedUp.URL + "/v1"},
+		},
+		Routes: []config.RouteConfig{
+			{Model: "chat-model", Provider: "localchat"},
+			{Model: "embed-model", Provider: "remoteembed"},
+		},
+		Cache: config.CacheConfig{Semantic: true, EmbeddingModel: "embed-model"},
+	}
+	s, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	s.sovereign = sovereign.NewPolicy([]config.ProviderConfig{
+		{Name: "localchat", BaseURL: chatUp.URL + "/v1"},
+		{Name: "remoteembed", BaseURL: "https://api.embed.example/v1", AllowEgress: true}, // opted in
+	})
+
+	resp := doChat(t, s, "chat-model")
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("local chat should be served; got %d", resp.StatusCode)
+	}
+	// The opted-in embed provider IS dialed (at least once, for the lookup embed).
+	if n := atomic.LoadInt32(&embedHits); n < 1 {
+		t.Fatalf("opted-in semantic-cache embedder should reach the embed provider; hits=%d", n)
+	}
+}
+
 // buildFailoverServer wires a primary provider (blocked/remote by policy) with a
 // local fallback, so a test can prove dispatch SKIPS the blocked target and
 // still serves from the on-box fallback — the sovereignty gate must not break

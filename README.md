@@ -2,10 +2,12 @@
 
 <img src="assets/llmux-logo.png" alt="llmux" width="340" />
 
-### One OpenAI-compatible endpoint for every LLM provider.
+### The sovereign OpenAI-compatible endpoint — your AI runs on your box.
 
 Point your existing OpenAI SDK at llmux and get routing, fallbacks, per-key
-budgets, caching, and live cost — across every provider, with zero per-language code.
+budgets, caching, and live cost — across every provider, with zero per-language
+code. Inference runs **on your box by default**, and a request is **never
+silently sent off the box** unless you explicitly, loggably opt in.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-2DD4BF.svg)](LICENSE)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://golang.org)
@@ -35,6 +37,11 @@ accounting happen underneath — no new SDK to learn.
 It's **self-hosted, open source, has no telemetry**, and ships its admin
 dashboard *inside* the binary. An optional control-plane seam adds centralized
 billing when you want it, and is invisible when you don't.
+
+It is also the **sovereign LLM gateway for Vulos**: a default-deny *sovereignty
+gate* runs before every dispatch, so inference stays on your box unless you
+explicitly opt a remote provider in. See
+**[the sovereignty gate](docs/architecture.md#the-sovereignty-gate-where-your-ai-runs)**.
 
 ```mermaid
 flowchart LR
@@ -86,6 +93,7 @@ print(resp.usage)                           # includes per-request cost
 
 | | |
 |---|---|
+| 🛡️ **Sovereignty gate** | Inference runs **on your box by default**. A default-deny gate runs before *every* dispatch path — no request leaves the box for a remote provider unless you set `allow_egress` (or declare a `sovereign`/`brokered` tier) on that provider. Fails closed; every permitted off-box call is logged with its tier. |
 | 🔌 **OpenAI-compatible API** | `chat/completions`, `completions`, `embeddings`, `models`, plus `responses`, `rerank`, `moderations`, `images/generations`, `audio/speech`. Works with any OpenAI SDK unchanged. |
 | 🌐 **Multi-provider routing** | Native adapters for Anthropic, Gemini, Cohere, Bedrock, and Azure — plus passthrough for any OpenAI-shaped upstream. Tool-calling, vision, and streaming translated per provider. |
 | 🧭 **Flexible routes** | Model aliases, `provider/model` prefixes, wildcards (`claude-*`), catch-all routes, fallback chains with retries/backoff, and least-cost selection. |

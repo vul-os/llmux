@@ -10,6 +10,40 @@ operator-configured upstreams, exposes user (`/v1/*`) and admin (`/admin/*`)
 endpoints, and serves a web UI (`/ui`). Clients are semi-trusted (authenticated
 by virtual key or master key); operators are trusted (they set provider configs).
 
+## Sovereignty gate (enforced egress control)
+
+llmux's headline security property is **data sovereignty**: inference runs on the
+operator's box by default and a request is **never** sent to a remote provider
+without an explicit, logged opt-in. This is enforced, not advisory.
+
+- **Default-deny at dispatch.** `core/sovereign` classifies every provider by
+  locality/tier; `core/server`'s `enforceSovereignty` runs **before any network
+  call** on *every* dispatch path — chat, streaming chat, embeddings, the
+  semantic-cache embedder, and all model-bearing modality routes
+  (`/v1/completions`, `/v1/responses`, images, audio, moderations, rerank). A
+  blocked provider never opens a socket; it returns `403 sovereignty_error`
+  (`egress_not_allowed`) and increments the `egress_blocked` metric.
+- **Fails closed.** An empty/unparseable `base_url`, an off-box endpoint marked
+  `local`, or an unknown tier is treated as **external and blocked**. Nothing
+  silently upgrades; unknown providers are denied.
+- **Opt-in is explicit and per-provider.** `allow_egress` (external),
+  `allow_brokered` (brokered tier), or `"tier": "sovereign"` — never a global
+  switch. Every *permitted* off-box call is logged with its tier so egress is
+  always observable.
+- **No bypass via the semantic cache.** The semantic cache embeds every prompt
+  to compute its similarity key; that embed is a dispatch path and is now gated
+  by the same `enforceSovereignty` check (a blocked embed model is a cache miss,
+  never a silent off-box call). Regression tests:
+  `TestSovereignBlocksSemanticCacheEmbedder`,
+  `TestSovereignSemanticCacheEmbedderOptInReaches`.
+- **Tests.** `core/server/sovereignty_enforcement_test.go` proves egress is
+  blocked-without-opt-in on every route, that opt-in flips it, and that a blocked
+  primary still fails over to a local fallback without dialing the blocked target
+  (`TestSovereignBlocksEgressByDefault`, `TestSovereignBlocksEveryModalityRoute`,
+  `TestSovereignBlocksEmbeddings`, `TestSovereignStreamChatBlocked`,
+  `TestSovereignFailoverSkipsBlockedServesLocal`,
+  `TestSovereignAllTargetsBlockedSurfaces403`).
+
 ## Posture (after the H5 review)
 
 Fixed:

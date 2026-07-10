@@ -16,7 +16,7 @@ central billing is an adapter layered on top.
 
 ```mermaid
 flowchart TD
-    product["product (lilmail AI, office AI, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
+    product["product (Vulos OS assistant, Mail AI, Office AI, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
 
     subgraph gateway["llmux gateway"]
         auth["authMW: resolve Bearer → account (Identity seam)"] --> route["route model → provider"]
@@ -191,16 +191,16 @@ Content-Type: application/json
 
 ### Alignment with the existing `airouter` contract
 
-lilmail's `[ai]` block already targets an OpenAI-compatible SSE chat endpoint
-(`/api/ai/chat`, the Vulos OS *airouter*) with a Bearer token. llmux's
+The Vulos Mail `[ai]` block already targets an OpenAI-compatible SSE chat
+endpoint (`/api/ai/chat`, the Vulos OS *airouter*) with a Bearer token. llmux's
 `/v1/chat/completions` is the **same OpenAI-compatible SSE shape**, so a product
 migrates by pointing its `[ai] endpoint` at llmux and passing the account token
 as the Bearer. The airouter can also simply front llmux for the same effect.
 
 > **Follow-up (not in this change):** actually re-pointing each product
-> (lilmail AI assistant, office AI, …) at llmux and threading the account token
-> is product-side wiring. This change delivers the gateway, the contract, and
-> this document; per-product wiring is tracked separately.
+> (the Vulos OS assistant, Mail AI, Office AI, …) at llmux and threading the
+> account token is product-side wiring. This change delivers the gateway, the
+> contract, and this document; per-product wiring is tracked separately.
 
 ---
 

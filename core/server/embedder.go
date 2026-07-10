@@ -19,15 +19,27 @@ type serverEmbedder struct {
 }
 
 // Embed embeds text via the configured embedding model.
+//
+// SOVEREIGNTY: this is a dispatch path like any other — the semantic cache
+// embeds EVERY chat/embeddings prompt to compute its cache key, so if the
+// configured embed model routed to a non-local provider, prompt text would
+// silently egress on every request even when that provider is blocked for
+// direct calls. It therefore enforces the same default-deny egress gate before
+// dialing, so the cache can never become a sovereignty bypass. A blocked embed
+// model surfaces an error to the caller (semantic.go treats a lookup/store
+// embed error as a cache miss and proceeds), never a silent off-box call.
 func (e serverEmbedder) Embed(ctx context.Context, text string) ([]float64, error) {
 	res, err := e.s.router.Resolve(e.model)
 	if err != nil {
 		return nil, err
 	}
+	t := res.Primary
+	if err := e.s.enforceSovereignty(t.Provider.Name()); err != nil {
+		return nil, err
+	}
 	input, _ := json.Marshal(text)
 	req := &openai.EmbeddingRequest{Model: e.model, Input: input}
 	raw, _ := json.Marshal(req)
-	t := res.Primary
 	resp, err := t.Provider.Embeddings(ctx, req, t.Model, raw)
 	if err != nil {
 		return nil, err

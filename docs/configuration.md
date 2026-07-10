@@ -75,6 +75,30 @@ DATABASE_URL='postgres://user:pass@ep-xyz.eu-central-1.aws.neon.tech/vulos?sslmo
 use the same hash), so a database dump never yields live credentials. This holds
 on the shared-schema path too.
 
+## Sovereignty (per-provider egress)
+
+Each provider is classified by **where its traffic goes** and gated by a
+default-deny egress policy before every dispatch (see
+[the sovereignty gate](architecture.md#the-sovereignty-gate-where-your-ai-runs)).
+A loopback / unix-socket `base_url` is **local** and always allowed; any off-box
+endpoint is **external** and **blocked** by default. You opt in per-provider —
+never globally — with these provider fields:
+
+| Provider field | Effect |
+|---|---|
+| `"tier": "sovereign"` | Declares this off-box endpoint one you vouch for (unverified by Vulos). Allowed without `allow_egress`. |
+| `"tier": "brokered"` | Declares a named third party under a claimed no-train agreement. Allowed only with `allow_brokered` (or `allow_egress`). |
+| `"allow_brokered": true` | Permits calls to `brokered`-tier providers. |
+| `"allow_egress": true` | Permits calls to a plain **external** off-box provider (the broad escape hatch). |
+
+A loopback URL is always `local` regardless of marking (you can't mislabel an
+on-box endpoint), and the gate fails **closed**: an empty/unparseable `base_url`,
+an off-box endpoint marked `local`, or an unknown tier value is treated as
+external and blocked. Blocked providers are never dialed; permitted off-box calls
+are logged with their tier, and `GET /health` (master key) discloses the full
+posture. See the sovereignty block in
+[`llmux.example.json`](../llmux.example.json).
+
 ## Related
 
 - [Routing & reliability](../web/docs/routing.md) — how requests map to providers
