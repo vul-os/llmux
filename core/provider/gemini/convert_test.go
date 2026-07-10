@@ -530,6 +530,150 @@ func TestCleanSchemaRecursesAnyOfAndItems(t *testing.T) {
 	}
 }
 
+func TestCleanSchemaResolvesRefsAgainstDefs(t *testing.T) {
+	in := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"user": {"$ref": "#/$defs/User"}
+		},
+		"$defs": {
+			"User": {
+				"type": "object",
+				"title": "User",
+				"properties": {
+					"name": {"type": "string"},
+					"address": {"$ref": "#/$defs/Address"}
+				}
+			},
+			"Address": {
+				"type": "object",
+				"properties": {
+					"city": {"type": "string"}
+				}
+			}
+		}
+	}`)
+	m := unmarshalSchema(t, cleanSchema(in))
+
+	// $defs must not survive into the Gemini-facing schema.
+	if _, ok := m["$defs"]; ok {
+		t.Fatalf("$defs leaked into cleaned schema: %v", m)
+	}
+
+	user, ok := m["properties"].(map[string]any)["user"].(map[string]any)
+	if !ok {
+		t.Fatalf("user property missing/wrong shape: %v", m)
+	}
+	if _, ok := user["$ref"]; ok {
+		t.Fatalf("$ref left unresolved on user: %v", user)
+	}
+	if user["type"] != "object" {
+		t.Fatalf("user.type=%v want object (inlined from $defs.User)", user["type"])
+	}
+	if _, ok := user["title"]; ok {
+		t.Errorf("inlined ref content should still be sanitized (title dropped): %v", user)
+	}
+	name, ok := user["properties"].(map[string]any)["name"].(map[string]any)
+	if !ok || name["type"] != "string" {
+		t.Fatalf("user.properties.name not inlined correctly: %v", user)
+	}
+
+	// Nested $ref (User.address -> Address) must also be resolved, recursively.
+	addr, ok := user["properties"].(map[string]any)["address"].(map[string]any)
+	if !ok {
+		t.Fatalf("address property missing after nested ref resolution: %v", user)
+	}
+	if _, ok := addr["$ref"]; ok {
+		t.Fatalf("nested $ref left unresolved: %v", addr)
+	}
+	city, ok := addr["properties"].(map[string]any)["city"].(map[string]any)
+	if !ok || city["type"] != "string" {
+		t.Fatalf("address.properties.city not inlined correctly: %v", addr)
+	}
+}
+
+func TestCleanSchemaResolvesLegacyDefinitionsKeyword(t *testing.T) {
+	in := json.RawMessage(`{
+		"type": "object",
+		"properties": {"item": {"$ref": "#/definitions/Item"}},
+		"definitions": {"Item": {"type": "string"}}
+	}`)
+	m := unmarshalSchema(t, cleanSchema(in))
+	if _, ok := m["definitions"]; ok {
+		t.Fatalf("definitions leaked into cleaned schema: %v", m)
+	}
+	item, ok := m["properties"].(map[string]any)["item"].(map[string]any)
+	if !ok || item["type"] != "string" {
+		t.Fatalf("item not inlined from legacy definitions: %v", m)
+	}
+}
+
+func TestCleanSchemaUnresolvableRefFallsBackToOpenObject(t *testing.T) {
+	// A $ref with no matching $defs entry must not be forwarded to Gemini
+	// verbatim (a dangling $ref is exactly what Gemini rejects).
+	in := json.RawMessage(`{
+		"type": "object",
+		"properties": {"x": {"$ref": "#/$defs/Missing"}}
+	}`)
+	m := unmarshalSchema(t, cleanSchema(in))
+	x, ok := m["properties"].(map[string]any)["x"].(map[string]any)
+	if !ok {
+		t.Fatalf("x property missing: %v", m)
+	}
+	if _, ok := x["$ref"]; ok {
+		t.Fatalf("unresolvable $ref must not survive: %v", x)
+	}
+}
+
+// TestToGeminiToolsWithRefSchema is an end-to-end check via toGemini (not just
+// cleanSchema directly) that a tool parameters schema using $ref/$defs — the
+// TODO this test targets — converts to a usable, ref-free Gemini declaration
+// instead of forwarding a schema Gemini would 400 on.
+func TestToGeminiToolsWithRefSchema(t *testing.T) {
+	params := json.RawMessage(`{
+		"type": "object",
+		"properties": {
+			"target": {"$ref": "#/$defs/Target"}
+		},
+		"required": ["target"],
+		"$defs": {
+			"Target": {
+				"type": "object",
+				"properties": {
+					"city": {"type": "string"},
+					"country": {"type": "string"}
+				}
+			}
+		}
+	}`)
+	req := &openai.ChatCompletionRequest{
+		Tools: []openai.Tool{
+			{Type: "function", Function: openai.FunctionDef{Name: "get_weather", Description: "d", Parameters: params}},
+		},
+	}
+	out := toGemini(req)
+	if len(out.Tools) != 1 || len(out.Tools[0].FunctionDeclarations) != 1 {
+		t.Fatalf("expected one tool decl, got %+v", out.Tools)
+	}
+	var parsed map[string]any
+	if err := json.Unmarshal(out.Tools[0].FunctionDeclarations[0].Parameters, &parsed); err != nil {
+		t.Fatalf("decl parameters not valid JSON: %v", err)
+	}
+	if _, ok := parsed["$defs"]; ok {
+		t.Fatalf("$defs leaked into tool declaration: %s", out.Tools[0].FunctionDeclarations[0].Parameters)
+	}
+	target, ok := parsed["properties"].(map[string]any)["target"].(map[string]any)
+	if !ok {
+		t.Fatalf("target property missing/unresolved: %s", out.Tools[0].FunctionDeclarations[0].Parameters)
+	}
+	if _, ok := target["$ref"]; ok {
+		t.Fatalf("tool schema $ref left unresolved: %v", target)
+	}
+	if target["type"] != "object" {
+		t.Fatalf("target.type=%v want object", target["type"])
+	}
+}
+
 func TestCleanSchemaInvalidFallsBack(t *testing.T) {
 	for _, in := range []string{`not json`, `[1,2,3]`, `"a string"`, `42`} {
 		if got := string(cleanSchema(json.RawMessage(in))); got != `{"type":"object","properties":{}}` {

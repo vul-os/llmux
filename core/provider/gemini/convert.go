@@ -320,12 +320,141 @@ func cleanSchema(s json.RawMessage) json.RawMessage {
 	if err := json.Unmarshal(s, &m); err != nil || m == nil {
 		return json.RawMessage(emptyObjectSchema)
 	}
+	// Inline any $ref/$defs (or legacy "definitions") BEFORE sanitizing so the
+	// sanitizer's key-stripping (including "$defs"/"definitions" themselves,
+	// via resolveRefs removing them) sees only fully-expanded schemas. Gemini
+	// has no concept of $ref, so a tool that uses one (routine output of
+	// pydantic/zod schema generators for recursive or shared types) would
+	// otherwise be forwarded with dangling $ref pointers Gemini rejects.
+	resolveRefs(m)
 	sanitizeSchema(m)
 	out, err := json.Marshal(m)
 	if err != nil {
 		return json.RawMessage(emptyObjectSchema)
 	}
 	return out
+}
+
+// maxRefDepth bounds $ref inlining recursion so a cyclic schema (a $ref that
+// (in)directly points back to itself) can't blow the stack or loop forever.
+// Past the bound, the offending $ref is left as an empty object rather than
+// expanded further.
+const maxRefDepth = 16
+
+// resolveRefs inlines every "$ref": "#/$defs/Name" (or the legacy
+// "#/definitions/Name") pointer in m against the top-level "$defs" /
+// "definitions" map, recursively, then removes the definitions map itself
+// (Gemini doesn't understand either keyword). Only local, in-document refs
+// (the form every JSON-Schema-generating tool library emits) are supported;
+// any other $ref shape (external file, $id-based, JSON pointer into a
+// non-definitions location) is left as an empty object rather than forwarded
+// unresolved, since an unresolved $ref is exactly the construct Gemini rejects.
+func resolveRefs(m map[string]any) {
+	defs := refDefs(m)
+	// Always walk the schema, even with no (or an empty) definitions map: a
+	// $ref that can't be resolved must still be stripped (see inlineRefs'
+	// unresolvable-ref fallback) rather than forwarded dangling.
+	inlineRefs(m, defs, 0)
+	delete(m, "$defs")
+	delete(m, "definitions")
+}
+
+// refDefs collects the schema's local definitions map ("$defs" takes
+// precedence over the legacy "definitions" if somehow both are present).
+func refDefs(m map[string]any) map[string]any {
+	if d, ok := m["$defs"].(map[string]any); ok {
+		return d
+	}
+	if d, ok := m["definitions"].(map[string]any); ok {
+		return d
+	}
+	return nil
+}
+
+// refName extracts the definition name from a local "#/$defs/Name" or
+// "#/definitions/Name" pointer, or "" if ref isn't that shape.
+func refName(ref string) string {
+	for _, prefix := range []string{"#/$defs/", "#/definitions/"} {
+		if strings.HasPrefix(ref, prefix) {
+			return ref[len(prefix):]
+		}
+	}
+	return ""
+}
+
+// inlineRefs walks m (and, transitively, everything reachable through
+// properties/items/anyOf/oneOf/allOf) replacing any {"$ref": "..."} object
+// with a deep copy of the referenced definition, resolved recursively so a
+// definition that itself contains a $ref is also expanded. depth bounds
+// recursion against cyclic definitions (see maxRefDepth).
+func inlineRefs(m map[string]any, defs map[string]any, depth int) {
+	if depth > maxRefDepth {
+		return
+	}
+	if ref, ok := m["$ref"].(string); ok {
+		delete(m, "$ref")
+		name := refName(ref)
+		def, ok := defs[name].(map[string]any)
+		if !ok {
+			// Unresolvable ref (external/unsupported shape): fall back to an
+			// open object rather than forwarding a dangling pointer.
+			return
+		}
+		resolved := deepCopyMap(def)
+		inlineRefs(resolved, defs, depth+1)
+		for k, v := range resolved {
+			if _, exists := m[k]; !exists {
+				m[k] = v
+			}
+		}
+		return
+	}
+	if props, ok := m["properties"].(map[string]any); ok {
+		for _, v := range props {
+			if child, ok := v.(map[string]any); ok {
+				inlineRefs(child, defs, depth+1)
+			}
+		}
+	}
+	if items, ok := m["items"].(map[string]any); ok {
+		inlineRefs(items, defs, depth+1)
+	}
+	for _, key := range []string{"anyOf", "oneOf", "allOf"} {
+		if arr, ok := m[key].([]any); ok {
+			for _, v := range arr {
+				if child, ok := v.(map[string]any); ok {
+					inlineRefs(child, defs, depth+1)
+				}
+			}
+		}
+	}
+}
+
+// deepCopyMap deep-copies a parsed-JSON map (values are only ever
+// map[string]any, []any, or JSON scalars) so mutating the copy via inlineRefs
+// never aliases the shared $defs entry — a schema referenced from two places
+// must not have one call site's inlining bleed into the other.
+func deepCopyMap(m map[string]any) map[string]any {
+	out := make(map[string]any, len(m))
+	for k, v := range m {
+		out[k] = deepCopyValue(v)
+	}
+	return out
+}
+
+func deepCopyValue(v any) any {
+	switch t := v.(type) {
+	case map[string]any:
+		return deepCopyMap(t)
+	case []any:
+		out := make([]any, len(t))
+		for i, e := range t {
+			out[i] = deepCopyValue(e)
+		}
+		return out
+	default:
+		return v // string/float64/bool/nil are immutable
+	}
 }
 
 // schemaDropKeys are JSON Schema keywords Gemini rejects outright.
@@ -335,10 +464,9 @@ var schemaDropKeys = []string{
 }
 
 // sanitizeSchema recursively rewrites a parsed JSON Schema object in place to
-// keep only what Gemini accepts.
-//
-// TODO: inline $ref against $defs/definitions. For now $ref/$defs are left
-// untouched (best effort) rather than dropped, so we don't crash on them.
+// keep only what Gemini accepts. Callers must resolve $ref/$defs (see
+// resolveRefs, called from cleanSchema) before calling this — sanitizeSchema
+// itself assumes a fully-expanded schema.
 func sanitizeSchema(m map[string]any) {
 	for _, k := range schemaDropKeys {
 		delete(m, k)
