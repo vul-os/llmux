@@ -157,6 +157,36 @@ func New(cfg *config.Config) (*Server, error) {
 	return s, nil
 }
 
+// unmeterableBudgeted reports whether serving model on the primary route would be
+// an UNMETERABLE charge against a budget-enforcing key: a non-BYOK request whose
+// resolved model the catalog cannot price. attachCost/recordSpend would then
+// record $0, the key's spend would never rise, OverBudget would never trip, and a
+// budgeted key could burn unbounded real provider spend on the operator's central
+// keys — the same fail-open class as an unchecked budget on a store error
+// (hardened separately). Callers refuse PRE-FLIGHT so no upstream call happens.
+//
+// Unaffected (correctly return false): BYOK requests (unmetered by design — they
+// spend the account's own key), and keys with no budget (BudgetUSD<=0: nothing to
+// enforce, so a $0-logged unpriced request is acceptable and left as-is).
+func (s *Server) unmeterableBudgeted(ctx context.Context, model, primaryProvider string) bool {
+	if s.primaryBYOK(ctx, primaryProvider) {
+		return false
+	}
+	k := keyFrom(ctx)
+	if k == nil || k.BudgetUSD <= 0 {
+		return false
+	}
+	return !s.catalog.HasPrice(model, primaryProvider)
+}
+
+// writeUnmeterable refuses a request the metering guard flagged, with a stable
+// error code an operator can act on (price the model, or scope the key).
+func writeUnmeterable(w http.ResponseWriter, model string) {
+	writeError(w, http.StatusForbidden, openai.NewError(
+		"model "+model+" has no configured price; refusing to serve an unmeterable request against a budgeted key",
+		"invalid_request_error", "model_not_priced"))
+}
+
 // attachCost computes and attaches dollar cost to a usage record from the
 // catalog (route-aware on the provider actually used), unless a provider
 // already supplied it.

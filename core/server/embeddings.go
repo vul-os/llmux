@@ -32,6 +32,12 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, openai.NewError(err.Error(), "invalid_request_error", "model_not_found"))
 		return
 	}
+	// Fail closed: never serve a metered request on a budgeted key for a model we
+	// cannot price (see unmeterableBudgeted) — uncounted spend would evade budget.
+	if s.unmeterableBudgeted(r.Context(), req.Model, res.Primary.Provider.Name()) {
+		writeUnmeterable(w, req.Model)
+		return
+	}
 	t := res.Primary
 	// Sovereignty gate: deny embeddings to a non-local provider without opt-in.
 	if err := s.enforceSovereignty(t.Provider.Name()); err != nil {

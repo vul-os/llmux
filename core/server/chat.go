@@ -42,6 +42,12 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, openai.NewError(err.Error(), "invalid_request_error", "model_not_found"))
 		return
 	}
+	// Fail closed: never serve a metered request on a budgeted key for a model we
+	// cannot price — the spend would go uncounted and the budget would never trip.
+	if s.unmeterableBudgeted(r.Context(), req.Model, res.Primary.Provider.Name()) {
+		writeUnmeterable(w, req.Model)
+		return
+	}
 
 	if req.Stream {
 		s.streamChat(w, r, &req, raw, res)

@@ -170,6 +170,18 @@ func (c *Catalog) priceForRoute(model, provider string) (Price, bool) {
 	return getFrom(snap.best, model)
 }
 
+// HasPrice reports whether the catalog can price model on the given provider
+// route (same resolution as priceForRoute, price discarded). The metering guard
+// uses it to refuse an unpriceable request against a budget-enforcing key BEFORE
+// any upstream spend: a served request whose cost cannot be computed would never
+// decrement the budget, so a budgeted key could burn unbounded real provider
+// spend — the same fail-open class as an unchecked budget on a store error.
+// provider "" checks the merged best.
+func (c *Catalog) HasPrice(model, provider string) bool {
+	_, ok := c.priceForRoute(model, provider)
+	return ok
+}
+
 // Cost computes the dollar cost of a usage record for a model on a route. The
 // provider is the name of the provider actually used (""=unknown, uses best).
 func (c *Catalog) Cost(model, provider string, usage *openai.Usage) *openai.Cost {

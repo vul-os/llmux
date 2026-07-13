@@ -56,6 +56,12 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 		writeError(w, http.StatusNotFound, openai.NewError(err.Error(), "invalid_request_error", "model_not_found"))
 		return
 	}
+	// Fail closed: never serve a metered request on a budgeted key for a model we
+	// cannot price (see unmeterableBudgeted) — uncounted spend would evade budget.
+	if s.unmeterableBudgeted(r.Context(), model, res.Primary.Provider.Name()) {
+		writeUnmeterable(w, model)
+		return
+	}
 	t := res.Primary
 	fwd, ok := t.Provider.(provider.Forwarder)
 	if !ok {
