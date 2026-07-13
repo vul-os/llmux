@@ -12,12 +12,6 @@ type reqIDKey int
 
 const requestIDKey reqIDKey = 0
 
-// requestIDFrom returns the request id from context, or "".
-func requestIDFrom(ctx context.Context) string {
-	id, _ := ctx.Value(requestIDKey).(string)
-	return id
-}
-
 // newLogger builds a slog logger at the configured level.
 func newLogger(level string) *slog.Logger {
 	var lv slog.Level
