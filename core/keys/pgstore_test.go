@@ -3,6 +3,7 @@ package keys
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -220,6 +221,175 @@ func TestPGStoreUsesDedicatedSchema(t *testing.T) {
 	}
 	if inPublic {
 		t.Fatal("table llmux_keys leaked into public schema")
+	}
+}
+
+// TestPGStorePendingSpendRecoversAfterDBError proves the durability half of the
+// fix against a real database: spend a failed write could not persist is held,
+// folded into the next successful write, and lands in Postgres. Previously the
+// write error was discarded, so spend during the outage window was lost forever.
+func TestPGStorePendingSpendRecoversAfterDBError(t *testing.T) {
+	dsn := testDSN(t)
+	ctx := context.Background()
+	resetSchema(t, ctx, dsn)
+
+	cfgs := []config.KeyConfig{{Key: "sk-rec", Name: "recover", BudgetUSD: 10.0}}
+	s, err := NewPGStore(ctx, dsn, testSchema, cfgs, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+
+	// The database goes away underneath the running store.
+	resetSchema(t, ctx, dsn)
+
+	// Spend recorded during the outage cannot persist, and its budget is now
+	// unknowable, so the key must be held over budget rather than treated unspent.
+	s.AddSpend("sk-rec", 0.4)
+	if !s.OverBudget("sk-rec") {
+		t.Fatal("with the DB unreadable and no last-known-good spend, the key must fail closed")
+	}
+
+	// The database comes back.
+	if err := s.migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.seed(ctx, cfgs); err != nil {
+		t.Fatal(err)
+	}
+
+	// The next write folds in the spend the outage swallowed.
+	s.AddSpend("sk-rec", 0.1)
+
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+	var stored float64
+	if err := pool.QueryRow(ctx,
+		fmt.Sprintf("SELECT spend_usd FROM %s WHERE key=$1", qualifiedTable()), HashToken("sk-rec")).Scan(&stored); err != nil {
+		t.Fatal(err)
+	}
+	if stored < 0.49 || stored > 0.51 {
+		t.Fatalf("persisted spend = %v, want ~0.5 (0.4 held through the outage + 0.1)", stored)
+	}
+	if got := s.Spend("sk-rec"); got < 0.49 || got > 0.51 {
+		t.Fatalf("spend = %v, want ~0.5 after recovery", got)
+	}
+}
+
+// deadPGStore builds a PGStore whose pool is already closed, so every query fails
+// immediately: the "Postgres blip" the budget check must never fail open on. It
+// needs no live database, so it runs in the default suite.
+func deadPGStore(t *testing.T, cfgs []config.KeyConfig) *PGStore {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), "postgres://llmux:llmux@127.0.0.1:1/llmux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.Close() // every subsequent query errors without touching the network
+	s := &PGStore{
+		pool: pool, limiter: NewMemLimiter(), schema: testSchema, table: qualifiedTable(),
+		keys: map[string]*Key{}, spend: map[string]*spendState{},
+	}
+	for _, c := range cfgs {
+		s.keys[c.Key] = &Key{
+			Key: c.Key, Name: c.Name, BudgetUSD: c.BudgetUSD, RPM: c.RPM,
+			AllowedModels: c.AllowedModels,
+		}
+	}
+	return s
+}
+
+// TestPGStoreOverBudgetFailsClosedOnDBError pins the money property: a key whose
+// spend cannot be read is reported OVER budget. Discarding the DB error (spend=0)
+// made 0>=budget false, so a single Postgres blip let every virtual key —
+// including exhausted ones — burn unbounded provider tokens on the operator's keys.
+func TestPGStoreOverBudgetFailsClosedOnDBError(t *testing.T) {
+	s := deadPGStore(t, []config.KeyConfig{
+		{Key: "sk-dead", Name: "team", BudgetUSD: 5.0},
+		{Key: "sk-unlimited", Name: "unlimited"}, // BudgetUSD 0 = no budget to enforce
+	})
+
+	if !s.OverBudget("sk-dead") {
+		t.Fatal("unreadable spend must report OVER budget (fail closed), not unspent")
+	}
+	// The reservation layer must not see a full budget either: an unknown spend
+	// is never 0 with the DB down.
+	if _, known := s.spendUSD("sk-dead"); known {
+		t.Fatal("spend must be reported unknown when Postgres cannot be read")
+	}
+	// A key with no configured budget has nothing to enforce and stays allowed.
+	if s.OverBudget("sk-unlimited") {
+		t.Fatal("a key with BudgetUSD<=0 has no budget to exceed")
+	}
+}
+
+// TestPGStoreDegradedSpendUsesLastKnownGood proves the graceful half of the fix:
+// once a spend figure has been read, a later DB outage keeps enforcing it (the cp
+// gate's last-known-good posture) instead of denying every request outright.
+func TestPGStoreDegradedSpendUsesLastKnownGood(t *testing.T) {
+	s := deadPGStore(t, []config.KeyConfig{{Key: "sk-warm", Name: "warm", BudgetUSD: 1.0}})
+	// A successful read before the outage: $0.90 of the $1.00 budget spent.
+	s.rememberSpend("sk-warm", 0.90)
+
+	if s.OverBudget("sk-warm") {
+		t.Fatal("0.90 < 1.00: the last-known-good spend must still allow the key")
+	}
+	// Spend recorded during the outage cannot reach Postgres, but must still count
+	// against the budget rather than being forgiven.
+	s.AddSpend("sk-warm", 0.5)
+	if got := s.Spend("sk-warm"); got < 1.39 || got > 1.41 {
+		t.Fatalf("degraded spend = %v, want ~1.4 (0.90 last-known + 0.50 pending)", got)
+	}
+	if !s.OverBudget("sk-warm") {
+		t.Fatal("spend recorded during a DB outage must count against the budget")
+	}
+}
+
+// TestPGStoreAddSpendRetainsUnpersistedSpend proves a failed spend write is not
+// swallowed: the amount is held and folded into the next write attempt, so spend
+// lost during the outage window recovers instead of vanishing.
+func TestPGStoreAddSpendRetainsUnpersistedSpend(t *testing.T) {
+	s := deadPGStore(t, []config.KeyConfig{{Key: "sk-hold", Name: "hold", BudgetUSD: 10.0}})
+
+	s.AddSpend("sk-hold", 0.25)
+	s.AddSpend("sk-hold", 0.75)
+
+	s.spendMu.Lock()
+	st := s.spend["sk-hold"]
+	s.spendMu.Unlock()
+	if st == nil {
+		t.Fatal("failed spend writes recorded nothing")
+	}
+	if st.pending < 0.99 || st.pending > 1.01 {
+		t.Fatalf("pending spend = %v, want ~1.0 (no spend lost across failed writes)", st.pending)
+	}
+}
+
+// TestRedisLimiterDegradesToLocalCapOnOutage pins F2.7: a Redis outage must not
+// lift the per-key RPM cap fleet-wide. Failing open here left keys with no budget
+// (RPM is their only throttle) entirely unthrottled.
+func TestRedisLimiterDegradesToLocalCapOnOutage(t *testing.T) {
+	// A port with nothing listening: every Redis command fails fast.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	ln.Close()
+
+	lim := NewRedisLimiter(redis.NewClient(&redis.Options{
+		Addr: addr, DialTimeout: 100 * time.Millisecond, MaxRetries: -1,
+	}))
+	const tok = "sk-redis-outage"
+
+	if !lim.Allow(tok, 2) || !lim.Allow(tok, 2) {
+		t.Fatal("the first two requests should pass under the degraded per-replica cap (rpm=2)")
+	}
+	if lim.Allow(tok, 2) {
+		t.Fatal("a Redis outage must degrade the RPM cap, not remove it: the third request must be denied")
 	}
 }
 

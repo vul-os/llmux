@@ -40,11 +40,14 @@ type Store interface {
 	Lookup(token string) (*Key, bool)
 	// Allow checks and consumes one unit of the per-minute rate limit.
 	Allow(token string) bool
-	// AddSpend records cost (USD) against a key.
+	// AddSpend records cost (USD) against a key. Implementations backed by a
+	// remote store must not drop spend a failed write left unpersisted.
 	AddSpend(token string, usd float64)
 	// Spend returns cumulative spend for a key.
 	Spend(token string) float64
 	// OverBudget reports whether the key has exhausted its budget.
+	// Implementations backed by a remote store must FAIL CLOSED (report true)
+	// when a key's spend is unknowable, never report an unreadable key as unspent.
 	OverBudget(token string) bool
 	// Keys returns all configured keys (for admin listing).
 	Keys() []*Key

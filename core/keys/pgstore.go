@@ -2,7 +2,9 @@ package keys
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log"
 	"sync"
 	"time"
 
@@ -31,6 +33,27 @@ type PGStore struct {
 
 	mu   sync.RWMutex
 	keys map[string]*Key
+
+	// spendMu guards spend, the degraded-mode bookkeeping consulted only when
+	// Postgres cannot answer.
+	spendMu sync.Mutex
+	spend   map[string]*spendState
+}
+
+// spendState is the degraded-mode bookkeeping for one key: the spend Postgres is
+// known to hold, plus spend Postgres has not durably accepted. It mirrors the cp
+// gate's last-known-good posture (integration/cp): an outage falls back to the
+// last known figure, never to "unspent".
+type spendState struct {
+	// db is the last spend_usd Postgres was seen to hold. Valid only when known.
+	db float64
+	// known is true once a read has succeeded for the key. Without it there is no
+	// basis at all to judge the budget, and OverBudget must fail closed.
+	known bool
+	// pending is spend a failed write left unpersisted. It counts against the
+	// budget immediately and is folded into the next write attempt, so a DB blip
+	// never silently forgives real spend.
+	pending float64
 }
 
 // Limiter enforces a per-minute request limit for a token.
@@ -61,7 +84,8 @@ func NewPGStore(ctx context.Context, dsn, schema string, cfgs []config.KeyConfig
 	// and quotes mixed-case/reserved names) since they are interpolated into DDL
 	// and DML strings rather than passed as parameters.
 	table := pgx.Identifier{schema, "llmux_keys"}.Sanitize()
-	s := &PGStore{pool: pool, limiter: limiter, schema: schema, table: table, keys: map[string]*Key{}}
+	s := &PGStore{pool: pool, limiter: limiter, schema: schema, table: table,
+		keys: map[string]*Key{}, spend: map[string]*spendState{}}
 	if err := s.migrate(ctx); err != nil {
 		pool.Close()
 		return nil, err
@@ -159,27 +183,149 @@ func (s *PGStore) Allow(token string) bool {
 // AddSpend implements Store (atomic increment in Postgres).
 // token is the raw bearer token; it is hashed before the DB UPDATE so the
 // plaintext credential is never written to the spend row.
+//
+// A failed write is never swallowed: the amount, plus anything an earlier write
+// failed to persist, is held as pending spend — counted against the budget from
+// that moment and folded into the next write attempt. A write that fails
+// ambiguously (e.g. a timeout after Postgres applied it) can therefore be
+// counted twice; over-counting spend is the safe side of a budget.
 func (s *PGStore) AddSpend(token string, usd float64) {
+	amount := usd + s.takePending(token)
+	if amount == 0 {
+		return
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	_, _ = s.pool.Exec(ctx, fmt.Sprintf(`UPDATE %s SET spend_usd = spend_usd + $2 WHERE key=$1`, s.table), HashToken(token), usd)
+	tag, err := s.pool.Exec(ctx, fmt.Sprintf(`UPDATE %s SET spend_usd = spend_usd + $2 WHERE key=$1`, s.table), HashToken(token), amount)
+	if err != nil {
+		s.holdPending(token, amount)
+		log.Printf("keys: postgres spend write failed for key %q (%v) — holding $%.4f as pending spend, enforced locally until it persists", s.nameFor(token), err, amount)
+		return
+	}
+	if tag.RowsAffected() == 0 {
+		// No row for this key (never seeded, or deleted): there is nothing to
+		// accumulate against, so holding the amount forever would be pointless.
+		return
+	}
+	s.applyPersisted(token, amount)
 }
 
 // Spend implements Store.
 // token is the raw bearer token; it is hashed before the DB SELECT.
+// When Postgres cannot be read it reports the last-known-good figure; see spendUSD.
 func (s *PGStore) Spend(token string) float64 {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	var v float64
-	_ = s.pool.QueryRow(ctx, fmt.Sprintf(`SELECT spend_usd FROM %s WHERE key=$1`, s.table), HashToken(token)).Scan(&v)
-	return v
+	usd, _ := s.spendUSD(token)
+	return usd
 }
 
 // OverBudget implements Store.
+//
+// FAIL CLOSED: when Postgres cannot be read and no last-known-good spend exists
+// for the key, its spend is unknowable, so the key is reported OVER budget
+// rather than unspent. Discarding the error here would hand every virtual key —
+// including already-exhausted ones — an unbounded budget against the operator's
+// real provider keys for the duration of a single DB blip.
 func (s *PGStore) OverBudget(token string) bool {
 	k, ok := s.Lookup(token)
 	if !ok || k.BudgetUSD <= 0 {
 		return false
 	}
-	return s.Spend(token) >= k.BudgetUSD
+	usd, known := s.spendUSD(token)
+	if !known {
+		return true
+	}
+	return usd >= k.BudgetUSD
+}
+
+// spendUSD returns the key's effective spend: the Postgres figure plus any spend
+// still pending locally. known is false only when Postgres could not be read AND
+// no last-known-good figure exists — the caller must then fail closed instead of
+// treating the key as unspent.
+func (s *PGStore) spendUSD(token string) (float64, bool) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var v float64
+	err := s.pool.QueryRow(ctx, fmt.Sprintf(`SELECT spend_usd FROM %s WHERE key=$1`, s.table), HashToken(token)).Scan(&v)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return s.degradedSpend(token, err)
+	}
+	// ErrNoRows means the key has no spend row: a definitive $0, not an outage.
+	return s.rememberSpend(token, v), true
+}
+
+// rememberSpend caches a freshly-read Postgres figure as the last-known-good
+// spend and returns it plus any spend still pending locally.
+func (s *PGStore) rememberSpend(token string, v float64) float64 {
+	s.spendMu.Lock()
+	defer s.spendMu.Unlock()
+	st := s.stateLocked(token)
+	st.db, st.known = v, true
+	return v + st.pending
+}
+
+// degradedSpend answers a spend query while Postgres is unreadable: it enforces
+// the last-known-good figure (plus unpersisted spend) when there is one, and
+// reports "unknown" when there is not, so the budget check can fail closed.
+func (s *PGStore) degradedSpend(token string, err error) (float64, bool) {
+	s.spendMu.Lock()
+	defer s.spendMu.Unlock()
+	st := s.spend[token]
+	if st == nil || !st.known {
+		log.Printf("keys: postgres spend read failed for key %q (%v) — no last-known-good spend, failing closed", s.nameFor(token), err)
+		return 0, false
+	}
+	usd := st.db + st.pending
+	log.Printf("keys: postgres spend read failed for key %q (%v) — enforcing last-known-good spend $%.4f", s.nameFor(token), err, usd)
+	return usd, true
+}
+
+// takePending removes and returns the key's unpersisted spend, so a write can
+// fold it in. It is put back (holdPending) if that write also fails.
+func (s *PGStore) takePending(token string) float64 {
+	s.spendMu.Lock()
+	defer s.spendMu.Unlock()
+	st := s.spend[token]
+	if st == nil {
+		return 0
+	}
+	v := st.pending
+	st.pending = 0
+	return v
+}
+
+// holdPending records spend Postgres would not accept.
+func (s *PGStore) holdPending(token string, usd float64) {
+	s.spendMu.Lock()
+	defer s.spendMu.Unlock()
+	s.stateLocked(token).pending += usd
+}
+
+// applyPersisted advances the last-known-good figure after a successful write so
+// it stays usable if Postgres later goes away.
+func (s *PGStore) applyPersisted(token string, usd float64) {
+	s.spendMu.Lock()
+	defer s.spendMu.Unlock()
+	if st := s.stateLocked(token); st.known {
+		st.db += usd
+	}
+}
+
+// stateLocked returns (creating if needed) the spend bookkeeping for a token.
+// The caller holds spendMu.
+func (s *PGStore) stateLocked(token string) *spendState {
+	st := s.spend[token]
+	if st == nil {
+		st = &spendState{}
+		s.spend[token] = st
+	}
+	return st
+}
+
+// nameFor returns the configured name for a token, for logs. The raw bearer
+// token is never logged.
+func (s *PGStore) nameFor(token string) string {
+	if k, ok := s.Lookup(token); ok {
+		return k.Name
+	}
+	return "unknown"
 }
