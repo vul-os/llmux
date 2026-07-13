@@ -18,6 +18,21 @@ override (manual)  >  provider API (Azure)  >  LiteLLM (direct)  >  OpenRouter (
   provider's discounted cache-read rate.
 - **Overrides** — pin or correct any model's price inline or via a JSON file.
 
+## Unpriced models
+
+If a request resolves to a model the catalog cannot price, the outcome depends on
+the key:
+
+- **Budgeted key** (a per-key USD budget, or a control-plane budget) — the request
+  is **refused pre-flight** with `403 model_not_priced`, before any provider call.
+  An unpriced request would otherwise be metered at $0, so the key's spend would
+  never rise and its budget could never stop it — unbounded real provider spend on
+  a budget that looks untouched. Add an override for the model (or wait for the
+  sync to pick it up), or scope the key to priced models.
+- **Un-budgeted key** — served normally and logged at $0, as before.
+- **BYOK** — always served (the request spends the account's own key, so llmux
+  does not meter it).
+
 ## Config
 
 ```json

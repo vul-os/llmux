@@ -407,10 +407,12 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 				return
 			}
 			// Gate by the account's LLM budget via the BudgetGate seam. Static
-			// default = per-key budget; cp = central entitlements (fail-open on
-			// transport error, explicit deny enforced). The gate may also place a
-			// per-account in-flight reservation (released after the request) and
-			// enforce a cp-side request-rate cap.
+			// default = per-key budget (fail-closed on a store error). cp = central
+			// entitlements: last-known-good on a warm cache, and — by default — a
+			// bounded degraded RPM cap (not fully open) on a cold cache + cp outage,
+			// with explicit deny enforced. The gate may also place a per-account
+			// in-flight reservation (released after the request) and enforce a
+			// cp-side request-rate cap.
 			d := s.budget.Check(r.Context(), p)
 			if d.RateLimited {
 				releaseDecision(d)

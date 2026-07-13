@@ -85,6 +85,20 @@ Upstream and validation errors are normalized to the OpenAI error shape
 SDK error handling works unchanged. Rate-limit and `retry-after` headers from the
 upstream are relayed.
 
+Alongside relayed upstream errors, the gateway raises these of its own before it
+ever calls a provider:
+
+| Status | `code` | When |
+|---|---|---|
+| 401 | `invalid_api_key` | The bearer token is unknown (or the control plane rejected it). |
+| 400 | `missing_model` | No `model` in the request body. |
+| 403 | `model_not_allowed` | The key's model allow-list doesn't include the requested model. |
+| 404 | `model_not_found` | No route matches the model string. |
+| 403 | `model_not_priced` | A **budgeted** key requested a routable model the catalog cannot price. Refused pre-flight so an unmeterable request can't burn unbounded real provider spend while logging $0. Price the model (or the pricing sync will) or scope the key. BYOK requests and keys with no budget are unaffected — the latter serve the model and log it at $0. |
+| 402 | `budget_exceeded` | The key/account is over its USD budget. **Fail-closed:** if the spend store (Postgres) cannot be read and no last-known-good figure exists, the key is treated as over budget rather than unspent. |
+| 429 | `rate_limit_exceeded` | The key's RPM limit (or a control-plane per-account cap) was hit. |
+| 403 | `egress_not_allowed` | The [sovereignty gate](architecture.md#the-sovereignty-gate-where-your-ai-runs) blocked an off-box provider the operator has not opted in. |
+
 ## Related
 
 - [Routing & reliability](../web/docs/routing.md)
