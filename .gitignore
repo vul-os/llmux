@@ -28,6 +28,11 @@ node_modules/
 # NOTE: web/dist is intentionally committed — it is embedded into the Go binary
 # via go:embed, so `go build` works without a Node toolchain. CI rebuilds it.
 
+# Playwright (E2E boot guard) output
+web/test-results/
+web/playwright-report/
+web/blob-report/
+
 # Rust
 /sdks/rust/target/
 /sdks/rust/Cargo.lock

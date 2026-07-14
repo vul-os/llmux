@@ -44,6 +44,29 @@ jobs:
           npm --prefix web ci
           npm --prefix web run build
 
+      # The bundle we just built is embedded into the gateway binary and served
+      # at /ui. A bundle that BUILDS but does not RUN is a blank screen for every
+      # user — `vite build` cannot see that, only a real browser can. Boot it in
+      # chromium and fail on any uncaught exception / empty root. This also walks
+      # the React.lazy() /docs and /app chunks, whose defects do not exist until
+      # their route is visited.
+      - name: Install chromium
+        working-directory: web
+        run: npx playwright install --with-deps chromium
+
+      # `npm test` → pretest:e2e (vite build) → playwright test
+      - name: Web boot guard + E2E
+        working-directory: web
+        run: npm test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: llmux-playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
