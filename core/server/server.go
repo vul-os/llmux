@@ -250,6 +250,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /admin/keys", s.handleAdminKeys)
 	s.mux.HandleFunc("GET /admin/usage", s.handleAdminUsage)
 	s.registerModalityRoutes()
+	s.registerTranscriptionRoutes()
 	s.registerBYOKRoutes()
 	s.mountUI()
 }

@@ -17,6 +17,7 @@ var knownPaths = map[string]bool{
 	"/v1/chat/completions": true, "/v1/embeddings": true, "/v1/models": true,
 	"/v1/catalog.json": true, "/v1/completions": true, "/v1/moderations": true,
 	"/v1/images/generations": true, "/v1/audio/speech": true, "/v1/rerank": true,
+	"/v1/audio/transcriptions": true, "/v1/audio/translations": true,
 	"/v1/responses": true, "/health": true, "/metrics": true,
 	"/admin/keys": true, "/admin/usage": true,
 }
