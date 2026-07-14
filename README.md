@@ -150,6 +150,22 @@ The admin dashboard ships *inside* the binary at `/ui` — no separate service, 
 
 </details>
 
+## Deployment modes
+
+llmux is one self-hosted binary; its shape is defined by whether the optional
+**control-plane seam** is wired. This lines up with the wider Vulos
+[three-shape model](https://github.com/vul-os/vulos/blob/dev/docs/ARCHITECTURE.md#deployment-modes)
+(self-host / OS-managed / cloud):
+
+| Shape | How | Billing / sovereignty |
+|---|---|---|
+| **Self-hosted** (default) | Run the binary with provider keys and no `LLMUX_CP_URL` | No telemetry, no central billing — fully sovereign; inference stays on-box until you opt a remote provider in |
+| **Control-plane-linked** | Set `LLMUX_CP_URL` / `LLMUX_CP_SECRET` | Virtual-key spend + usage metered through a central control plane (e.g. Vulos Cloud); the seam is invisible when unset |
+| **Embedded in Vulos OS** | The OS points at it with `LLMUX_URL` | The same binary run on-box as the OS's sovereign LLM gateway — every product's AI features route through it |
+
+The self-hosted and control-plane-linked shapes are the **same binary**; the CP
+seam only *adds* central billing on top. See [control-plane.md](docs/control-plane.md).
+
 ## Self-hosting
 
 A single binary with no required runtime dependencies — drop it on a host (or use
