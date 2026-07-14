@@ -134,7 +134,7 @@ export default function App() {
           </div>
         </div>
         <div className="wrap footer-base">
-          <span>© {new Date().getFullYear()} llmux · MIT · <span className="footer-vula">Vula — open</span></span>
+          <span>© {new Date().getFullYear()} llmux · MIT · <a href={import.meta.env.BASE_URL + "licenses.txt"} target="_blank" rel="noreferrer">Third-party licenses</a> · <span className="footer-vula">Vula — open</span></span>
           <span className="footer-mono">Part of the Vulos OS suite</span>
         </div>
       </footer>
