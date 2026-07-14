@@ -182,12 +182,19 @@ Content-Type: application/json
   control plane in the suite). That account is what BYOK-vs-central and metering
   key off — so **a product does not decide BYOK/central; it just forwards the
   account's token** and llmux applies the right key and metering.
+- **Meet captions:** server-side transcription routes through
+  `POST /v1/audio/transcriptions` (a `multipart/form-data` audio upload). It is
+  gated exactly like every other route (sovereignty, BYOK/central, fail-closed
+  metering). Per-audio-minute pricing is not yet wired, so a served
+  transcription logs a **$0 auditable** line for unbudgeted/BYOK keys and is
+  **refused pre-flight** for a *budgeted* key (no price ⇒ `403 model_not_priced`,
+  no upstream spend) — never a silent free path.
 - **Shape:** standard OpenAI chat-completions request/response and SSE. Any
   OpenAI SDK (or a raw SSE reader) works unchanged; the `model` string selects
   the route. Embeddings (`/v1/embeddings`) and the forwarded modality routes
   (`/v1/completions`, `/v1/responses`, `/v1/rerank`, `/v1/moderations`,
-  `/v1/images/generations`, `/v1/audio/speech`) follow the same BYOK/central +
-  metering rules.
+  `/v1/images/generations`, `/v1/audio/speech`, `/v1/audio/transcriptions`,
+  `/v1/audio/translations`) follow the same BYOK/central + metering rules.
 
 ### Alignment with the existing `airouter` contract
 

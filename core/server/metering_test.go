@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/llmux/llmux/core/config"
@@ -335,6 +336,70 @@ func priceModel(t *testing.T, s *Server, model string) {
 	s.catalog.SetSource("test-"+model, 0, map[string]pricing.Price{
 		model: {Model: model, Provider: "openai", InputPerMTok: 1, OutputPerMTok: 1},
 	})
+}
+
+// --- Cache-not-billed money boundary ----------------------------------------
+
+// TestCacheHitNotBilled is the money boundary for response caching: a cache HIT
+// serves a stored response WITHOUT calling any provider, so it must not charge
+// the key's budget a second time. The hit is still LOGGED (Cached=true) for
+// visibility, but recordSpend is deliberately skipped on the cache path (chat.go)
+// — otherwise a hot cache key would be billed repeatedly for a single real call.
+func TestCacheHitNotBilled(t *testing.T) {
+	var calls int32
+	up := okUpstream("cached", &calls)
+	defer up.Close()
+	cfg := &config.Config{
+		Server:    config.ServerConfig{Addr: ":0"},
+		Cache:     config.CacheConfig{Enabled: true, MaxEntries: 100},
+		Providers: []config.ProviderConfig{{Name: "openai", Type: config.TypePassthrough, BaseURL: up.URL + "/v1", APIKey: "k"}},
+		Routes:    []config.RouteConfig{{Model: "*", Provider: "openai"}},
+		Keys:      []config.KeyConfig{{Key: "sk-budget", Name: "tenant", BudgetUSD: 1000}},
+	}
+	s, err := New(cfg)
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+	priceModel(t, s, "m")
+	cl := &captureLogger{}
+	s.usage = cl
+
+	body := `{"model":"m","messages":[{"role":"user","content":"hi"}]}`
+
+	// First call MISSES and is billed the real cost.
+	rec1 := postAuth(s, "/v1/chat/completions", "sk-budget", body)
+	if rec1.Code != 200 || rec1.Header().Get("X-LLMux-Cache") == "hit" {
+		t.Fatalf("first call should be a served miss: %d %q", rec1.Code, rec1.Header().Get("X-LLMux-Cache"))
+	}
+	spendAfterMiss := s.keys.Spend("sk-budget")
+	if spendAfterMiss <= 0 {
+		t.Fatalf("first (miss) call must charge real spend, got %v", spendAfterMiss)
+	}
+
+	// Second identical call HITS the cache: no provider call, no additional spend.
+	rec2 := postAuth(s, "/v1/chat/completions", "sk-budget", body)
+	if rec2.Header().Get("X-LLMux-Cache") != "hit" {
+		t.Fatalf("second identical call should hit cache")
+	}
+	if n := atomic.LoadInt32(&calls); n != 1 {
+		t.Fatalf("cache hit must not call the provider; upstream calls=%d", n)
+	}
+	if got := s.keys.Spend("sk-budget"); got != spendAfterMiss {
+		t.Fatalf("cache hit must NOT be billed: spend went %v -> %v", spendAfterMiss, got)
+	}
+
+	// Both requests are logged; the second is marked Cached (auditable, unbilled).
+	cl.mu.Lock()
+	defer cl.mu.Unlock()
+	if len(cl.recs) != 2 {
+		t.Fatalf("expected 2 usage records (miss + hit), got %d", len(cl.recs))
+	}
+	if cl.recs[0].Cached {
+		t.Fatalf("first record must be a miss (Cached=false): %+v", cl.recs[0])
+	}
+	if !cl.recs[1].Cached {
+		t.Fatalf("second record must be a cache hit (Cached=true): %+v", cl.recs[1])
+	}
 }
 
 func assertOneMeteredRecord(t *testing.T, cl *captureLogger, wantTotal int, wantCost bool) {

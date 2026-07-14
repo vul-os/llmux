@@ -29,11 +29,29 @@ allow-lists. See [Configuration](configuration.md).
 | `POST /v1/moderations` | Moderation (forwarded). |
 | `POST /v1/images/generations` | Image generation (forwarded). |
 | `POST /v1/audio/speech` | Text-to-speech (forwarded). |
+| `POST /v1/audio/transcriptions` | Speech-to-text (multipart/form-data upload; forwarded). Powers Meet captions. |
+| `POST /v1/audio/translations` | Speech-to-text with translation to English (multipart; forwarded). |
 
 > **Routed vs. forwarded.** `chat/completions` and `embeddings` go through native
 > per-provider translation. The other modality routes are forwarded to the
 > resolved upstream; every *served* forward is still metered. See
 > [Providers](../web/docs/providers.md).
+>
+> **Audio input is multipart.** `audio/transcriptions` and `audio/translations`
+> take a `multipart/form-data` body (the audio file plus a `model` form field),
+> not JSON. llmux reads and rewrites the `model` FORM field, preserving the
+> uploaded file, then forwards to the routed provider — with the same
+> sovereignty, BYOK/central, and fail-closed metering gates as every other route.
+>
+> **Per-audio-minute metering is a known gap.** Whisper-class transcription
+> responses carry no token-usage object and there is no per-minute price in the
+> catalog yet, so a *served* transcription is recorded as a **$0 auditable usage
+> line** (never a silent free path — the model and account are logged). A
+> **budgeted** key is still protected: with no price the fail-closed meterability
+> gate refuses the request pre-flight (`403 model_not_priced`) before any
+> upstream spend, so a budget can never be evaded via audio. When a provider does
+> report usage (e.g. `gpt-4o-transcribe`) and the model is priced, it meters
+> normally.
 
 ## Catalog & discovery
 

@@ -33,7 +33,8 @@ configured provider by *where its traffic goes* and the server calls the gate
 (`core/server/sovereignty.go`, `enforceSovereignty`) **before any network call
 on every dispatch path** — chat, streaming chat, embeddings, the semantic-cache
 embedder, and all model-bearing modality routes (`/v1/completions`,
-`/v1/responses`, images, audio, moderations, rerank).
+`/v1/responses`, images, audio speech/transcriptions/translations, moderations,
+rerank).
 
 Providers resolve to a 4-tier dial, most→least private:
 
