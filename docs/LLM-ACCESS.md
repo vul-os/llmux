@@ -198,14 +198,14 @@ Content-Type: application/json
 
 ### Alignment with the existing `airouter` contract
 
-The Vulos Mail `[ai]` block already targets an OpenAI-compatible SSE chat
-endpoint (`/api/ai/chat`, the Vulos OS *airouter*) with a Bearer token. llmux's
+The mail connector's (`lilmail`) `[ai]` block already targets an OpenAI-compatible
+SSE chat endpoint (`/api/ai/chat`, the Vulos OS *airouter*) with a Bearer token. llmux's
 `/v1/chat/completions` is the **same OpenAI-compatible SSE shape**, so a product
 migrates by pointing its `[ai] endpoint` at llmux and passing the account token
 as the Bearer. The airouter can also simply front llmux for the same effect.
 
 > **Follow-up (not in this change):** actually re-pointing each product
-> (the Vulos OS assistant, Mail AI, Office AI, …) at llmux and threading the
+> (the Vulos OS assistant, the mail connector's AI, Office AI, …) at llmux and threading the
 > account token is product-side wiring. This change delivers the gateway, the
 > contract, and this document; per-product wiring is tracked separately.
 
