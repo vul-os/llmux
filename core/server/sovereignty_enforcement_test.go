@@ -393,7 +393,7 @@ func TestHealthDisclosesSovereigntyPosture(t *testing.T) {
 		Providers: []config.ProviderConfig{
 			{Name: "ollama", Type: config.TypePassthrough, BaseURL: "http://localhost:11434/v1"},
 			{Name: "openai", Type: config.TypePassthrough, BaseURL: "https://api.openai.com/v1"}, // blocked
-			{Name: "pool", Type: config.TypePassthrough, BaseURL: "https://pool.eu.vulos.net/v1", Tier: "sovereign"},
+			{Name: "pool", Type: config.TypePassthrough, BaseURL: "https://pool.eu.vulos.org/v1", Tier: "sovereign"},
 		},
 		Routes: []config.RouteConfig{{Model: "*", Provider: "ollama"}},
 	}

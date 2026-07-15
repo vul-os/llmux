@@ -157,7 +157,7 @@ func TestSovereignSovereignTierServesWithoutOptIn(t *testing.T) {
 
 	// Off-box URL, marked sovereign, no allow_egress / allow_brokered.
 	pol := sovereign.NewPolicy([]config.ProviderConfig{
-		{Name: "mock", BaseURL: "https://pool.eu.vulos.net/v1", Tier: "sovereign"},
+		{Name: "mock", BaseURL: "https://pool.eu.vulos.org/v1", Tier: "sovereign"},
 	})
 	s := buildServer(t, up.URL, pol)
 

@@ -98,7 +98,7 @@ func TestDecisionLabel(t *testing.T) {
 func TestTierSummaryGroupsAllowedOnly(t *testing.T) {
 	p := NewPolicy([]config.ProviderConfig{
 		{Name: "ollama", BaseURL: "http://localhost:11434/v1"},                                            // local  → allowed
-		{Name: "pool", BaseURL: "https://pool.eu.vulos.net/v1", Tier: "sovereign"},                        // sovereign → allowed
+		{Name: "pool", BaseURL: "https://pool.eu.vulos.org/v1", Tier: "sovereign"},                        // sovereign → allowed
 		{Name: "brk-on", BaseURL: "https://broker.example.com/v1", Tier: "brokered", AllowBrokered: true}, // allowed
 		{Name: "brk-off", BaseURL: "https://broker.example.com/v1", Tier: "brokered"},                     // BLOCKED → omitted
 		{Name: "ext-on", BaseURL: "https://api.openai.com/v1", AllowEgress: true},                         // external → allowed
@@ -159,7 +159,7 @@ func TestDecisionsSnapshotIncludesBlocked(t *testing.T) {
 func TestAllowedEgressExcludesBlockedAndLocal(t *testing.T) {
 	p := NewPolicy([]config.ProviderConfig{
 		{Name: "ollama", BaseURL: "http://localhost:11434/v1"},                    // local (not egress)
-		{Name: "sov", BaseURL: "https://pool.eu.vulos.net/v1", Tier: "sovereign"}, // egress, allowed
+		{Name: "sov", BaseURL: "https://pool.eu.vulos.org/v1", Tier: "sovereign"}, // egress, allowed
 		{Name: "ext-off", BaseURL: "https://api.openai.com/v1"},                   // egress, BLOCKED
 		{Name: "ext-on", BaseURL: "https://api.openai.com/v1", AllowEgress: true}, // egress, allowed
 	})

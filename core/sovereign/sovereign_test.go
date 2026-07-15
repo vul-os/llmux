@@ -49,7 +49,7 @@ func TestTierOf(t *testing.T) {
 		{"http://127.0.0.1:8080/v1", "external", TierLocal}, // cannot mislabel on-box
 		{"unix:///run/llmux.sock", "brokered", TierLocal},
 		// Off-box endpoints honor an explicit sovereign/brokered declaration.
-		{"https://pool.eu.vulos.net/v1", "sovereign", TierSovereign},
+		{"https://pool.eu.vulos.org/v1", "sovereign", TierSovereign},
 		{"https://broker.example.com/v1", "brokered", TierBrokered},
 		{"https://api.openai.com/v1", "external", TierExternal},
 		// Unmarked off-box derives from locality → external (nothing upgrades).
@@ -75,7 +75,7 @@ func TestTierOf(t *testing.T) {
 func TestPolicyTiers(t *testing.T) {
 	p := NewPolicy([]config.ProviderConfig{
 		{Name: "local", BaseURL: "http://localhost:11434/v1"},
-		{Name: "sov", BaseURL: "https://pool.eu.vulos.net/v1", Tier: "sovereign"},
+		{Name: "sov", BaseURL: "https://pool.eu.vulos.org/v1", Tier: "sovereign"},
 		{Name: "brk-off", BaseURL: "https://broker.example.com/v1", Tier: "brokered"},
 		{Name: "brk-on", BaseURL: "https://broker.example.com/v1", Tier: "brokered", AllowBrokered: true},
 		{Name: "brk-egress", BaseURL: "https://broker.example.com/v1", Tier: "brokered", AllowEgress: true},
