@@ -505,10 +505,10 @@ func TestEnabled(t *testing.T) {
 	if New("", "x").Enabled() {
 		t.Fatal("empty url should be disabled (standalone)")
 	}
-	if !New("https://cp.vulos.to", "").Enabled() {
+	if !New("https://cp.vulos.org", "").Enabled() {
 		t.Fatal("set url should enable cp")
 	}
-	if New("https://cp.vulos.to/", "").BaseURL != "https://cp.vulos.to" {
+	if New("https://cp.vulos.org/", "").BaseURL != "https://cp.vulos.org" {
 		t.Fatal("trailing slash should be trimmed")
 	}
 }

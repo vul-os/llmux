@@ -18,7 +18,7 @@ import (
 // MULTIPART form body — an uploaded audio file plus a "model" form field — not a
 // JSON body with a "model" key. They therefore need a multipart-aware handler
 // that reads and rewrites the model FORM field and re-encodes the upload before
-// forwarding. Meet captions route their server-side transcription through here.
+// forwarding. Server-side voice transcription (e.g. live captions) routes here.
 var transcriptionRoutes = map[string]string{
 	"POST /v1/audio/transcriptions": "/audio/transcriptions",
 	"POST /v1/audio/translations":   "/audio/translations",

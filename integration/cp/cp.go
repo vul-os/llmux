@@ -12,7 +12,7 @@
 //
 // All cp calls authenticate with the X-Relay-Auth header carrying the shared
 // secret. The request/response shapes match the cp contract shared across the
-// Vulos suite (vulos-office / vulos-mail).
+// Vulos products that consume the control plane.
 package cp
 
 import (

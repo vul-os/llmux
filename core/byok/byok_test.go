@@ -165,3 +165,59 @@ func TestFileStorePersistsEncrypted(t *testing.T) {
 		t.Fatalf("reopened get = %q,%v", k, ok)
 	}
 }
+
+// TestFileStoreClearAndProvidersPersist exercises the FileStore lifecycle beyond
+// Set/Get: Providers must list only the account's live providers (sorted), and a
+// Clear must persist across a reopen (a cleared key must never reappear from the
+// on-disk file).
+func TestFileStoreClearAndProvidersPersist(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "byok.json")
+	c := testCrypter(t)
+
+	fs, err := NewFileStore(c, path)
+	if err != nil {
+		t.Fatalf("NewFileStore: %v", err)
+	}
+	if err := fs.Set("acct", "openai", "k-openai"); err != nil {
+		t.Fatalf("set openai: %v", err)
+	}
+	if err := fs.Set("acct", "anthropic", "k-anthropic"); err != nil {
+		t.Fatalf("set anthropic: %v", err)
+	}
+
+	if provs := fs.Providers("acct"); len(provs) != 2 || provs[0] != "anthropic" || provs[1] != "openai" {
+		t.Fatalf("Providers sorted = %v, want [anthropic openai]", provs)
+	}
+	// An account with no keys lists nothing.
+	if provs := fs.Providers("nobody"); provs != nil {
+		t.Fatalf("empty account Providers = %v, want nil", provs)
+	}
+
+	// Clear one provider and confirm it is gone from both the live view and disk.
+	if err := fs.Clear("acct", "openai"); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	if provs := fs.Providers("acct"); len(provs) != 1 || provs[0] != "anthropic" {
+		t.Fatalf("after clear Providers = %v, want [anthropic]", provs)
+	}
+
+	// Reopen: the clear must have persisted, and the surviving key must decrypt.
+	fs2, err := NewFileStore(c, path)
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	if _, ok := fs2.Get("acct", "openai"); ok {
+		t.Fatal("cleared provider reappeared after reopen")
+	}
+	if k, ok := fs2.Get("acct", "anthropic"); !ok || k != "k-anthropic" {
+		t.Fatalf("surviving key after reopen = %q,%v", k, ok)
+	}
+	// Clearing the last provider drops the account entry entirely.
+	if err := fs2.Clear("acct", "anthropic"); err != nil {
+		t.Fatalf("clear last: %v", err)
+	}
+	if provs := fs2.Providers("acct"); provs != nil {
+		t.Fatalf("account with all keys cleared should list nil, got %v", provs)
+	}
+}

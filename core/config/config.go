@@ -104,7 +104,7 @@ func (b BYOKConfig) ResolveKEK() string {
 
 // CPConfig configures the optional control-plane integration.
 type CPConfig struct {
-	// URL is the cp base URL (e.g. https://cp.vulos.to). Empty = standalone.
+	// URL is the cp base URL (e.g. https://cp.vulos.org). Empty = standalone.
 	URL string `json:"cp_url"`
 	// SharedSecret authenticates outbound cp calls via the X-Relay-Auth header.
 	SharedSecret string `json:"cp_shared_secret"`
