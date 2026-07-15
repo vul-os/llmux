@@ -11,7 +11,9 @@
     "notices:all": "npm run notices && npm run notices:go",
     "build": "npm run notices:all && vite build",
     "preview": "vite preview",
-    "test": "npm run test:e2e",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run",
+    "test:unit:watch": "vitest",
     "pretest:e2e": "npm run build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui"
@@ -28,11 +30,15 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
     "@vitejs/plugin-react": "^6.0.1",
     "autoprefixer": "^10.4.20",
+    "jsdom": "^29.1.1",
     "license-checker-rseidelsohn": "^5.0.1",
     "postcss": "^8.4.47",
     "tailwindcss": "^3.4.14",
-    "vite": "^8.0.1"
+    "vite": "^8.0.1",
+    "vitest": "^3.2.7"
   }
 }

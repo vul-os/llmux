@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
+// Canonical repo — matches App.jsx's GH constant (github.com/vul-os/llmux).
+const GH = "https://github.com/vul-os/llmux";
+
 const up = {
   hidden: { opacity: 0, y: 20 },
   show: (i = 0) => ({ opacity: 1, y: 0, transition: { duration: 0.6, delay: i * 0.07, ease: [0.22, 1, 0.36, 1] } }),
@@ -139,7 +142,7 @@ export default function Landing() {
             </motion.p>
             <motion.div className="hero-cta" variants={up} custom={3} initial="hidden" animate="show">
               <Link className="btn primary big" to="/docs">Get started <span aria-hidden="true">→</span></Link>
-              <a className="btn big" href="https://github.com/llmux/llmux" target="_blank" rel="noreferrer">Star on GitHub</a>
+              <a className="btn big" href={GH} target="_blank" rel="noreferrer">Star on GitHub</a>
             </motion.div>
             <motion.div className="hero-meta" variants={up} custom={4} initial="hidden" animate="show">
               <span className="chip"><b>100+</b> providers</span>
@@ -291,7 +294,7 @@ export default function Landing() {
             <p className="lede">One binary, your keys, your infra. Or let llmux Cloud run it — and undercut the aggregators.</p>
             <div className="hero-cta">
               <Link className="btn primary big" to="/docs">Read the docs <span aria-hidden="true">→</span></Link>
-              <a className="btn big" href="https://github.com/llmux/llmux">Star on GitHub</a>
+              <a className="btn big" href={GH} target="_blank" rel="noreferrer">Star on GitHub</a>
             </div>
           </motion.div>
         </div>
