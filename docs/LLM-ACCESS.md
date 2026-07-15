@@ -16,7 +16,7 @@ central billing is an adapter layered on top.
 
 ```mermaid
 flowchart TD
-    product["product (Vulos OS assistant, Mail AI, Office AI, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
+    product["product (Vulos OS assistant, Office AI, app AI features, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
 
     subgraph gateway["llmux gateway"]
         auth["authMW: resolve Bearer → account (Identity seam)"] --> route["route model → provider"]
@@ -182,7 +182,7 @@ Content-Type: application/json
   control plane in the suite). That account is what BYOK-vs-central and metering
   key off — so **a product does not decide BYOK/central; it just forwards the
   account's token** and llmux applies the right key and metering.
-- **Meet captions:** server-side transcription routes through
+- **Voice captions / transcription:** server-side transcription routes through
   `POST /v1/audio/transcriptions` (a `multipart/form-data` audio upload). It is
   gated exactly like every other route (sovereignty, BYOK/central, fail-closed
   metering). Per-audio-minute pricing is not yet wired, so a served

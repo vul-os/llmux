@@ -29,7 +29,7 @@ allow-lists. See [Configuration](configuration.md).
 | `POST /v1/moderations` | Moderation (forwarded). |
 | `POST /v1/images/generations` | Image generation (forwarded). |
 | `POST /v1/audio/speech` | Text-to-speech (forwarded). |
-| `POST /v1/audio/transcriptions` | Speech-to-text (multipart/form-data upload; forwarded). Powers Meet captions. |
+| `POST /v1/audio/transcriptions` | Speech-to-text (multipart/form-data upload; forwarded). Powers voice captions / transcription. |
 | `POST /v1/audio/translations` | Speech-to-text with translation to English (multipart; forwarded). |
 
 > **Routed vs. forwarded.** `chat/completions` and `embeddings` go through native
