@@ -14,6 +14,8 @@ silently sent off the box** unless you explicitly, loggably opt in.
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Tests](https://img.shields.io/badge/tests-passing-14B8A6)](TESTING.md)
 
+<sub><img src="assets/vulos-logo.png" height="14" alt="VulOS"> Part of <strong><a href="https://vulos.org">VulOS</a></strong> — the open, self-hostable web OS &amp; app suite. Runs standalone, or as an app hosted by the Vulos OS.</sub>
+
 [**Quickstart**](web/docs/quickstart.md) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Architecture**](docs/architecture.md)
 
 <br/>
@@ -52,6 +54,32 @@ flowchart LR
     mux --> p4["DeepSeek · Groq · OpenRouter …"]
     mux --> p5["100+ via passthrough"]
 ```
+
+## Part of VulOS
+
+[VulOS](https://vulos.org) is an open, self-hostable web OS + app suite. **Vulos =
+free, open-source software + two paid services.** The **Vulos OS**, all its apps,
+and the app store are OSS and free — you self-host them on your own box (Fly /
+Hetzner / any VPS / home server); Vulos does not host or provision boxes. Vulos
+bills for only two things: **Vulos Relay** (reachability) and **backup storage**
+(buckets). There is no compute, mail, or app-store billing.
+
+The suite (each free, OSS, and independently self-hostable):
+
+- **Vulos OS** — the web-native desktop shell that hosts the apps
+- **Vulos Office** — documents: docs, sheets, slides, PDF, and whiteboards
+- **Vulos Files** — file storage + P2P sharing, built into the OS
+- **Vulos Relay** — sovereign connectivity / reachability fabric (`@vulos/relay-client`) — one of the two paid services
+- **llmux** — the sovereign AI gateway *(this repo)*
+
+**PIM is bring-your-own** via **lilmail** (connect-your-own-mailbox engine
+exposing `/v1`); **comms are third-party** (Matrix/Element for chat; Element
+Call / Jitsi for video). Products never import each other — they link across
+clean seams.
+
+**llmux's role:** the sovereign AI gateway. It runs standalone as a single
+binary **and** is embedded on-box as the OS's LLM gateway, so every product's AI
+features route through it while inference stays on your box by default.
 
 ## Quick start
 
