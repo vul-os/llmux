@@ -14,8 +14,6 @@ silently sent off the box** unless you explicitly, loggably opt in.
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Tests](https://img.shields.io/badge/tests-passing-14B8A6)](TESTING.md)
 
-<sub><img src="assets/vulos-logo.png" height="14" alt="VulOS"> Part of <strong><a href="https://vulos.org">VulOS</a></strong> — the open, self-hostable web OS &amp; app suite. Runs standalone, or as an app hosted by the Vulos OS.</sub>
-
 [**Quickstart**](web/docs/quickstart.md) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Architecture**](docs/architecture.md)
 
 <br/>
@@ -40,9 +38,8 @@ It's **self-hosted, open source, has no telemetry**, and ships its admin
 dashboard *inside* the binary. An optional control-plane seam adds centralized
 billing when you want it, and is invisible when you don't.
 
-It is also the **sovereign LLM gateway for Vulos**: a default-deny *sovereignty
-gate* runs before every dispatch, so inference stays on your box unless you
-explicitly opt a remote provider in. See
+It also enforces a default-deny *sovereignty gate* before every dispatch, so
+inference stays on your box unless you explicitly opt a remote provider in. See
 **[the sovereignty gate](docs/architecture.md#the-sovereignty-gate-where-your-ai-runs)**.
 
 ```mermaid
@@ -54,32 +51,6 @@ flowchart LR
     mux --> p4["DeepSeek · Groq · OpenRouter …"]
     mux --> p5["100+ via passthrough"]
 ```
-
-## Part of VulOS
-
-[VulOS](https://vulos.org) is an open, self-hostable web OS + app suite. **Vulos =
-free, open-source software + two paid services.** The **Vulos OS**, all its apps,
-and the app store are OSS and free — you self-host them on your own box (Fly /
-Hetzner / any VPS / home server); Vulos does not host or provision boxes. Vulos
-bills for only two things: **Vulos Relay** (reachability) and **backup storage**
-(buckets). There is no compute, mail, or app-store billing.
-
-The suite (each free, OSS, and independently self-hostable):
-
-- **Vulos OS** — the web-native desktop shell that hosts the apps
-- **Vulos Office** — documents: docs, sheets, slides, PDF, and whiteboards
-- **Vulos Files** — file storage + P2P sharing, built into the OS
-- **Vulos Relay** — sovereign connectivity / reachability fabric (`@vulos/relay-client`) — one of the two paid services
-- **llmux** — the sovereign AI gateway *(this repo)*
-
-**PIM is bring-your-own** via **lilmail** (connect-your-own-mailbox engine
-exposing `/v1`); **comms are third-party** (Matrix/Element for chat; Element
-Call / Jitsi for video). Products never import each other — they link across
-clean seams.
-
-**llmux's role:** the sovereign AI gateway. It runs standalone as a single
-binary **and** is embedded on-box as the OS's LLM gateway, so every product's AI
-features route through it while inference stays on your box by default.
 
 ## Quick start
 
@@ -181,18 +152,15 @@ The admin dashboard ships *inside* the binary at `/ui` — no separate service, 
 ## Deployment modes
 
 llmux is one self-hosted binary; its shape is defined by whether the optional
-**control-plane seam** is wired. This lines up with the wider Vulos
-[three-shape model](https://github.com/vul-os/vulos/blob/dev/docs/ARCHITECTURE.md#deployment-modes)
-(self-host / OS-managed / cloud):
+**control-plane seam** is wired:
 
 | Shape | How | Billing / sovereignty |
 |---|---|---|
 | **Self-hosted** (default) | Run the binary with provider keys and no `LLMUX_CP_URL` | No telemetry, no central billing — fully sovereign; inference stays on-box until you opt a remote provider in |
-| **Control-plane-linked** | Set `LLMUX_CP_URL` / `LLMUX_CP_SECRET` | Virtual-key spend + usage metered through a central control plane (e.g. Vulos Cloud); the seam is invisible when unset |
-| **Embedded in Vulos OS** | The OS points at it with `LLMUX_URL` | The same binary run on-box as the OS's sovereign LLM gateway — every product's AI features route through it |
+| **Control-plane-linked** | Set `LLMUX_CP_URL` / `LLMUX_CP_SECRET` | Virtual-key spend + usage metered through a central control plane; the seam is invisible when unset |
 
-The self-hosted and control-plane-linked shapes are the **same binary**; the CP
-seam only *adds* central billing on top. See [control-plane.md](docs/control-plane.md).
+Both shapes are the **same binary**; the CP seam only *adds* central billing on
+top. See [control-plane.md](docs/control-plane.md).
 
 ## Self-hosting
 
@@ -214,3 +182,7 @@ not file public issues for security problems.
 ## License
 
 [MIT](LICENSE) — free to use, modify, and distribute.
+
+---
+
+<sub><img src="assets/vulos-logo.png" height="16" alt="VulOS"> · <strong>Built with purpose. Open by design.</strong></sub>
