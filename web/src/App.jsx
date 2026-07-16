@@ -128,8 +128,7 @@ export default function App() {
             <div className="footer-col">
               <h4>Vulos</h4>
               <a href={VULOS} target="_blank" rel="noreferrer">vulos.org</a>
-              <a href="https://github.com/vul-os/vulos-office" target="_blank" rel="noreferrer">Vulos Office</a>
-              <a href="https://github.com/vul-os/vulos-mail" target="_blank" rel="noreferrer">Vulos Mail</a>
+              <a href="https://github.com/vul-os/ofisi" target="_blank" rel="noreferrer">Ofisi</a>
             </div>
           </div>
         </div>

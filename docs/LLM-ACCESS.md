@@ -16,7 +16,7 @@ central billing is an adapter layered on top.
 
 ```mermaid
 flowchart TD
-    product["product (Vulos OS assistant, Office AI, app AI features, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
+    product["product (Vulos OS assistant, Ofisi AI, app AI features, …)<br/>POST /v1/chat/... · Authorization: Bearer &lt;token&gt;"] --> auth
 
     subgraph gateway["llmux gateway"]
         auth["authMW: resolve Bearer → account (Identity seam)"] --> route["route model → provider"]
@@ -205,7 +205,7 @@ migrates by pointing its `[ai] endpoint` at llmux and passing the account token
 as the Bearer. The airouter can also simply front llmux for the same effect.
 
 > **Follow-up (not in this change):** actually re-pointing each product
-> (the Vulos OS assistant, the mail connector's AI, Office AI, …) at llmux and threading the
+> (the Vulos OS assistant, the mail connector's AI, Ofisi AI, …) at llmux and threading the
 > account token is product-side wiring. This change delivers the gateway, the
 > contract, and this document; per-product wiring is tracked separately.
 
