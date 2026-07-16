@@ -1,6 +1,6 @@
 # llmux — Tasks
 
-Tracks concrete work per phase (see `roadmap.md`). `[ ]` todo · `[~]` in progress
+Tracks concrete work per phase (see `ROADMAP.md`). `[ ]` todo · `[~]` in progress
 · `[x]` done. MVP = P1 + P2 + cost logging.
 
 ## Status — built in waves 0–6 (all Go tests pass, `-race` clean)

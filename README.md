@@ -171,8 +171,9 @@ Add Postgres and Redis when you scale to multiple replicas. See
 
 ## Contributing & support
 
-Issues and PRs welcome. See [SUPPORT.md](SUPPORT.md) for help and the
-[roadmap](roadmap.md) for what's planned.
+Issues and PRs welcome. See [SUPPORT.md](SUPPORT.md) for help, the
+[roadmap](ROADMAP.md) for what's planned, and the [changelog](CHANGELOG.md)
+for what's shipped.
 
 ## Security
 

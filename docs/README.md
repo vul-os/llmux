@@ -27,7 +27,8 @@ Everything you need to run, configure, and operate llmux.
 | [Provider parity](../PARITY.md) | Per-provider feature support matrix |
 | [Testing](../TESTING.md) | Test suites and how to run them |
 | [Security policy](../SECURITY.md) | Reporting vulnerabilities |
-| [Roadmap](../roadmap.md) | What's planned |
+| [Roadmap](../ROADMAP.md) | What's planned |
+| [Changelog](../CHANGELOG.md) | What's shipped |
 | [Support](../SUPPORT.md) | Getting help |
 
 > The same guides ship **inside the binary** and are served at `/ui/docs` in the
