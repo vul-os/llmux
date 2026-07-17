@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="190" viewBox="0 0 480 190" fill="none">
+  <title>llmux</title>
+  <defs>
+    <symbol id="mux" viewBox="0 0 76 72">
+      <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="18" r="2.6" fill="#ffffff" stroke="none"/>
+        <circle cx="8" cy="36" r="2.6" fill="#ffffff" stroke="none"/>
+        <circle cx="8" cy="54" r="2.6" fill="#ffffff" stroke="none"/>
+        <line x1="11" y1="18" x2="30" y2="18"/>
+        <line x1="11" y1="36" x2="30" y2="36"/>
+        <line x1="11" y1="54" x2="30" y2="54"/>
+        <path d="M30 12 L54 26 L54 46 L30 60 Z"/>
+        <line x1="54" y1="36" x2="71" y2="36"/>
+      </g>
+    </symbol>
+  </defs>
+
+  <rect x="1" y="1" width="478" height="188" rx="26" fill="#0A0F1A" stroke="#26303F" stroke-width="1.5"/>
+
+  <rect x="32" y="37" width="116" height="116" rx="27" fill="#2DD4BF"/>
+  <use href="#mux" x="51" y="58" width="78" height="74"/>
+
+  <text x="170" y="124" font-family="ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace"
+        font-size="74" font-weight="600" letter-spacing="-3">
+    <tspan fill="#F1F5F5">ll</tspan><tspan fill="#2DD4BF">mux</tspan>
+  </text>
+</svg>
