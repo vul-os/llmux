@@ -9,7 +9,9 @@ budgets, caching, and live cost — across every provider, with zero per-languag
 code. Inference runs **on your box by default**, and a request is **never
 silently sent off the box** unless you explicitly, loggably opt in.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-2DD4BF.svg)](LICENSE)
+<sub><img src="assets/vulos-logo.png" height="14" alt="VulOS"> Part of <strong><a href="https://vulos.org">VulOS</a></strong> — the open, self-hostable web OS &amp; app suite. Runs standalone, or as an app hosted by the Vulos OS.</sub>
+
+[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-2DD4BF.svg)](LICENSE-MIT)
 [![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://golang.org)
 [![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![Tests](https://img.shields.io/badge/tests-passing-14B8A6)](TESTING.md)
@@ -182,7 +184,8 @@ not file public issues for security problems.
 
 ## License
 
-[MIT](LICENSE) — free to use, modify, and distribute.
+[MIT](LICENSE-MIT) OR [Apache-2.0](LICENSE-APACHE) — © VulOS. llmux is a VulOS
+project; source and issues at [github.com/vul-os/llmux](https://github.com/vul-os/llmux).
 
 ---
 
