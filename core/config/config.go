@@ -64,7 +64,7 @@ type Config struct {
 	// counterpart.
 	UsageLogPath string `json:"usage_log_path"`
 
-	// CP optionally points llmux at a Vulos control plane ("cp" / vulos-cloud)
+	// CP optionally points llmux at an external control plane ("cp")
 	// for central identity/budget/usage. Empty = standalone (the default): the
 	// gateway uses its static keys and never talks to cp. This config is read by
 	// the composition root (cmd/llmux) to wire the OPTIONAL integration/cp

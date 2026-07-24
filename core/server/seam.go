@@ -8,7 +8,7 @@ import (
 )
 
 // This file defines the integration "seam" between the llmux core gateway and
-// any external control plane ("cp" / vulos-cloud).
+// any external control plane ("cp").
 //
 // GOAL: llmux must run COMPLETELY STANDALONE with NO dependency on cp. The
 // standalone path is the default and works with zero cp configuration — it is

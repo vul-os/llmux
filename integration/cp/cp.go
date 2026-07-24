@@ -1,4 +1,4 @@
-// Package cp is the OPTIONAL Vulos control-plane ("cp" / vulos-cloud) adapter
+// Package cp is the OPTIONAL external control-plane ("cp") adapter
 // for the llmux integration seam.
 //
 // It implements the server.Identity / server.BudgetGate / server.UsageLogger
