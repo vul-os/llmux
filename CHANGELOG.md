@@ -49,9 +49,9 @@ No unreleased changes.
   Vulos-vetted guarantee. Enforcement and tier keys are unchanged.
 - README and docs made self-contained (dropped the "Part of VulOS" suite-map
   banner in favor of a plain logo footer) and de-genericized: stale
-  `@vulos.net` references purged, "Vulos Mail [ai] block" reframed as the mail
-  connector's own `[ai]` block, "Vulos Office" corrected to "Ofisi", and a
-  stale Vulos Mail link dropped.
+  `@vulos.net` references purged, the mail connector's `[ai]` block reframed as
+  the connector's own `[ai]` block, sibling products named correctly (Ofisi and
+  lilmail), and a stale mail link dropped.
 - Documented previously-implicit behavior: modality routes are
   passthrough-only (translating adapters return 501), `model_not_priced`
   fail-closed budgeting, and the `/health` auth surface reconciled between

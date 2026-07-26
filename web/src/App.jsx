@@ -89,7 +89,7 @@ export default function App() {
             </a>
             <ThemeToggle />
             <a className="btn primary sm" href={VULOS} target="_blank" rel="noreferrer">
-              Vulos Cloud <span aria-hidden="true">→</span>
+              Vulos OS <span aria-hidden="true">→</span>
             </a>
           </nav>
         </div>
@@ -117,7 +117,7 @@ export default function App() {
               <h4>Product</h4>
               <Link to="/docs">Documentation</Link>
               <Link to="/app">Dashboard</Link>
-              <a href={VULOS} target="_blank" rel="noreferrer">Vulos Cloud</a>
+              <a href={VULOS} target="_blank" rel="noreferrer">Vulos OS</a>
             </div>
             <div className="footer-col">
               <h4>Develop</h4>
