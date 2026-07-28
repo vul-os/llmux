@@ -10,15 +10,22 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// testRedis is the Redis integration gate. It records the outcome (see
+// integration_gate_test.go) so a skipped run says out loud what it did not
+// verify instead of passing quietly.
 func testRedis(t *testing.T) *redis.Client {
-	addr := os.Getenv("LLMUX_TEST_REDIS")
+	addr := os.Getenv(redisEnv)
 	if addr == "" {
-		t.Skip("set LLMUX_TEST_REDIS to run Redis cache integration tests")
+		gateRecord(t.Name(), false)
+		t.Skip("set " + redisEnv + " to run Redis cache integration tests (the SHARED, cross-replica cache " +
+			"path is NOT verified without it)")
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: addr, DB: 15})
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		t.Skipf("redis not reachable: %v", err)
+		gateRecord(t.Name(), false)
+		t.Skipf("redis at %s not reachable (%v) — the shared cache path is NOT verified", addr, err)
 	}
+	gateRecord(t.Name(), true)
 	return rdb
 }
 

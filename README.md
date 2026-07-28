@@ -34,13 +34,17 @@ Every language already ships a mature OpenAI client that accepts a custom
 `base_url`. Point it at llmux and the routing, budgets, caching, and cost
 accounting happen underneath — no new SDK to learn.
 
-It's **self-hosted, open source, has no telemetry**, and ships its admin
-dashboard *inside* the binary. An optional control-plane seam adds centralized
-billing when you want it, and is invisible when you don't.
+It's **self-hosted, open source, has no telemetry, and has no accounts** — no
+login, no email, no sign-up; you authenticate with an operator-issued bearer
+token and configure it by endpoint. It ships its admin dashboard *inside* the
+binary. An optional control-plane seam adds centralized billing when you want
+it, and is invisible when you don't.
 
 It also enforces a default-deny *sovereignty gate* before every dispatch, so
 inference stays on your box unless you explicitly opt a remote provider in. See
-**[the sovereignty gate](docs/architecture.md#the-sovereignty-gate-where-your-ai-runs)**.
+**[the sovereignty gate](docs/architecture.md#the-sovereignty-gate-where-your-ai-runs)**
+— including [what it does not cover](docs/architecture.md#what-the-gate-does-not-cover),
+which is stated plainly rather than left to be discovered.
 
 ```mermaid
 flowchart LR
@@ -99,7 +103,7 @@ print(resp.usage)                           # includes per-request cost
 | 📡 **Byte-identical SSE** | Streamed responses match OpenAI's wire format exactly, so every language's stream parser just works. |
 | ⚡ **Caching** | Exact-match (LRU + TTL) and semantic (embedding-similarity), in-memory or shared via Redis. Scoped per virtual key. |
 | 🔑 **Virtual keys & budgets** | Per-key USD budgets, RPM limits, and model allow-lists. Spend in Postgres, rate limits in Redis. |
-| 💲 **Live pricing** | A built-in seed (cost works offline) auto-syncs from OpenRouter + LiteLLM. Cost appears in each response's `usage`; merged catalog at `GET /v1/catalog.json`. |
+| 💲 **Live pricing** | A built-in seed (cost works offline) auto-syncs from OpenRouter + LiteLLM. Cost appears in each response's `usage`; merged catalog at `GET /v1/catalog.json`. **This sync is the one outbound call a stock gateway makes on its own** — a plain GET of a public price list, carrying no prompt, key, or usage, and *not* covered by the sovereignty gate (which governs inference). Turn it off with `"pricing": {"sources": []}`, or point it at your own mirror. |
 | 📊 **Embedded dashboard** | Usage by model, key budgets, and the live catalog — served from the binary at `/ui` via `go:embed`. No separate service. |
 | 🛡️ **Hardened by default** | Constant-time auth, size/body limits, upstream timeouts, error normalization, `drop_params`, Prometheus `/metrics`, structured logs, `/health`. |
 

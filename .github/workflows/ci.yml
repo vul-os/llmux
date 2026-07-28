@@ -30,6 +30,10 @@ jobs:
       # Enables the gated Postgres/Redis integration tests in CI.
       LLMUX_TEST_POSTGRES: postgres://postgres:postgres@localhost:5432/llmux_test?sslmode=disable
       LLMUX_TEST_REDIS: localhost:6379
+      # The service containers above are guaranteed here, so a SKIP means they
+      # failed to come up. Without this, such a run goes green with zero
+      # cross-replica coverage. With it, the gated corpus must actually execute.
+      LLMUX_REQUIRE_INTEGRATION: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -79,7 +83,7 @@ jobs:
         run: go vet ./...
 
       - name: gofmt check
-        run: test -z "$(gofmt -l core cmd sdks web)"
+        run: test -z "$(gofmt -l core cmd sdks web site)"
 
       - name: Test
         run: go test -race -cover -timeout 180s ./...

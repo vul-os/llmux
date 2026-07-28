@@ -1,4 +1,4 @@
-.PHONY: build web test vet fmt run clean sdk-bins sdk-test docker tidy
+.PHONY: build web site-docs test vet fmt run clean sdk-bins sdk-test docker tidy
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
@@ -6,6 +6,9 @@ PKG := ./cmd/llmux
 web: ## Build the embedded web app (landing/docs/dashboard) into web/dist
 	npm --prefix web install --no-audit --no-fund
 	npm --prefix web run build
+
+site-docs: ## Regenerate site/docs from the canonical docs/ tree (CI fails if stale)
+	go run ./site/gen
 
 build: ## Build the gateway binary (embeds web/dist; run `make web` first to refresh)
 	@mkdir -p dist

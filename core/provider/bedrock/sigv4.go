@@ -139,9 +139,7 @@ func canonicalizeHeaders(req *http.Request) (canonical, signed string) {
 		if lower == "authorization" {
 			continue
 		}
-		for _, v := range vals {
-			collected[lower] = append(collected[lower], v)
-		}
+		collected[lower] = append(collected[lower], vals...)
 	}
 
 	headers := make([]hv, 0, len(collected))

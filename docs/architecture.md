@@ -61,6 +61,57 @@ a keyless gateway, only to a loopback caller); see [API reference](api.md).
 Operators opt a provider in per-provider in the config (never globally):
 `"tier": "sovereign"`, `"allow_brokered": true`, or `"allow_egress": true`.
 
+### What the gate does not cover
+
+The gate governs **inference dispatch** — the paths a prompt or a completion can
+travel. It is not a process-wide firewall, and the following outbound
+connections do not pass through it. None of them carries prompt or completion
+text:
+
+| Path | When it dials | What it sends |
+|---|---|---|
+| **Price-catalog sync** (`core/pricing`) | **On by default** — `config.Default()` ships two public feeds (openrouter.ai, raw.githubusercontent.com); a GET at startup and every `sync_interval_minutes` | Nothing. It is a plain GET of a public price list — no prompt, no key, no usage. Disable with `"pricing": {"sources": []}`; the built-in seed catalog still prices requests offline, or point `sources` at your own mirror. |
+| **Control-plane seam** (`integration/cp`) | Only when `LLMUX_CP_URL` is set | Billing counts (model, tokens, account) — never prompts or completions |
+| **Redis** (cache + rate limits) | Only when `redis` is configured | Cache **values**, which can contain completions — treat Redis as inside your sovereignty boundary |
+| **Postgres** (key spend/budgets) | Only when a DSN is configured | Key names, spend, budgets |
+
+Everything in that table is enumerated in the `outboundDialSites` registry in
+`core/sovereign/egress_guard_test.go`. Adding an outbound connection anywhere in
+the repo fails CI until it is listed there with a reason — so this table cannot
+quietly fall out of date.
+
+### The pattern (copyable)
+
+The reason this holds is not the tier table; it is the shape. Four rules, and
+they transfer to any service that must not phone home by accident:
+
+1. **One classifier, built once from config, consulted per call.** A pure
+   function maps each configured destination to a verdict (`core/sovereign`:
+   base URL + operator marking → tier → allowed). It imports only the config
+   package, so it is trivially testable and cannot itself dial anything.
+2. **Fail closed on the unknown.** Empty base URL, unparseable URL, unknown
+   provider name, unrecognized tier, off-box endpoint dishonestly marked
+   `local` — all resolve to *blocked external*, never to *allowed*. A
+   classification bug then costs availability, not privacy.
+3. **The check sits in the same function as the dial, immediately before it.**
+   Not in a constructor, not in middleware two frames up. `enforceSovereignty`
+   is called in each of the six dispatch functions, and the guard test enforces
+   *same function* precisely because "a caller up the chain checks it" is the
+   reasoning that produces bypasses.
+4. **Make it structural, not disciplinary.** Behavioral tests prove today's
+   paths are gated; they say nothing about tomorrow's seventh path. So a test
+   parses the source: every call to an egress-capable provider method must sit
+   in a function that also calls the gate, and every file in the repo that can
+   open a socket must be registered with a written reason. Both assert coverage
+   floors, so a broken scan fails instead of passing vacuously. Adding an
+   ungated egress path is then a CI failure on the day it is written, naming the
+   file and line.
+
+The escape hatch matters too: the gate is a gate, not a wall. Every block has a
+matching per-provider opt-in, each denial is logged and counted, and each
+*permitted* off-box call is logged with its tier — so egress is always
+observable, never silent, in both directions.
+
 ## The canonical contract
 
 Every provider implements one `Provider` interface and speaks only the canonical

@@ -8,14 +8,45 @@ verbatim.
 
 ## Authentication
 
+**Bearer tokens, and nothing else.** llmux has no accounts, no email/password
+login, no OAuth, no sign-up, no sessions and no cookies — there is no login
+surface to integrate with, and the gateway never asks a human for anything. A
+client sends one header:
+
+```http
+Authorization: Bearer <token>
+```
+
 | Surface | Credential |
 |---|---|
-| `/v1/*` | `Authorization: Bearer <virtual key>` |
-| `/admin/*`, `/metrics` | The master key (`LLMUX_MASTER_KEY`) |
+| `/v1/*` | A **virtual key** |
+| `/admin/*`, `/metrics` | The **master key** (`LLMUX_MASTER_KEY`) |
+| `/health` | None for the minimal body; master key (or a loopback caller on a keyless gateway) for the full posture |
+| `/ui`, `/ui/docs` | None |
 
-Virtual keys are defined in config (or resolved via the
-[control-plane](control-plane.md)) and carry budgets, RPM limits, and model
-allow-lists. See [Configuration](configuration.md).
+Virtual keys are issued by the operator — defined in the config file (or
+resolved by the optional [control-plane](control-plane.md)), never
+self-registered — and carry budgets, RPM limits, and model allow-lists. See
+[Configuration](configuration.md). Tokens are compared in constant time; an
+unknown token is `401 invalid_api_key`.
+
+If **no** master key and **no** virtual keys are configured, every request is
+served — an open proxy. llmux then **refuses to start** on a non-loopback bind
+unless the operator sets `insecure_keyless`; a loopback bind starts with a loud
+warning. A client cannot detect or change this — it is an operator posture, not
+part of the API contract.
+
+### Request headers
+
+| Header | Direction | Meaning |
+|---|---|---|
+| `Authorization: Bearer …` | request | Required on `/v1/*` and `/admin/*` (see above). |
+| `Content-Type: application/json` | request | All routes except `audio/transcriptions` and `audio/translations`, which take `multipart/form-data`. |
+| `X-Request-ID` | request + response | Supply one to correlate your logs with the gateway's; if absent llmux generates one. It is always echoed on the response. |
+
+Response headers from the upstream provider (`x-ratelimit-*`, `retry-after`)
+are relayed unchanged, so client-side backoff logic works as it does against the
+provider directly.
 
 ## Inference endpoints
 

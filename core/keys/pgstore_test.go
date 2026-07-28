@@ -15,11 +15,17 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+// testDSN is the Postgres integration gate. It records the outcome (see
+// integration_gate_test.go) so a skipped run says out loud what it did not
+// verify instead of passing quietly.
 func testDSN(t *testing.T) string {
-	dsn := os.Getenv("LLMUX_TEST_POSTGRES")
+	dsn := os.Getenv(pgEnv)
 	if dsn == "" {
-		t.Skip("set LLMUX_TEST_POSTGRES to run Postgres integration tests")
+		gateRecord(t.Name(), false)
+		t.Skip("set " + pgEnv + " to run Postgres integration tests (cross-replica spend, hashing at rest, " +
+			"dedicated schema, pending-spend recovery are NOT verified without it)")
 	}
+	gateRecord(t.Name(), true)
 	return dsn
 }
 
@@ -34,6 +40,15 @@ func qualifiedTable() string {
 }
 
 // resetSchema drops the test schema (and its tables) for a clean slate.
+//
+// It also drops public.llmux_keys. TestPGStoreUsesDedicatedSchema asserts that
+// the table did NOT land in public, and dropping only the llmux schema left
+// that assertion at the mercy of whatever the database already contained: a
+// stale public.llmux_keys (from an older build, or another product's run
+// against a shared dev database) made the test fail forever on a developer
+// machine while passing in CI's fresh container. Cleaning both makes the
+// assertion mean "this run did not leak" rather than "this database has never
+// had such a table".
 func resetSchema(t *testing.T, ctx context.Context, dsn string) {
 	t.Helper()
 	pool, err := pgxpool.New(ctx, dsn)
@@ -42,6 +57,9 @@ func resetSchema(t *testing.T, ctx context.Context, dsn string) {
 	}
 	defer pool.Close()
 	if _, err := pool.Exec(ctx, fmt.Sprintf("DROP SCHEMA IF EXISTS %s CASCADE", pgx.Identifier{testSchema}.Sanitize())); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pgx.Identifier{"public", "llmux_keys"}.Sanitize())); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -393,15 +411,20 @@ func TestRedisLimiterDegradesToLocalCapOnOutage(t *testing.T) {
 	}
 }
 
+// testRedisClient is the Redis integration gate (see testDSN).
 func testRedisClient(t *testing.T) *redis.Client {
-	addr := os.Getenv("LLMUX_TEST_REDIS")
+	addr := os.Getenv(redisEnv)
 	if addr == "" {
-		t.Skip("set LLMUX_TEST_REDIS to run Redis integration tests")
+		gateRecord(t.Name(), false)
+		t.Skip("set " + redisEnv + " to run Redis integration tests (cross-replica rate limiting and " +
+			"hashed limiter keys are NOT verified without it)")
 	}
 	rdb := redis.NewClient(&redis.Options{Addr: addr, DB: 15})
 	if err := rdb.Ping(context.Background()).Err(); err != nil {
-		t.Skipf("redis not reachable: %v", err)
+		gateRecord(t.Name(), false)
+		t.Skipf("redis at %s not reachable (%v) — cross-replica rate limiting NOT verified", addr, err)
 	}
+	gateRecord(t.Name(), true)
 	return rdb
 }
 

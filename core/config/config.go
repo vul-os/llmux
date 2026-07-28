@@ -293,6 +293,14 @@ type PricingConfig struct {
 	// SyncIntervalMinutes controls how often the catalog refreshes (0 = off).
 	SyncIntervalMinutes int `json:"sync_interval_minutes"`
 	// Sources lists URLs to sync from (OpenRouter, LiteLLM JSON, ...).
+	//
+	// EGRESS NOTE: Default() populates this with two public price feeds, so a
+	// stock gateway makes an outbound GET at startup and every
+	// SyncIntervalMinutes. That fetch carries no prompt, no key and no usage —
+	// it is a plain GET of a public price list — but it is off-box traffic that
+	// the sovereignty gate does not classify (the gate governs inference
+	// dispatch). Set "sources": [] to disable it; the built-in seed catalog
+	// still prices requests offline.
 	Sources []string `json:"sources"`
 	// OverridePath is a JSON file of model->price overrides (highest precedence).
 	OverridePath string `json:"override_path"`
@@ -463,7 +471,12 @@ func (c *Config) merge(o *Config) {
 	if o.Pricing.SyncIntervalMinutes != 0 {
 		c.Pricing.SyncIntervalMinutes = o.Pricing.SyncIntervalMinutes
 	}
-	if len(o.Pricing.Sources) > 0 {
+	// nil means "the file said nothing about sources" (keep the defaults); an
+	// explicitly-empty list means "no price feeds", which is the only way an
+	// operator can turn off the ONE outbound call a stock gateway makes on its
+	// own (see PricingConfig.Sources). A len>0 check would silently ignore
+	// "sources": [] and leave the default feeds dialing.
+	if o.Pricing.Sources != nil {
 		c.Pricing.Sources = o.Pricing.Sources
 	}
 	if o.LogLevel != "" {

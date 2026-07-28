@@ -99,6 +99,29 @@ are logged with their tier, and `GET /health` (master key) discloses the full
 posture. See the sovereignty block in
 [`llmux.example.json`](../llmux.example.json).
 
+### The one outbound call the gate does not cover
+
+The gate governs **inference**. The **price-catalog sync** is separate and is
+**on by default**: `pricing.sources` ships with two public feeds, so a stock
+gateway issues a GET at startup and every `sync_interval_minutes`. It sends no
+prompt, no key and no usage — it is a plain GET of a public price list — but it
+is off-box traffic, so it is stated here rather than left to be discovered.
+
+```jsonc
+{
+  "pricing": {
+    "sources": []            // no outbound price feeds at all; the built-in
+                             // seed catalog still prices requests offline
+  }
+}
+```
+
+An empty list is the off switch (omitting `sources` keeps the defaults). You can
+also point it at an on-box mirror — `"sources": ["http://localhost:8080/model_prices.json"]`
+— to keep prices fresh without leaving the box. The full list of outbound
+connections llmux can make, gated and ungated, is in
+[Architecture → what the gate does not cover](architecture.md#what-the-gate-does-not-cover).
+
 ## Related
 
 - [Routing & reliability](../web/docs/routing.md) — how requests map to providers
