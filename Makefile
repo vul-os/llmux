@@ -1,4 +1,4 @@
-.PHONY: build web site-docs test vet fmt run clean sdk-bins sdk-test docker tidy
+.PHONY: build web web-dist-check site-docs test vet fmt fmt-check gates run clean sdk-bins sdk-test docker tidy
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
@@ -6,6 +6,9 @@ PKG := ./cmd/llmux
 web: ## Build the embedded web app (landing/docs/dashboard) into web/dist
 	npm --prefix web install --no-audit --no-fund
 	npm --prefix web run build
+
+web-dist-check: ## Fail if the COMMITTED web/dist differs from a fresh build of web/src
+	./scripts/check-web-dist.sh
 
 site-docs: ## Regenerate site/docs from the canonical docs/ tree (CI fails if stale)
 	go run ./site/gen
@@ -36,6 +39,14 @@ vet: ## Static analysis
 
 fmt: ## Format
 	go fmt ./...
+
+fmt-check: ## gofmt gate over EVERY Go directory (the check CI runs)
+	./scripts/gofmt-check.sh
+
+# The artifact-level gates, in the order CI runs them. `test` is separate
+# because it needs no Node; these two are the ones that catch a green build
+# shipping a wrong artifact.
+gates: fmt-check web-dist-check ## Run the artifact gates (gofmt scope + web/dist staleness)
 
 run: build ## Build and run on :4000
 	$(BIN)

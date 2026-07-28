@@ -46,6 +46,30 @@ inference stays on your box unless you explicitly opt a remote provider in. See
 — including [what it does not cover](docs/architecture.md#what-the-gate-does-not-cover),
 which is stated plainly rather than left to be discovered.
 
+> ### ⚠️ One outbound call IS on by default: the price-catalog sync
+>
+> llmux is this suite's reference implementation of default-deny egress, so the
+> single exception is stated up front rather than buried in a feature table.
+>
+> `config.Default()` ships two public price feeds — `openrouter.ai` and
+> `raw.githubusercontent.com` — so **a stock gateway makes an outbound GET at
+> startup and every `sync_interval_minutes` (default 360) without you
+> configuring anything.** It is a plain GET of a public price list: it carries
+> **no prompt, no completion, no API key, and no usage data**, and it is *not*
+> covered by the sovereignty gate, which governs inference dispatch only.
+>
+> If "no network calls unless I ask" is a requirement for you, turn it off:
+>
+> ```json
+> { "pricing": { "sources": [] } }
+> ```
+>
+> Cost accounting still works offline from the built-in seed catalog; you can
+> also point `sources` at your own mirror. This default has **not** been
+> changed — it is disclosed so the choice is yours and informed. Full detail:
+> [what the gate does not cover](docs/architecture.md#what-the-gate-does-not-cover)
+> and the `outboundDialSites` census in `core/sovereign/egress_guard_test.go`.
+
 ```mermaid
 flowchart LR
     client["any OpenAI client"] -->|"base_url = llmux"| mux["llmux mux"]
@@ -58,8 +82,10 @@ flowchart LR
 
 ## Quick start
 
-> **Prerequisites:** Go 1.25+, Node 18+ (only to rebuild the web UI), and at
-> least one provider API key.
+> **Prerequisites:** Go 1.25+, and at least one provider API key. Node is only
+> needed to *rebuild* the web UI (the built bundle is committed and embedded) —
+> and when you do, it must be **Node 20.19+ or 22.12+**, which is what `web/`'s
+> vite 8 toolchain requires and what CI uses.
 
 ```bash
 # 1. Build the binary (embeds the prebuilt web UI)

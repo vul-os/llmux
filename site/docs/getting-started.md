@@ -5,7 +5,7 @@ llmux is the sovereign LLM gateway: a single Go binary that speaks the OpenAI HT
 
 ## 1. Deploy llmux
 
-**Prerequisites:** Go 1.25+ and Node 18+ (Node only if you rebuild the embedded web UI). No database or cache is required for a single replica.
+**Prerequisites:** Go 1.25+ (Node **20.19+ or 22.12+** only if you rebuild the embedded web UI — vite 8 requires it; the built bundle ships committed, so a plain build needs no Node at all). No database or cache is required for a single replica.
 
 ### Build and run from source
 

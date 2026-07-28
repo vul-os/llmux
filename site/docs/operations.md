@@ -5,8 +5,10 @@ Building, testing, and running llmux in production.
 
 ## Build & run
 
-**Prerequisites:** Go 1.25+, Node 18+ (only to rebuild the embedded web UI), and
-at least one provider API key.
+**Prerequisites:** Go 1.25+ and at least one provider API key. Node is needed
+only to *rebuild* the embedded web UI, and then it must be **Node 20.19+ or
+22.12+** — `web/` builds with vite 8, whose declared engine range is
+`^20.19.0 || >=22.12.0`. CI pins Node 20.
 
 ```bash
 make web        # rebuild the embedded React/Vite admin UI into web/dist

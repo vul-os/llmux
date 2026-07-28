@@ -63,7 +63,11 @@ const COMPARE = [
   ["Routing + fallback + least-cost", ["yes", "✓"], ["yes", "✓"], ["partial", "auto only"]],
   ["Exact + semantic caching", ["yes", "✓"], ["yes", "✓"], ["no", "—"]],
   ["Live cost in every response", ["yes", "✓"], ["partial", "partial"], ["yes", "✓"]],
-  ["Provider breadth", ["partial", "6 + passthrough"], ["yes", "100+"], ["yes", "300+"]],
+  // 6 = the number of config.ProviderType constants: passthrough + 5 native
+  // adapters (anthropic, gemini, azure, cohere, bedrock). The old label read
+  // "6 + passthrough", which counted passthrough twice and implied a seventh
+  // adapter that does not exist. See PARITY.md / SUPPORT.md.
+  ["Provider breadth", ["partial", "5 native + passthrough"], ["yes", "100+"], ["yes", "300+"]],
   ["Battle-tested maturity", ["partial", "new"], ["yes", "✓"], ["yes", "✓"]],
 ];
 
@@ -146,8 +150,16 @@ export default function Landing() {
             </motion.div>
             <motion.div className="hero-meta" variants={up} custom={4} initial="hidden" animate="show">
               <span className="chip"><b>100+</b> providers</span>
-              <span className="chip"><b>~9MB</b> binary</span>
-              <span className="chip"><b>0</b> dependencies</span>
+              {/* Measured, not remembered: the release binaries this repo's
+                  release workflow produces (go build -ldflags "-s -w") are
+                  12.9–13.8 MB across linux/darwin × amd64/arm64. The chip used
+                  to say ~9MB, which stopped being true several waves ago. */}
+              <span className="chip"><b>~14MB</b> binary</span>
+              {/* "0 dependencies" was wrong twice over: go.mod requires pgx and
+                  go-redis. What is actually true — and what the README says —
+                  is that nothing is required at RUNTIME: no database, no cache,
+                  no Node, no sidecar for a single replica. */}
+              <span className="chip"><b>0</b> runtime deps</span>
               <span className="chip"><b>$0</b> self-hosted</span>
             </motion.div>
           </div>

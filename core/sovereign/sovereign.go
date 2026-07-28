@@ -19,6 +19,35 @@
 // treated as external and blocked. Every permitted call is logged/labeled with
 // its tier so off-box traffic is always observable, never silent.
 //
+// # Scope, and the one default-on outbound call
+//
+// This gate governs INFERENCE DISPATCH — the paths a prompt or a completion can
+// travel. It is not a process-wide firewall, and one outbound connection in a
+// stock gateway is neither gated nor opt-in:
+//
+//	PRICE-CATALOG SYNC (core/pricing) IS ON BY DEFAULT. config.Default() ships
+//	two public feeds (openrouter.ai and raw.githubusercontent.com), so an
+//	unconfigured llmux makes an outbound GET at startup and every
+//	sync_interval_minutes (default 360). It sends NO prompt, NO completion, NO
+//	API key and NO usage — it is a plain GET of a public price list — but it IS
+//	off-box traffic that this package does not classify or block. Operators who
+//	need "no network calls unless I ask" must set "pricing": {"sources": []},
+//	which leaves the built-in seed catalog pricing requests offline, or point
+//	sources at their own mirror.
+//
+// That is written here, in the package that other Vulos products cite as the
+// reference implementation of default-deny egress, because a default-deny
+// reputation is exactly what an undisclosed default fetch would undermine. The
+// default has deliberately NOT been changed; it is disclosed so the choice is
+// the operator's and informed.
+//
+// The complete census of outbound dial sites — each labelled GATED or UNGATED
+// with the reason — lives in outboundDialSites in egress_guard_test.go, and
+// TestOutboundDialSitesAreRegistered fails on a new dialer or a stale entry.
+// The operator-facing version of the same table is in
+// docs/architecture.md#what-the-gate-does-not-cover, and the README states it
+// up front.
+//
 // This package is dependency-free aside from core/config and speaks only about
 // provider base URLs, so it can be reused by the server and by tooling.
 package sovereign

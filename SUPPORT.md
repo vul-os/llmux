@@ -11,11 +11,21 @@ provider's stability.
 | OpenAI / DeepSeek / Groq / Mistral / Together / Fireworks / xAI / OpenRouter / Ollama / vLLM | `passthrough` | **stable** | ✅ | ✅ | ✅ | ✅ | ✅ | ⏳ |
 | Anthropic | `anthropic` | **beta** | ✅ | ✅ | ✅ | ✅ | — | ❌ |
 | Google Gemini | `gemini` | **beta** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
+| Azure OpenAI | `azure` | **beta** | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ |
 | Cohere | `cohere` | **experimental** | ✅ | ✅ | ✅ | — | ✅ | ❌ |
 | AWS Bedrock (Anthropic) | `bedrock` | **experimental** | ✅ | synth | ✅ | ✅ | — | ❌ |
 
 Legend: ✅ implemented · synth = synthesized (non-native) · ⏳ pending live run ·
 ❌ not yet live-verified.
+
+> This table must list every `config.ProviderType` the binary can build. The
+> `azure` row was missing for several waves while `providers.Stability()`
+> already classified it **beta** and `/health` already reported it — an operator
+> who configured `"type": "azure"` found no row here at all. Azure OpenAI is
+> wire-identical to OpenAI (the adapter forwards the raw body, rewriting only
+> `model`/`stream`, and differs in auth header and deployment URL shape), which
+> is why its chat/stream/tools/vision/embeddings support matches passthrough.
+> It is **beta**, not stable: nothing here has been live-verified yet.
 
 ## Promotion criteria (experimental → beta → stable)
 1. **beta:** full translation implemented + unit tests against recorded-shape mocks.

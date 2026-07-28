@@ -21,16 +21,21 @@ Legend: ✅ have · 🟡 partial · ⬜ missing.
 | `/v1/audio/speech` (TTS) | ✅ | via forwarder |
 | `/v1/rerank` | ✅ | via forwarder |
 | `/v1/responses` | 🟡 | route forwards; lifecycle (get/cancel) TODO |
-| `/v1/images/edits`, `/audio/transcriptions` (multipart) | ⬜ | Tier 1 (needs multipart model extraction) |
+| `/v1/audio/transcriptions`, `/v1/audio/translations` (multipart) | ✅ | Multipart-aware forwarder (`core/server/transcription.go`): reads and rewrites the `model` FORM field, re-encodes the upload. Same gates as the JSON routes (allow-list, routing, sovereignty, BYOK). **Metering is a known gap**: no per-audio-minute price exists, so a served transcription records a $0 *auditable* usage line, and a *budgeted* key is refused pre-flight rather than billed — see the METERING NOTE in that file. |
+| `/v1/images/edits` (multipart) | ⬜ | Tier 1 |
 | Batches / Files / Fine-tuning / Assistants / Vector stores | ⬜ | Tier 2 (passthrough resources) |
 | Realtime (WS), OCR, video, RAG, search | ⬜ | Tier 3 |
 | Native provider passthrough (`/anthropic`,`/gemini`,`/bedrock`,…) | ⬜ | Tier 2 |
 | MCP gateway | ⬜ | Tier 3 |
 
-## Providers (~146 in LiteLLM; we have 5 adapter types)
+## Providers (~146 in LiteLLM; we have 6 adapter types)
+Six is the number of `config.ProviderType` constants: `passthrough` plus five
+native adapters. Per-adapter stability comes from `providers.Stability()` and is
+tabulated in [SUPPORT.md](SUPPORT.md).
+
 - ✅ passthrough (covers OpenAI/Azure-AI/DeepSeek/Groq/Mistral/Together/Fireworks/xAI/OpenRouter/Ollama/vLLM/Perplexity/Cerebras/SambaNova/Nebius/Novita/DeepInfra… — most "openai_like" providers, cheaply)
-- 🟡 anthropic, gemini (beta), cohere, bedrock (experimental)
-- ⬜ Tier 1 native: Vertex AI (families), Azure OpenAI (full), Bedrock non-Anthropic families
+- 🟡 anthropic, gemini, azure (beta), cohere, bedrock (experimental)
+- ⬜ Tier 1 native: Vertex AI (families), Azure OpenAI *beyond* chat/stream/embeddings/forward (e.g. AAD token auth, per-deployment routing sugar), Bedrock non-Anthropic families
 - ⬜ Tier 2 native: HuggingFace, Replicate, Databricks, Watsonx, SageMaker, AI21, Voyage/Jina (embeddings/rerank), Deepgram/ElevenLabs/AssemblyAI (audio), Stability/BFL/Recraft/fal (images)
 - ⬜ Tier 3: the long tail (~100 more)
 
