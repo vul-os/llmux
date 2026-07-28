@@ -1,4 +1,4 @@
-.PHONY: build web web-dist-check site-docs test vet fmt fmt-check gates run clean sdk-bins sdk-test docker tidy
+.PHONY: build web web-dist-check site-docs test vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
@@ -43,10 +43,13 @@ fmt: ## Format
 fmt-check: ## gofmt gate over EVERY Go directory (the check CI runs)
 	./scripts/gofmt-check.sh
 
+verify-selftest: ## Prove scripts/verify.sh still REFUSES every broken-release shape
+	bash scripts/verify.sh --selftest
+
 # The artifact-level gates, in the order CI runs them. `test` is separate
-# because it needs no Node; these two are the ones that catch a green build
-# shipping a wrong artifact.
-gates: fmt-check web-dist-check ## Run the artifact gates (gofmt scope + web/dist staleness)
+# because it needs no Node; these three are the ones that catch a green build
+# shipping a wrong artifact — or shipping a right artifact nobody can check.
+gates: fmt-check web-dist-check verify-selftest ## Run the artifact gates (gofmt scope + web/dist staleness + release-verifier failure matrix)
 
 run: build ## Build and run on :4000
 	$(BIN)

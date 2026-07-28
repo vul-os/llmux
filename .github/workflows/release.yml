@@ -5,12 +5,18 @@ on:
     tags:
       - 'v*'
 
+# Job-level permissions are set on the job below. Keeping the workflow default
+# at read means a step added later does not silently inherit write scope.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # create the Release and upload assets
+      id-token: write       # mint the OIDC token the attestation is signed with
+      attestations: write   # record the attestation against this repo
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,42 +52,152 @@ jobs:
           fi
           echo "Version check passed: ${VERSION}"
 
+      # Everything that will be published lands in release/ and nothing else
+      # does. The manifest below covers that directory, so "published" and
+      # "covered" are the same set by construction rather than two lists someone
+      # keeps in sync by hand — add a sixth platform here and it is covered
+      # without touching the manifest step.
       - name: Build release binaries
+        id: stage
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
           LDFLAGS="-s -w -X main.Version=${VERSION}"
-          mkdir -p builds/llmux
+          mkdir -p release/llmux
 
-          cp llmux.example.json builds/llmux/llmux.example.json
+          cp llmux.example.json release/llmux/llmux.example.json
 
           # linux/amd64
-          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
-          cd builds && zip -r "llmux_${VERSION}_linux_amd64.zip" llmux/ && cd ..
-          rm builds/llmux/llmux
+          GOOS=linux GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o release/llmux/llmux ./cmd/llmux
+          cd release && zip -r "llmux_${VERSION}_linux_amd64.zip" llmux/ && cd ..
+          rm release/llmux/llmux
 
           # linux/arm64
-          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
-          cd builds && zip -r "llmux_${VERSION}_linux_arm64.zip" llmux/ && cd ..
-          rm builds/llmux/llmux
+          GOOS=linux GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o release/llmux/llmux ./cmd/llmux
+          cd release && zip -r "llmux_${VERSION}_linux_arm64.zip" llmux/ && cd ..
+          rm release/llmux/llmux
 
           # darwin/amd64
-          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
-          cd builds && zip -r "llmux_${VERSION}_darwin_amd64.zip" llmux/ && cd ..
-          rm builds/llmux/llmux
+          GOOS=darwin GOARCH=amd64 go build -ldflags "${LDFLAGS}" -o release/llmux/llmux ./cmd/llmux
+          cd release && zip -r "llmux_${VERSION}_darwin_amd64.zip" llmux/ && cd ..
+          rm release/llmux/llmux
 
           # darwin/arm64 (Apple Silicon)
-          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o builds/llmux/llmux ./cmd/llmux
-          cd builds && zip -r "llmux_${VERSION}_darwin_arm64.zip" llmux/ && cd ..
-          rm builds/llmux/llmux
+          GOOS=darwin GOARCH=arm64 go build -ldflags "${LDFLAGS}" -o release/llmux/llmux ./cmd/llmux
+          cd release && zip -r "llmux_${VERSION}_darwin_arm64.zip" llmux/ && cd ..
+          rm release/llmux/llmux
 
           # Source archive
-          git archive --format=zip HEAD -o "builds/llmux_${VERSION}_source.zip"
+          git archive --format=zip HEAD -o "release/llmux_${VERSION}_source.zip"
 
-          rm -rf builds/llmux
+          # Clean up the staging dir — release/ must be FLAT, because the
+          # manifest step lists it with `find -maxdepth 1 -type f`, while
+          # `files: release/*` would publish a leftover subdirectory's contents
+          # uncovered.
+          rm -rf release/llmux
+
+          # Exported so the release body can name an asset exactly. Assets are
+          # versioned WITHOUT the leading 'v', so a body interpolating
+          # github.ref_name would print a filename that does not exist and the
+          # copy-pasted verify command would fail on a correct release.
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      # =====================================================================
+      # RELEASE SIGNING — copied from vul-os/ephor's RELEASE-TEMPLATE.md.
+      # This step is the ONLY thing that writes SHA256SUMS and scripts/verify.sh
+      # is the ONLY thing that reads it; the step after this runs verify.sh
+      # against this job's own output, so producer and consumer cannot drift
+      # apart without a red release.
+      # =====================================================================
+      - name: Emit SHA256SUMS
+        run: |
+          set -euo pipefail
+          cd release
+
+          # Portable listing (no `find -printf`): release/ is flat by
+          # construction, one line per asset, sorted so the manifest is
+          # reproducible.
+          mapfile -t ASSETS < <(find . -maxdepth 1 -type f ! -name SHA256SUMS -exec basename {} \; | LC_ALL=C sort)
+
+          # FAIL CLOSED. A build that produced nothing must be a red release,
+          # not a green one with an empty manifest. An empty SHA256SUMS vouches
+          # for nothing while looking exactly like a manifest that vouched for
+          # everything.
+          if [ "${#ASSETS[@]}" -eq 0 ]; then
+            echo "::error::release/ contains no artifacts — refusing to publish a release whose manifest would vouch for nothing."
+            exit 1
+          fi
+
+          : > SHA256SUMS
+          for a in "${ASSETS[@]}"; do
+            sha256sum "$a" >> SHA256SUMS
+          done
+
+          # COVERAGE ASSERTION. Without it the step is trivially satisfiable: a
+          # one-line manifest "covers" a five-asset release and every later
+          # check still passes. Pin line count to asset count.
+          LINES="$(wc -l < SHA256SUMS | tr -d ' ')"
+          if [ "$LINES" -ne "${#ASSETS[@]}" ]; then
+            echo "::error::SHA256SUMS has ${LINES} line(s) for ${#ASSETS[@]} staged artifact(s) — the manifest does not cover the release."
+            exit 1
+          fi
+
+          echo "SHA256SUMS covers ${#ASSETS[@]} artifact(s):"
+          cat SHA256SUMS
+          printf '%s\n' "${ASSETS[@]}" > /tmp/release-assets.txt
+
+      # The producer checked by the consumer. If verify.sh and the emit step
+      # ever disagree about the format, it surfaces here — in a red release job,
+      # not in a user's terminal after the release is public.
+      - name: Verify SHA256SUMS with the same script users run
+        run: |
+          set -euo pipefail
+          mapfile -t ASSETS < /tmp/release-assets.txt
+          bash scripts/verify.sh --dir release "${ASSETS[@]}"
+
+      # Proves the verifier's refusals still fire on this runner, on this
+      # release, before anything is published. A verifier whose failure paths
+      # are never exercised is a verifier that has probably stopped failing.
+      - name: Prove the verifier still refuses broken releases
+        run: bash scripts/verify.sh --selftest
+
+      # Short-lived sigstore certificate minted from this job's OIDC identity:
+      # no long-lived key, no new secret, no new hosted service, and the
+      # identity it binds is "vul-os/llmux's release workflow at this commit"
+      # rather than "whoever holds the key". Attests every file in release/,
+      # SHA256SUMS included — so an attestation on the manifest transitively
+      # covers every asset the manifest names.
+      #
+      # Deliberately NOT load-bearing: verify.sh's digest path needs only curl
+      # and sha256sum, and --attest is opt-in. If this action is removed or
+      # broken, SHA256SUMS still verifies and nobody's verification silently
+      # becomes a no-op.
+      - name: Attest build provenance (sigstore via OIDC — no long-lived key)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: "release/*"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: builds/*
+          # Publish the directory the manifest covers, not a hand-listed set of
+          # names — a name list and a manifest are two things to keep in sync.
+          files: release/*
           generate_release_notes: true
+          body: |
+            ### Verify before you run this
+
+            ```sh
+            curl -fsSLO https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/scripts/verify.sh
+            bash verify.sh --tag ${{ github.ref_name }} --attest llmux_${{ steps.stage.outputs.version }}_linux_amd64.zip
+            ```
+
+            `verify.sh` fetches `SHA256SUMS`, looks up the exact entry for the
+            asset and compares digests. It exits non-zero, with a distinct
+            diagnostic, on a missing or malformed manifest, a missing entry, a
+            truncated download or a digest mismatch. There is no skip path and a
+            missing `SHA256SUMS` is never treated as "nothing to check".
+            `--attest` additionally checks the sigstore build provenance (needs
+            the `gh` CLI); without it, provenance is NOT checked and the script
+            says so rather than letting a pass imply more than it checked.

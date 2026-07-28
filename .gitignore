@@ -62,3 +62,6 @@ web/blob-report/
 
 # OS
 .DS_Store
+
+# Release staging directory (built in CI; the SHA256SUMS manifest covers it)
+/release/
