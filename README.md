@@ -9,10 +9,7 @@ budgets, caching, and live cost — across every provider, with zero per-languag
 code. Inference runs **on your box by default**, and a request is **never
 silently sent off the box** unless you explicitly, loggably opt in.
 
-[![License: MIT OR Apache-2.0](https://img.shields.io/badge/License-MIT%20OR%20Apache--2.0-2DD4BF.svg)](LICENSE-MIT)
-[![Go](https://img.shields.io/badge/Go-1.25-00ADD8?logo=go&logoColor=white)](https://golang.org)
-[![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
-[![Tests](https://img.shields.io/badge/tests-passing-14B8A6)](TESTING.md)
+**[MIT OR Apache-2.0](LICENSE-MIT) · Go 1.25 · React 18 · [Tests](TESTING.md)**
 
 [**Quickstart**](web/docs/quickstart.md) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Architecture**](docs/architecture.md)
 
