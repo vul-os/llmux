@@ -1,26 +1,28 @@
 // llmux brand mark — the multiplexer glyph (many input ports → one output),
-// a solid dark-ink body on a rounded teal tile (brand/logo.svg's "fill the
-// mux body solid" treatment, not the earlier wireframe outline). The tile is
-// icon-only; the `llmux` wordmark (ll in text-primary, mux in accent) sits
-// beside it, never on the tile. Mirrors web/public/llmux.svg and
-// web/public/favicon.svg. Tile fill is brand teal-400 (#2DD4BF); glyph ink
-// is brand dark (#0A0F1A).
+// a solid dark-ink body on a rounded teal tile. Geometry copied verbatim
+// (same viewBox, same path/line/circle coordinates) from brand/logo.svg's
+// inner mark group — the tile is icon-only; the `llmux` wordmark (ll in
+// text-primary, mux in accent) sits beside it, never on the tile. Mirrors
+// web/public/llmux.svg and web/public/favicon.svg. Tile fill is brand
+// teal-400 (#2DD4BF); glyph ink is brand dark (#0A0F1A).
 export function Mark({ size = 32 }) {
   return (
-    <svg className="mark" width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      <rect x="0" y="0" width="64" height="64" rx="15" fill="#2DD4BF" />
-      <g stroke="#0A0F1A" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" fill="none">
-        <line x1="16" y1="20" x2="27" y2="20" />
-        <line x1="16" y1="32" x2="27" y2="32" />
-        <line x1="16" y1="44" x2="27" y2="44" />
-        <line x1="46" y1="37" x2="56" y2="37" />
-      </g>
-      <path d="M27 18 L46 29 L46 45 L27 56 Z" fill="#0A0F1A" />
-      <g fill="#0A0F1A">
-        <circle cx="13" cy="20" r="2.2" />
-        <circle cx="13" cy="32" r="2.2" />
-        <circle cx="13" cy="44" r="2.2" />
-        <circle cx="56" cy="37" r="2.2" />
+    <svg className="mark" width={size} height={size} viewBox="0 0 100 100" fill="none" aria-hidden="true">
+      <rect x="2" y="2" width="96" height="96" rx="24" fill="#2DD4BF" />
+      <g transform="translate(16,18) scale(0.9)">
+        <g stroke="#0A0F1A" strokeWidth="4.6" strokeLinecap="round">
+          <line x1="8" y1="14" x2="32" y2="14" />
+          <line x1="8" y1="34" x2="32" y2="34" />
+          <line x1="8" y1="54" x2="32" y2="54" />
+          <line x1="56" y1="34" x2="74" y2="34" />
+        </g>
+        <path d="M30 6 L56 23 L56 45 L30 62 Z" fill="#0A0F1A" />
+        <g fill="#0A0F1A">
+          <circle cx="8" cy="14" r="4.2" />
+          <circle cx="8" cy="34" r="4.2" />
+          <circle cx="8" cy="54" r="4.2" />
+          <circle cx="74" cy="34" r="4.2" />
+        </g>
       </g>
     </svg>
   );
