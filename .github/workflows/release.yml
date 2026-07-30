@@ -104,7 +104,7 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
       # =====================================================================
-      # RELEASE SIGNING — copied from vul-os/ephor's RELEASE-TEMPLATE.md.
+      # RELEASE SIGNING — copied from the suite's shared RELEASE-TEMPLATE.md.
       # This step is the ONLY thing that writes SHA256SUMS and scripts/verify.sh
       # is the ONLY thing that reads it; the step after this runs verify.sh
       # against this job's own output, so producer and consumer cannot drift
