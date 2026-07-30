@@ -73,6 +73,28 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   and is now disclosed as such in the README and `docs/configuration.md`.
 
 ### Fixed
+- **The brand mark never propagated past `brand/logo.svg`.** The "fill the mux
+  body solid" decision only ever touched `brand/logo.svg` itself — every
+  downstream copy (`web/public/favicon.svg`, `web/public/llmux.svg`,
+  `web/src/components/Logo.jsx`'s in-app `Mark`, `assets/llmux-logo.svg` and
+  its `site/assets/` twin, and `site/assets/llmux-mark.svg` — the actual
+  favicon/nav-tile the marketing site and docs viewer serve) still drew the
+  earlier white-outline wireframe glyph. Recoloured/re-derived all of them to
+  the approved solid dark-ink (`#0A0F1A`) body on the teal tile, regenerated
+  the PNG exports (`llmux-logo.png` ×2, `favicon-32.png`,
+  `apple-touch-icon.png`, `llmux.png`) from the fixed SVGs, and rebuilt
+  `web/dist` so the embedded binary ships the corrected mark too. Also removed
+  `web/public/og.jpg`, an unreferenced pre-rebrand social-preview image (orange
+  theme, old screenshot-style hero) that was still being embedded into the
+  binary via `web/dist` despite nothing linking to it.
+- Re-captured `docs/screenshots` and `site/screenshots` (landing, docs, and
+  the three dashboard tabs) plus `web/public/shots/dashboard.jpg` against the
+  corrected UI — this repo has no committed screenshot harness, so the capture
+  reused `web/e2e/fixtures.js`'s `installApi` mock ad hoc. Incidentally
+  current at capture time: the binary-size stat reads `~14MB`, not the
+  previously-screenshotted `~9MB`, and the header CTA reads "Vulos OS", not
+  "Vulos Cloud" — both are pre-existing copy that had already drifted from the
+  stale screenshots, not something this change introduced.
 - `"pricing": {"sources": []}` in a config file now actually disables the price
   feeds. The merge used a `len() > 0` check, so an explicitly-empty list was
   indistinguishable from an absent one and the shipped defaults kept dialing —

@@ -2,14 +2,14 @@
   <title>llmux</title>
   <defs>
     <symbol id="mux" viewBox="0 0 76 72">
-      <g fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="8" cy="18" r="2.6" fill="#ffffff" stroke="none"/>
-        <circle cx="8" cy="36" r="2.6" fill="#ffffff" stroke="none"/>
-        <circle cx="8" cy="54" r="2.6" fill="#ffffff" stroke="none"/>
+      <g fill="none" stroke="#0A0F1A" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="8" cy="18" r="2.6" fill="#0A0F1A" stroke="none"/>
+        <circle cx="8" cy="36" r="2.6" fill="#0A0F1A" stroke="none"/>
+        <circle cx="8" cy="54" r="2.6" fill="#0A0F1A" stroke="none"/>
         <line x1="11" y1="18" x2="30" y2="18"/>
         <line x1="11" y1="36" x2="30" y2="36"/>
         <line x1="11" y1="54" x2="30" y2="54"/>
-        <path d="M30 12 L54 26 L54 46 L30 60 Z"/>
+        <path d="M30 12 L54 26 L54 46 L30 60 Z" fill="#0A0F1A"/>
         <line x1="54" y1="36" x2="71" y2="36"/>
       </g>
     </symbol>
