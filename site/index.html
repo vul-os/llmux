@@ -88,6 +88,28 @@ document.documentElement.classList.add('js');
   --pad:32px;
   --bus:52px;              /* x-offset of the signal bus inside .wrap */
   --ease:cubic-bezier(.16,1,.3,1);
+
+  /* ── Syntax highlighting ─────────────────────────────────────────────────
+     The shared Vulos code palette, and deliberately NOT themed. The code
+     surface is a fixed dark carbon panel in BOTH page themes — the same
+     decision docs.html and the sibling projects make — so every token colour
+     is chosen once against --hl-bg and never needs a light/dark pair. Because
+     the surface is constant, so is the measured contrast:
+
+       fg  #C8D4E3 12.63:1   keyword #C4B5FD 10.27:1   string  #5EEAD4 12.82:1
+       num #FBBF24 11.36:1   fn      #7DD3FC 11.37:1   prop    #93C5FD 10.52:1
+       var #FDA4AF 10.03:1   meta    #FDBA74 11.24:1   punct   #8195AC  6.17:1
+       del #FCA5A5  9.99:1   add     #86EFAC 13.51:1   comment #6C7D94  4.51:1
+
+     Comment is #6C7D94 rather than the palette's nominal #6B7C93: that value
+     measures 4.45:1, a hair under AA. One LSB per channel is invisible and
+     clears 4.5:1. --hl-bar carries the frame's title strip; --hl-punct on it
+     measures 5.81:1. */
+  --hl-bg:#0C1116; --hl-bar:#111820; --hl-line:#22303C; --hl-line-2:#2C3D4C;
+  --hl-fg:#C8D4E3; --hl-comment:#6C7D94; --hl-keyword:#C4B5FD; --hl-string:#5EEAD4;
+  --hl-number:#FBBF24; --hl-function:#7DD3FC; --hl-property:#93C5FD;
+  --hl-variable:#FDA4AF; --hl-meta:#FDBA74; --hl-punct:#8195AC;
+  --hl-del:#FCA5A5; --hl-add:#86EFAC;
 }
 
 /* ── DARK: the rack in a dim room. This is the DEFAULT set, written onto
@@ -242,8 +264,22 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .hdr-in{display:flex;align-items:center;gap:14px;height:60px}
 .brand{display:flex;align-items:center;gap:10px;flex:none;height:44px}
 .brand img{width:26px;height:26px;border-radius:7px}
-.brand .word{font-family:var(--mono);font-weight:600;font-size:18px;letter-spacing:-.045em}
-.brand .word i{font-style:normal;color:var(--teal-ink)}
+/* The wordmark has to read as ONE word, "llmux".
+   It must NOT be set in the mono face. IBM Plex Mono draws lowercase `l` as a
+   bare vertical stem with a top serif and a foot — glyph-identical to its `1` —
+   and a monospace advance pads every glyph, so `ll` separates from `mux` and
+   the pair reads as the digits "11". Set in mono at 600 the header literally
+   spelled "11mux".
+   The fix, the same one web/ui.html carries: the SANS skeleton (no serifed
+   stem, and `1` keeps a diagonal flag so it can never be confused for `l`),
+   weight 700, tight NEGATIVE tracking to close the pair up, `ll` in the text
+   colour and `mux` in the accent, and no whitespace whatsoever between the two
+   spans in the markup. */
+.brand .word{
+  font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 100;
+  font-size:19.5px;line-height:1;letter-spacing:-.045em;color:var(--ink);
+}
+.brand .word .mux{color:var(--teal-ink)}
 .hdr .spacer{flex:1}
 .secnav{display:flex;gap:2px}
 .secnav a{
@@ -267,7 +303,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 [data-theme="light"] #themeBtn .moon{display:none}
 
 /* ═══ Bands — the alternating grounds that replace the endless card grid ═══ */
-.band{position:relative;background:var(--band-a);padding:78px 0 84px}
+.band{position:relative;background:var(--band-a);padding:64px 0 70px}
 /* The alternate ground carries its own surface tokens rather than only a
    background: on the dark theme a background swap alone is invisible, and the
    panels sitting on it have to move with it or they vanish into the band. */
@@ -327,7 +363,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 
 /* ═══ Channel header — the rack-unit label that opens every band ══════════ */
 .chead{
-  display:flex;align-items:center;gap:14px;margin:0 0 30px;
+  display:flex;align-items:center;gap:14px;margin:0 0 26px;
   font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
 }
 .chead .ch{color:var(--teal-ink);font-weight:600;flex:none}
@@ -354,22 +390,41 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   .toprail span:last-child{margin-left:0}
 }
 
-.hero-h{margin:52px 0 0}
+/* The hero is one grid, not a headline followed by a two-column block. The
+   headline runs the full width; the standfirst, the body copy and the code
+   panel then share the SAME two rows — so the panel rises to sit level with the
+   standfirst instead of leaving a half-width column of nothing above it, which
+   is what the earlier stacked version did. */
+.hero-grid{
+  display:grid;grid-template-columns:minmax(0,1.02fr) minmax(0,.98fr);
+  column-gap:44px;align-items:start;
+}
+.hero-h{grid-column:1/-1;margin:52px 0 0}
 .hero-h .l1,.hero-h .l2{display:block;font-size:clamp(40px,8vw,113px)}
-.hero-h .l3{
-  display:block;margin-top:26px;font-weight:600;font-variation-settings:'wdth' 104;
+.hero-tag{
+  grid-column:1;grid-row:2;margin:26px 0 0;
+  font-family:var(--display);font-weight:600;font-variation-settings:'wdth' 104;
   font-size:clamp(20px,2.9vw,38px);line-height:1.1;letter-spacing:-.02em;max-width:22ch;
+  color:var(--ink);
 }
-.hero-h .l3 em{font-style:normal;color:var(--teal-ink)}
-
-.hero-body{
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:44px;
-  align-items:start;margin-top:44px;
+.hero-tag em{font-style:normal;color:var(--teal-ink)}
+.hero-copy{grid-column:1;grid-row:3;margin-top:30px}
+/* The side column is shorter than the copy column, so rather than leaving a
+   ragged tail under the buttons it is justified across the same two rows: the
+   panel sits level with the standfirst, the buttons land level with the last
+   line of copy, and the hero reads as one settled block. */
+.hero-side{
+  grid-column:2;grid-row:2 / span 2;margin-top:26px;align-self:stretch;
+  display:flex;flex-direction:column;justify-content:space-between;
 }
-@media (max-width:960px){.hero-body{grid-template-columns:minmax(0,1fr);gap:34px}}
-.hero-body p{margin:0;color:var(--muted);font-size:16.5px;line-height:1.65}
-.hero-body p b{color:var(--ink);font-weight:600}
-.hero-body p + p{margin-top:16px}
+@media (max-width:960px){
+  .hero-grid{grid-template-columns:minmax(0,1fr)}
+  .hero-tag,.hero-copy,.hero-side{grid-column:1;grid-row:auto}
+  .hero-side{margin-top:30px;display:block}
+}
+.hero-copy p{margin:0;color:var(--muted);font-size:16.5px;line-height:1.65}
+.hero-copy p b{color:var(--ink);font-weight:600}
+.hero-copy p + p{margin-top:16px}
 
 .cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
 .btn{
@@ -386,9 +441,9 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 /* ── Stat rail: four figures, ruled, mono ── */
 .rail{
   display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
-  border-top:1px solid var(--line-2);margin-top:56px;
+  border-top:1px solid var(--line-2);margin-top:46px;
 }
-.rail div{padding:20px 20px 24px;border-right:1px solid var(--line)}
+.rail div{padding:18px 20px 20px;border-right:1px solid var(--line)}
 .rail div:first-child{padding-left:0}
 .rail div:last-child{border-right:0}
 .rail > div > b{
@@ -409,7 +464,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    Four tiered inputs converge through the gate (the brand's own trapezoid)
    into the single connection your application actually holds. */
 .mux{
-  margin:64px 0 0;padding:0 0 84px;
+  margin:56px 0 0;padding:0 0 64px;
 }
 .mux-grid{
   display:grid;
@@ -457,11 +512,17 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   position:absolute;top:calc(50% + 62px);left:50%;transform:translateX(-50%);width:122px;
   text-align:center;background:var(--band-a);padding:6px 0;
 }
+/* Same rule as the header wordmark: the product name is never set in the mono
+   face, because Plex Mono's `l` is indistinguishable from its `1`. */
 .core .lbl > b{
-  display:block;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.04em;
-  color:var(--ink);
+  display:block;font-family:var(--display);font-size:16px;font-weight:700;
+  font-variation-settings:'wdth' 100;letter-spacing:-.04em;color:var(--ink);
 }
-.core span{
+.core .lbl > b .mux{color:var(--teal-ink)}
+/* Direct child only: the wordmark inside <b> is built from its own spans, and
+   a bare `.core span` rule would uppercase and letter-space them apart —
+   which is the very thing the wordmark must never do. */
+.core .lbl > span{
   display:block;margin-top:5px;font-family:var(--mono);font-size:10.2px;line-height:1.6;
   letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
 }
@@ -488,7 +549,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 @media (max-width:1160px){
   .mux-grid{grid-template-columns:minmax(0,1fr) 50px auto 40px minmax(0,.76fr)}
   .core .lbl{width:104px;top:calc(50% + 58px)}
-  .core span{font-size:9.4px;letter-spacing:.06em}
+  .core .lbl > span{font-size:9.4px;letter-spacing:.06em}
   .core .glyph{width:54px;height:94px}
   .core{width:54px}
 }
@@ -499,14 +560,14 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   .core{width:auto;gap:18px;padding:26px 0;justify-content:flex-start}
   .core .glyph{width:34px;height:58px}
   .core .lbl{position:static;transform:none;width:auto;text-align:left}
-  .core span{margin-top:3px}
+  .core .lbl > span{margin-top:3px}
 }
 
 /* ═══ Ledger — the ruled rows that replaced every card grid ═══════════════ */
 .ledger{margin:0;border-top:1px solid var(--line-2)}
 .lrow{
   display:grid;grid-template-columns:minmax(0,235px) minmax(0,1fr);gap:30px;
-  padding:22px 0;border-bottom:1px solid var(--line);align-items:start;
+  padding:18px 0;border-bottom:1px solid var(--line);align-items:start;
 }
 .lrow dt,.lrow .t{
   margin:0;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;font-size:17px;
@@ -524,7 +585,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 /* ═══ Triptych — three ruled columns, hairline-separated, no boxes ═══════ */
 .triptych{
   display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
-  border-top:1px solid var(--line-2);margin-top:44px;
+  border-top:1px solid var(--line-2);margin-top:38px;
 }
 .triptych > div{padding:22px 26px 4px;border-right:1px solid var(--line)}
 .triptych > div:first-child{padding-left:0}
@@ -544,87 +605,136 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   .triptych > div:last-child{border-bottom:0}
 }
 
-/* ═══ Flow schematics ════════════════════════════════════════════════════ */
-.flow{margin:44px 0 0;padding:26px;border:1px solid var(--line);background:var(--panel)}
-.frow{display:flex;flex-wrap:wrap;align-items:center;gap:0}
-.fnode{
-  border:1px solid var(--line-2);background:var(--band-a);padding:12px 15px;min-width:0;
+/* ═══ Instrument diagrams ═════════════════════════════════════════════════
+   Four hand-authored inline SVGs, one per channel, each drawing something the
+   prose asserts. They are drawn as INSTRUMENT diagrams, not flowcharts, and
+   they belong to the same front panel as the rest of the page: hairline rules
+   at one weight, zero rounded corners, mono labels, one accent for permitted
+   and one for blocked, and nothing coloured that does not mean something.
+
+   Everything is tinted from the page's own custom properties, so both themes
+   and the ink band are handled by the same markup. Strokes are declared
+   non-scaling so a hairline stays a hairline at any render width, exactly as
+   the hero's converging traces already do.
+
+   Sizing: the drawings never scale UP past their authored size (max-width),
+   so label type is never blown out on a wide screen; on a narrow one they
+   scroll inside their own box rather than shrinking to illegibility — the
+   same compromise .tscroll already makes for the spec tables, and the reason
+   the page body still never scrolls sideways. */
+.flow{margin:38px 0 0;padding:24px;border:1px solid var(--line);background:var(--panel)}
+.dgm{overflow-x:auto;overflow-y:hidden}
+.dgm > svg{display:block;width:100%;max-width:900px;height:auto;margin:0 auto}
+@media (max-width:820px){
+  .dgm > svg{min-width:560px;margin:0}
+  /* macOS/iOS hide overlay scrollbars until something moves, so at the widths
+     where the drawing does pan, say so. Sticky pins the hint to the left edge
+     of the scroll box rather than letting it slide away with the drawing. */
+  .dgm::after{
+    content:"drag to pan →";position:sticky;left:0;display:block;width:max-content;
+    margin-top:10px;font-family:var(--mono);font-size:10.4px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--faint);
+  }
 }
-.fnode > b{display:block;font-family:var(--mono);font-size:13.4px;font-weight:600;letter-spacing:-.02em;
-  color:var(--ink)}
-.fnode span{display:block;margin-top:4px;font-family:var(--mono);font-size:11.4px;color:var(--faint)}
-.fnode.go{border-color:var(--teal-edge);background:var(--teal-wash)}
-.fnode.go b,.fnode.go span{color:var(--teal-ink)}
-.fnode.stop{border-color:var(--rust-edge);background:var(--rust-wash)}
-.fnode.stop b,.fnode.stop span{color:var(--rust)}
-.fnode.mid{border-color:var(--line-3)}
-.fnode.dim{opacity:.5}
-.wire{
-  flex:0 0 44px;height:1px;background:var(--line-3);position:relative;align-self:center;
+
+.dgm .bx{fill:var(--band-a);stroke:var(--line-2);stroke-width:1;vector-effect:non-scaling-stroke}
+.dgm .bx-2{fill:var(--sunk);stroke:var(--line-3);stroke-width:1;vector-effect:non-scaling-stroke}
+.dgm .ln{fill:none;stroke:var(--line-3);stroke-width:1;vector-effect:non-scaling-stroke}
+.dgm .ln-f{fill:var(--line-3)}
+.dgm .dim{opacity:.55}
+.dgm .go{fill:none;stroke:var(--teal);stroke-width:1.4;vector-effect:non-scaling-stroke}
+.dgm .go-f{fill:var(--teal)}
+.dgm .go-bx{fill:var(--teal-wash);stroke:var(--teal-edge);stroke-width:1;vector-effect:non-scaling-stroke}
+.dgm .no{fill:none;stroke:var(--rust);stroke-width:1.4;vector-effect:non-scaling-stroke}
+.dgm .no-f{fill:var(--rust)}
+.dgm .no-bx{fill:var(--rust-wash);stroke:var(--rust-edge);stroke-width:1;vector-effect:non-scaling-stroke}
+.dgm .edge{fill:none;stroke:var(--line-3);stroke-width:1;stroke-dasharray:5 5;
+  vector-effect:non-scaling-stroke}
+.dgm .ghost{opacity:.34}
+
+.dgm text{font-family:var(--mono);fill:var(--muted);font-size:11.6px}
+.dgm .t-n{font-size:13.6px;fill:var(--ink);font-weight:600;letter-spacing:-.02em}
+.dgm .t-s{font-size:10.8px;fill:var(--faint)}
+.dgm .t-k{font-size:9.8px;fill:var(--faint);letter-spacing:.15em}
+.dgm .t-go{fill:var(--teal-ink)}
+.dgm .t-no{fill:var(--rust)}
+.dgm .t-fig{font-size:16px;fill:var(--ink);font-weight:600;letter-spacing:-.03em}
+/* The product name inside a drawing obeys the same rule as the header: sans,
+   tight, `mux` in the accent — never the mono face. */
+.dgm .t-brand{font-family:var(--display);font-weight:700;font-size:14.5px;
+  letter-spacing:-.045em;fill:var(--ink)}
+.dgm .t-brand tspan{fill:var(--teal-ink)}
+
+/* The travelling signal. One dash chasing along the whole route, started only
+   once the figure has been revealed — it shows the ORDER things happen in,
+   which is the one thing a static drawing of this cannot say. */
+.dgm .pulse{fill:none;stroke:var(--teal);stroke-width:2.6;stroke-linecap:square;
+  vector-effect:non-scaling-stroke;opacity:0}
+.dgm .pulse.no-p{stroke:var(--rust)}
+.rv.in .dgm .pulse{opacity:.95;animation:chase var(--dur,3.6s) linear var(--del,.3s) infinite}
+@keyframes chase{to{stroke-dashoffset:var(--chase-end)}}
+/* The fallback selector: the marker sits on exactly one candidate at a time,
+   which is the whole point — the chain is tried in order, not in parallel. The
+   paired keyframes make each move instantaneous and each dwell equal. */
+.rv.in .dgm .sel{animation:step3 4.5s linear .4s infinite}
+@keyframes step3{
+  0%,31%{transform:translateY(0)}
+  33%,64%{transform:translateY(84px)}
+  66%,100%{transform:translateY(168px)}
 }
-.wire::after{
-  content:"";position:absolute;right:0;top:-3px;border:3.5px solid transparent;
-  border-left-color:var(--line-3);
-}
-.wire.go{background:var(--teal)}
-.wire.go::after{border-left-color:var(--teal)}
-.wire.stop{background:var(--rust)}
-.wire.stop::after{border-left-color:var(--rust)}
-.wire.dash{background:repeating-linear-gradient(90deg,var(--line-3) 0 5px,transparent 5px 10px)}
-.fbranch{display:flex;flex-direction:column;gap:10px;min-width:0}
-.fbranch .brow{display:flex;align-items:center;gap:0;min-width:0}
+@media (prefers-reduced-motion:reduce){.dgm .pulse{display:none}.dgm .sel{animation:none}}
+
 .cap{
   margin:20px 0 0;padding-top:16px;border-top:1px solid var(--line);
   font-size:13.4px;line-height:1.65;color:var(--faint);
 }
 .cap code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;font-size:.86em}
+.cap b{color:var(--muted);font-weight:600}
 /* Wide: the caption becomes the drawing's legend, hung to the right of the
    schematic rather than stacked under it — which is also what stops every
    schematic from ending in the same wide band of empty panel. */
-@media (min-width:1100px){
-  .flow{display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:0 34px;align-items:start}
+/* Wide — and specifically only once .wrap has hit its own max, so the drawing
+   column is a CONSTANT 724px from here up and the diagram never rescales as
+   the window grows. Below this the legend stacks under the drawing and the
+   drawing takes the full panel. */
+@media (min-width:1220px){
+  .flow{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 28px;align-items:start}
   .flow > *{grid-column:1}
   .flow > .cap{
-    grid-column:2;grid-row:1 / span 12;margin:0;padding:0 0 0 22px;
+    grid-column:2;grid-row:1;margin:0;padding:0 0 0 22px;
     border-top:0;border-left:1px solid var(--line);align-self:stretch;
   }
 }
-@media (max-width:760px){
-  .flow{padding:18px}
-  .frow{flex-direction:column;align-items:stretch;gap:0}
-  .fnode{width:100%}
-  .wire{flex:none;width:1px;height:24px;margin:0 0 0 22px}
-  .wire::after{right:-3px;top:auto;bottom:0;border:3.5px solid transparent;
-    border-top-color:var(--line-3);border-left-color:transparent}
-  .wire.go::after{border-top-color:var(--teal);border-left-color:transparent}
-  .wire.stop::after{border-top-color:var(--rust);border-left-color:transparent}
-  .wire.dash{background:repeating-linear-gradient(180deg,var(--line-3) 0 5px,transparent 5px 10px)}
-  .fbranch{width:100%}
-  .fbranch .brow{flex-direction:column;align-items:stretch}
-}
+@media (max-width:760px){.flow{padding:18px}}
 
-/* ═══ Code frames ════════════════════════════════════════════════════════ */
-.code{border:1px solid var(--line-2);background:var(--sunk)}
+/* ═══ Code frames ════════════════════════════════════════════════════════
+   A code frame is a fixed carbon panel in both themes — it carries its own
+   surface, its own rules and its own token colours, so nothing about it moves
+   when the page theme does. Every class below maps to exactly one syntactic
+   ROLE; nothing is coloured by "looks important". */
+.code{border:1px solid var(--hl-line-2);background:var(--hl-bg)}
 .code-bar{
-  display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);
-  font-family:var(--mono);font-size:11.4px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
-  background:var(--panel);
+  display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--hl-line);
+  font-family:var(--mono);font-size:11.4px;letter-spacing:.09em;text-transform:uppercase;
+  color:var(--hl-punct);background:var(--hl-bar);
 }
-.code-bar i{width:5px;height:5px;background:var(--line-3);flex:none}
+.code-bar i{width:5px;height:5px;background:var(--hl-line-2);flex:none}
 .code-bar .path{margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .code pre{margin:0;padding:16px;overflow-x:auto;font-family:var(--mono);font-size:12.9px;
-  line-height:1.72;color:var(--muted)}
+  line-height:1.72;color:var(--hl-fg)}
 .code.soft pre{white-space:pre-wrap;overflow-wrap:anywhere}
-.cb-f{color:var(--teal-ink)}
-.cb-s{color:var(--ink)}
-.cb-k{color:var(--teal-ink);font-weight:500}
-.cb-c{color:var(--faint);font-style:normal}
-.cb-pr{color:var(--ink);font-weight:500}
-.cb-n{color:var(--rust)}
-.cb-p{color:var(--faint)}
-.cb-flag{color:var(--rust)}
-.cb-var{color:var(--ink)}
-.cb-op{color:var(--faint)}
+.cb-f{color:var(--hl-function)}    /* function / command name / constructor  */
+.cb-s{color:var(--hl-string)}      /* string literal, quotes included        */
+.cb-k{color:var(--hl-keyword)}     /* language keyword                       */
+.cb-c{color:var(--hl-comment);font-style:italic}
+.cb-pr{color:var(--hl-property)}   /* object key, keyword argument           */
+.cb-n{color:var(--hl-number)}      /* number, boolean, null                  */
+.cb-p{color:var(--hl-punct)}       /* brace, bracket, colon, comma, dot      */
+.cb-flag{color:var(--hl-meta)}     /* CLI flag                               */
+.cb-var{color:var(--hl-variable)}  /* variable / env-var name                */
+.cb-op{color:var(--hl-punct)}      /* operator                               */
+.cb-del{color:var(--hl-del)}       /* diff: line removed                     */
+.cb-add{color:var(--hl-add)}       /* diff: line added                       */
 
 /* ═══ Spec tables — the endpoint matrix and the error ledger ═════════════ */
 .tscroll{overflow-x:auto;border:1px solid var(--line-2);background:var(--panel)}
@@ -634,7 +744,7 @@ table.spec thead th{
   text-transform:uppercase;color:var(--faint);padding:12px 16px;border-bottom:1px solid var(--line-2);
   background:var(--sunk);white-space:nowrap;
 }
-table.spec td{padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted);
+table.spec td{padding:11px 16px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted);
   line-height:1.55}
 table.spec tr:last-child td{border-bottom:0}
 table.spec td.m{font-family:var(--mono);font-size:11.6px;color:var(--faint);white-space:nowrap;
@@ -678,7 +788,7 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spac
 .ladder{border-top:1px solid var(--line-2);margin-top:8px}
 .step{
   display:grid;grid-template-columns:56px minmax(0,180px) minmax(0,1fr);gap:24px;
-  padding:22px 0;border-bottom:1px solid var(--line);align-items:start;
+  padding:18px 0;border-bottom:1px solid var(--line);align-items:start;
 }
 .step .idx{font-family:var(--mono);font-size:11.6px;color:var(--faint);letter-spacing:.1em;padding-top:4px}
 .step h3{
@@ -709,7 +819,7 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spac
 
 /* ═══ Note / disclosure ══════════════════════════════════════════════════ */
 .note{
-  margin-top:44px;border:1px solid var(--rust-edge);background:var(--rust-wash);
+  margin-top:38px;border:1px solid var(--rust-edge);background:var(--rust-wash);
   display:grid;grid-template-columns:44px minmax(0,1fr);gap:18px;padding:24px;
 }
 .note .ic svg{width:22px;height:22px;stroke:var(--rust);fill:none;stroke-width:1.8}
@@ -731,8 +841,14 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spac
 }
 
 /* ═══ Screenshots — presented in instrument chrome ═══════════════════════ */
+/* Each capture is 2560×1600, and each one runs out of content at a DIFFERENT
+   height — the keys tab is four rows and ends barely two thirds down, the
+   models tab fills the frame. Presenting all three in the same 16:10 window
+   therefore paid for a lot of empty dashboard: the frames below are cropped
+   per capture, from the top, to end where that capture's content ends. That is
+   also most of the reason this section is no longer the longest on the page. */
 .shot{border:1px solid var(--line-2);background:var(--panel)}
-.shot .box{position:relative;background:var(--sunk);aspect-ratio:2560/1600;overflow:hidden}
+.shot .box{position:relative;background:var(--sunk);aspect-ratio:var(--ar,2560/1600);overflow:hidden}
 .shot img{width:100%;height:100%;object-fit:cover;object-position:top center;opacity:0;
   transition:opacity .4s var(--ease)}
 .shot img.loaded{opacity:1}
@@ -749,7 +865,7 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spac
   letter-spacing:-.02em;color:var(--ink)}
 .shotcap span{display:block;margin-top:6px;font-size:13.4px;line-height:1.6;color:var(--muted)}
 .shotcap code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;font-size:.86em}
-.shotgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;margin-top:34px}
+.shotgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;margin-top:28px}
 @media (max-width:820px){.shotgrid{grid-template-columns:minmax(0,1fr)}}
 .shot-noscript img{opacity:1;position:static}
 
@@ -777,7 +893,7 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spac
 
 /* ═══ Steps list ═════════════════════════════════════════════════════════ */
 ol.steps{list-style:none;margin:0;padding:0;border-top:1px solid var(--line-2)}
-ol.steps li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:18px;padding:18px 0;
+ol.steps li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:18px;padding:15px 0;
   border-bottom:1px solid var(--line)}
 ol.steps .n{font-family:var(--mono);font-size:12px;color:var(--teal-ink);letter-spacing:.1em;padding-top:3px}
 ol.steps li > div > b{display:block;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;font-size:16px;
@@ -827,7 +943,7 @@ html.js .rv.in{opacity:1;transform:none}
   <div class="wrap hdr-in" style="padding-left:var(--pad)">
     <a class="brand" href="./index.html" aria-label="llmux — home">
       <img src="./assets/llmux-mark.svg" alt="" width="26" height="26">
-      <span class="word">ll<i>mux</i></span>
+      <span class="word"><span class="ll">ll</span><span class="mux">mux</span></span>
     </a>
     <nav class="secnav" aria-label="Channels">
       <a href="#wire">01 · Wire</a>
@@ -869,14 +985,13 @@ html.js .rv.in{opacity:1;transform:none}
       <span>v0.2.0</span>
     </div>
 
-    <h1 class="hero-h disp rv in">
-      <span class="l1">One endpoint.</span>
-      <span class="l2">Every model.</span>
-      <span class="l3">Nothing leaves your box <em>unless you say so.</em></span>
-    </h1>
-
-    <div class="hero-body">
-      <div class="rv in">
+    <div class="hero-grid">
+      <h1 class="hero-h disp rv in">
+        <span class="l1">One endpoint.</span>
+        <span class="l2">Every model.</span>
+      </h1>
+      <p class="hero-tag rv in">Nothing leaves your box <em>unless you say so.</em></p>
+      <div class="hero-copy rv in">
         <p>llmux is a single Go binary that speaks the <b>OpenAI HTTP API</b> and routes every request to
           the provider behind it. Point any OpenAI SDK at it and get routing, fallback chains, per-key
           budgets, caching and live cost — across OpenAI, Anthropic, Gemini, Cohere, Bedrock and Azure,
@@ -884,11 +999,15 @@ html.js .rv.in{opacity:1;transform:none}
         <p>A default-deny <b>sovereignty gate</b> runs before every dispatch, so inference stays on your
           box until you explicitly, loggably opt a provider out.</p>
       </div>
-      <div class="rv in">
+      <div class="hero-side rv in">
         <div class="code">
           <div class="code-bar"><i></i><span class="path">the whole change · any OpenAI client</span></div>
-          <pre><code><span class="cb-c">-</span> <span class="cb-var">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"https://api.openai.com/v1"</span>
-<span class="cb-f">+</span> <span class="cb-var">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"http://localhost:4000/v1"</span></code></pre>
+          <!-- The diff markers are the deletion/addition roles; `base_url` is the
+                 setting being assigned, i.e. a property — deliberately NOT the
+                 variable role, whose rose is close enough to the deletion rose
+                 that the marker would stop reading as a marker. -->
+            <pre><code><span class="cb-del">-</span> <span class="cb-pr">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"https://api.openai.com/v1"</span>
+<span class="cb-add">+</span> <span class="cb-pr">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"http://localhost:4000/v1"</span></code></pre>
         </div>
         <div class="cta">
           <a class="btn pri" href="#start">Get started
@@ -956,7 +1075,7 @@ html.js .rv.in{opacity:1;transform:none}
           <svg class="glyph" viewBox="0 0 60 100" aria-hidden="true">
             <path d="M6 4 L54 34 L54 66 L6 96 Z"/>
           </svg>
-          <div class="lbl"><b>llmux</b><span>gate · router · budgets · cache</span></div>
+          <div class="lbl"><b><span class="ll">ll</span><span class="mux">mux</span></b><span>gate · router · budgets · cache</span></div>
         </div>
 
         <div class="trace" aria-hidden="true">
@@ -1001,7 +1120,12 @@ html.js .rv.in{opacity:1;transform:none}
       <div>
         <div class="code">
           <div class="code-bar"><i></i><span class="path">↑ request · curl</span></div>
-          <pre><code><span class="cb-f">curl</span> <span class="cb-s">http://localhost:4000/v1/chat/completions</span> <span class="cb-p">\</span>
+          <!-- The URL is an unquoted shell WORD, not a string literal, so it
+               stays default text; only the two quoted headers and the single
+               -d payload are strings. That payload is ONE bash single-quoted
+               string from the opening ' to the closing ' — it is emphatically
+               not JSON in this context, so it is not tokenised as JSON. -->
+          <pre><code><span class="cb-f">curl</span> http://localhost:4000/v1/chat/completions <span class="cb-p">\</span>
   <span class="cb-flag">-H</span> <span class="cb-s">"Authorization: Bearer sk-team-a"</span> <span class="cb-p">\</span>
   <span class="cb-flag">-H</span> <span class="cb-s">"Content-Type: application/json"</span> <span class="cb-p">\</span>
   <span class="cb-flag">-d</span> <span class="cb-s">'{"model":"assistant",
@@ -1063,23 +1187,106 @@ html.js .rv.in{opacity:1;transform:none}
          resolves to, folded back through the same shape before your app sees
          it — the request/response half of the story the hero tells about
          sovereignty tiers. -->
+    <!-- ILLUSTRATION 01 — the wire.
+         The claim being drawn: your client holds ONE shape, in and out, and the
+         translation happens on the far side of the gateway. So the packet
+         silhouette leaving your app and the packet silhouette coming back are
+         literally the same outline, and the silhouette on the provider side is
+         a different one. The port swatches are the same drawing device: the two
+         passthrough ports carry the app's own outline, because a passthrough
+         provider needs no translation at all. -->
     <figure class="flow rv">
-      <div class="frow">
-        <div class="fnode"><b>Your app</b><span>POST /v1/chat/completions</span></div>
-        <span class="wire" aria-hidden="true"></span>
-        <div class="fnode mid"><b>llmux</b><span>translates the shape</span></div>
-        <span class="wire go" aria-hidden="true"></span>
-        <div class="fbranch">
-          <div class="fnode go"><b>anthropic</b><span>dialed this call</span></div>
-          <div class="fnode dim"><b>local</b><span>candidate, not dialed</span></div>
-          <div class="fnode dim"><b>bedrock</b><span>candidate, not dialed</span></div>
-        </div>
+      <div class="dgm">
+        <svg viewBox="0 0 780 320" role="img" aria-labelledby="il1t il1d">
+          <title id="il1t">One OpenAI-shaped call, fanned out to six provider ports and folded back
+            through the same shape</title>
+          <desc id="il1d">Your app sends a request in the OpenAI wire shape. llmux translates it into the
+            shape the resolved provider speaks — here Anthropic, one of six ports on the distribution bus,
+            the other five being candidates that are not dialed. The reply travels the return lane, is
+            translated back into the OpenAI shape, and reaches your app in the same shape it sent, streaming
+            included.</desc>
+
+          <text class="t-k" x="560" y="16">PROVIDER PORTS · <tspan class="t-go">1 OF 6 DIALED</tspan></text>
+
+          <!-- your app -->
+          <rect class="bx" x="8" y="40" width="112" height="252"/>
+          <text class="t-n" x="64" y="150" text-anchor="middle">your app</text>
+          <text class="t-s" x="64" y="170" text-anchor="middle">any OpenAI SDK</text>
+          <text class="t-s" x="64" y="185" text-anchor="middle">one base_url</text>
+
+          <!-- llmux -->
+          <rect class="bx" x="316" y="40" width="84" height="252"/>
+          <path class="go-f" d="M341 54 L377 70 L377 84 L341 100 Z"/>
+          <text class="t-brand" x="358" y="152" text-anchor="middle">ll<tspan>mux</tspan></text>
+          <text class="t-s" x="358" y="172" text-anchor="middle">translates</text>
+          <text class="t-s" x="358" y="187" text-anchor="middle">both ways</text>
+
+          <!-- ── request lane, y=116 ── -->
+          <text class="t-k" x="146" y="92">REQUEST</text>
+          <path class="ln" d="M120 116 H140"/><path class="ln-f" d="M133 111.5 L140 116 L133 120.5 Z"/>
+          <path class="ln" d="M146 101 H284 L296 116 L284 131 H146 Z"/>
+          <text x="215" y="120" text-anchor="middle" font-size="10.4">/v1/chat/completions</text>
+          <path class="ln" d="M296 116 H316"/><path class="ln-f" d="M309 111.5 L316 116 L309 120.5 Z"/>
+          <path class="ln" d="M400 116 H414"/><path class="ln-f" d="M407 111.5 L414 116 L407 120.5 Z"/>
+          <path class="go" d="M420 101 H512 V108 H530 V124 H512 V131 H420 Z"/>
+          <text class="t-go" x="466" y="120" text-anchor="middle" font-size="10.4">anthropic</text>
+          <path class="go" d="M530 116 H552"/><path class="go-f" d="M545 111.5 L552 116 L545 120.5 Z"/>
+
+          <!-- distribution bus + the five candidates that are not dialed -->
+          <path class="ln dim" d="M540 40 V230"/>
+          <rect class="go-f" x="537" y="113" width="6" height="6"/>
+          <g class="dim">
+            <path class="ln" d="M540 40 H560 M540 78 H560 M540 154 H560 M540 192 H560 M540 230 H560"/>
+            <rect class="bx" x="560" y="25" width="144" height="30"/>
+            <path class="ln-f" d="M568 34.5 H582 L588 40 L582 45.5 H568 Z"/>
+            <text x="598" y="44">openai</text>
+            <rect class="bx" x="560" y="63" width="144" height="30"/>
+            <path class="ln-f" d="M568 72.5 H582 L588 78 L582 83.5 H568 L574 78 Z"/>
+            <text x="598" y="82">gemini</text>
+            <rect class="bx" x="560" y="139" width="144" height="30"/>
+            <path class="ln-f" d="M568 148.5 H588 V152 H576 V156 H588 V159.5 H568 Z"/>
+            <text x="598" y="158">cohere</text>
+            <rect class="bx" x="560" y="177" width="144" height="30"/>
+            <path class="ln-f" d="M572 186.5 H588 V197.5 H572 L568 192 Z"/>
+            <text x="598" y="196">bedrock</text>
+            <rect class="bx" x="560" y="215" width="144" height="30"/>
+            <path class="ln-f" d="M568 224.5 H582 L588 230 L582 235.5 H568 Z"/>
+            <text x="598" y="234">local</text>
+          </g>
+          <!-- the dialed port -->
+          <rect class="go-bx" x="560" y="101" width="144" height="30"/>
+          <path class="go-f" d="M568 110.5 H580 V113 H588 V119 H580 V121.5 H568 Z"/>
+          <text class="t-go" x="598" y="120">anthropic</text>
+
+          <!-- ── return lane, y=282 ── -->
+          <path class="go" d="M704 116 H740 V282 H530"/>
+          <g class="go-f">
+            <rect x="560" y="276" width="2" height="12"/><rect x="578" y="276" width="2" height="12"/>
+            <rect x="596" y="276" width="2" height="12"/><rect x="614" y="276" width="2" height="12"/>
+            <rect x="632" y="276" width="2" height="12"/><rect x="650" y="276" width="2" height="12"/>
+            <rect x="668" y="276" width="2" height="12"/>
+          </g>
+          <text class="t-k t-go" x="704" y="266" text-anchor="end">BYTE-IDENTICAL SSE</text>
+          <path class="go" d="M530 267 H438 V274 H420 V290 H438 V297 H530 Z"/>
+          <text class="t-go" x="484" y="286" text-anchor="middle" font-size="10.4">anthropic</text>
+          <path class="go" d="M420 282 H400"/><path class="go-f" d="M407 277.5 L400 282 L407 286.5 Z"/>
+          <path class="ln" d="M316 282 H296"/><path class="ln-f" d="M303 277.5 L296 282 L303 286.5 Z"/>
+          <path class="ln" d="M296 267 H158 L146 282 L158 297 H296 Z"/>
+          <text x="227" y="286" text-anchor="middle" font-size="10.4">/v1/chat/completions</text>
+          <path class="ln" d="M146 282 H120"/><path class="ln-f" d="M127 277.5 L120 282 L127 286.5 Z"/>
+          <text class="t-k" x="146" y="313">RESPONSE · SAME SHAPE, TRANSLATED BACK</text>
+
+          <path class="pulse" d="M120 116 H740 V282 H120"
+                style="stroke-dasharray:24 1400;--chase-end:-1424px;--dur:4s"/>
+        </svg>
       </div>
       <figcaption class="cap">Every call arrives in the same OpenAI shape and is translated to whichever
-        provider the route resolves to — here, Anthropic. The reply is translated back before your app ever
-        sees it, so your client only ever holds the one shape it already speaks, in and out — streaming
-        included: <code>"stream":true</code> returns byte-identical OpenAI SSE regardless of which provider
-        actually answered.</figcaption>
+        provider the route resolves to — here, Anthropic; the other five ports were candidates and were
+        never dialed. The reply is translated back before your app ever sees it, so your client only ever
+        holds the one shape it already speaks, in and out — streaming included: <code>"stream":true</code>
+        returns byte-identical OpenAI SSE regardless of which provider actually answered.
+        <b>The two passthrough ports carry your app's own outline</b>, because an OpenAI-shaped upstream
+        needs no translation at all.</figcaption>
     </figure>
 
     <!-- The full endpoint surface: every route the gateway serves, not just the
@@ -1168,26 +1375,96 @@ html.js .rv.in{opacity:1;transform:none}
 
     <!-- Where the gate actually sits: between route resolution and the network
          call, never after it. -->
+    <!-- ILLUSTRATION 02 — the gate.
+         Two things are being drawn, and only two. WHERE the gate sits: after
+         route resolution, before the socket — so it is upstream of the dashed
+         line that separates this box from the network. And WHAT a block is: the
+         blocked lane terminates against a shut channel that is itself entirely
+         to the left of that line, which is the whole meaning of "never dialed".
+         The 403 goes back to the caller and the counter increments; nothing
+         crosses. -->
     <figure class="flow rv">
-      <div class="frow">
-        <div class="fnode"><b>Request</b><span>route resolved</span></div>
-        <span class="wire" aria-hidden="true"></span>
-        <div class="fnode mid"><b>Sovereignty gate</b><span>runs before every dispatch</span></div>
-        <div class="fbranch">
-          <div class="brow">
-            <span class="wire go" aria-hidden="true"></span>
-            <div class="fnode go"><b>Provider dialed</b><span>logged with its tier</span></div>
-          </div>
-          <div class="brow">
-            <span class="wire stop" aria-hidden="true"></span>
-            <div class="fnode stop"><b>403 · blocked</b><span>never dialed, counted</span></div>
-          </div>
-        </div>
+      <div class="dgm">
+        <svg viewBox="0 0 780 366" role="img" aria-labelledby="il2t il2d">
+          <title id="il2t">Where the default-deny gate sits in the dispatch path, and what a blocked call
+            does</title>
+          <desc id="il2d">A resolved request reaches the sovereignty gate before any socket is opened. An
+            allowed provider passes through an open channel and is dialed across the boundary between your
+            box and the network, logged with its tier. A blocked provider hits a shut channel entirely on
+            your side of that boundary: it is never dialed, the caller gets a 403 egress_not_allowed, and
+            the llmux_egress_blocked_total counter increments.</desc>
+
+          <!-- the boundary this drawing exists to make visible -->
+          <path class="edge" d="M520 20 V330"/>
+          <text class="t-k" x="512" y="32" text-anchor="end">YOUR BOX</text>
+          <text class="t-k" x="528" y="32">THE NETWORK</text>
+
+          <!-- request -->
+          <rect class="bx" x="8" y="74" width="150" height="56"/>
+          <text class="t-n" x="83" y="98" text-anchor="middle">request</text>
+          <text class="t-s" x="83" y="116" text-anchor="middle">route resolved</text>
+
+          <!-- the gate itself. Drawn BEFORE the two lanes so the lanes run
+               visibly through it rather than under an opaque module face. -->
+          <rect class="bx-2" x="312" y="56" width="110" height="200"/>
+          <text class="t-k" x="326" y="156" text-anchor="middle"
+                transform="rotate(-90 326 156)">SOVEREIGNTY GATE</text>
+          <text class="t-k t-go" x="382" y="86" text-anchor="middle">OPEN</text>
+          <path class="go" d="M344 92 H416 M344 112 H416"/>
+          <text class="t-k t-no" x="382" y="192" text-anchor="middle">SHUT</text>
+
+          <!-- the two lanes into the gate -->
+          <text class="t-s" x="176" y="94">an allowed provider</text>
+          <path class="ln" d="M158 102 H370"/>
+          <text class="t-s t-no" x="176" y="202">a blocked provider</text>
+          <path class="no" d="M83 130 V210 H337"/><path class="no-f" d="M336 205.5 L344 210 L336 214.5 Z"/>
+
+          <!-- the shut channel the blocked lane terminates against -->
+          <rect class="no-bx" x="344" y="198" width="72" height="24"/>
+          <path class="no" d="M350 222 L358 198 M362 222 L370 198 M374 222 L382 198 M386 222 L394 198
+                               M398 222 L406 198"/>
+
+          <!-- allowed: through the open channel, across the boundary, and it is
+               the only thing on this drawing that crosses -->
+          <path class="go" d="M370 102 H541"/><path class="go-f" d="M540 97.5 L548 102 L540 106.5 Z"/>
+          <rect class="go-bx" x="548" y="76" width="224" height="52"/>
+          <text class="t-n t-go" x="660" y="98" text-anchor="middle">provider dialed</text>
+          <text class="t-s t-go" x="660" y="116" text-anchor="middle">logged with its tier</text>
+
+          <!-- blocked: stops dead, well short of the boundary. The provider it
+               was aimed at is drawn out there, greyed and unwired — no trace
+               reaches it, which is the entire point of the picture. -->
+          <path class="no" d="M428 202 L442 218 M442 202 L428 218"/>
+          <text class="t-s t-no" x="430" y="238">not dialed</text>
+          <text class="t-s t-no" x="430" y="253">no socket</text>
+          <g class="ghost">
+            <rect class="bx" x="548" y="184" width="224" height="52"/>
+            <text class="t-n" x="660" y="206" text-anchor="middle">the blocked provider</text>
+            <text class="t-s" x="660" y="224" text-anchor="middle">never contacted</text>
+          </g>
+
+          <!-- …and answers the caller -->
+          <path class="no" d="M338 234 H96 V140"/><path class="no-f" d="M91.5 141 L96 132 L100.5 141 Z"/>
+          <text class="t-s t-no" x="110" y="256">403 · egress_not_allowed</text>
+          <text class="t-s" x="110" y="272">returned to the caller</text>
+
+          <!-- …and is counted -->
+          <path class="no" style="stroke-dasharray:4 4" d="M380 224 V292"/>
+          <rect class="bx" x="284" y="292" width="272" height="60"/>
+          <text x="300" y="318">llmux_egress_blocked_total</text>
+          <text class="t-s" x="300" y="336">counted, never silent</text>
+          <text class="t-no" x="540" y="326" text-anchor="end" font-size="20"
+                font-weight="600">+1</text>
+
+          <path class="pulse" d="M158 102 H548" style="stroke-dasharray:20 390;--chase-end:-410px;--dur:2.6s"/>
+          <path class="pulse no-p" d="M83 130 V210 H338"
+                style="stroke-dasharray:20 336;--chase-end:-356px;--dur:2.6s;--del:.5s"/>
+        </svg>
       </div>
       <figcaption class="cap">The gate sits between route resolution and the network call — never after it.
-        An allowed provider gets dialed and logged with its tier; a blocked one is never dialed at all: the
-        request fails with <code>403</code> before a single byte leaves the box, and
-        <code>llmux_egress_blocked_total</code> counts it.</figcaption>
+        An allowed provider gets dialed and logged with its tier; a blocked one is never dialed at all: it
+        terminates <b>on your side of the boundary</b>, the request fails with <code>403</code> before a
+        single byte leaves the box, and <code>llmux_egress_blocked_total</code> counts it.</figcaption>
     </figure>
 
     <div class="split" style="margin-top:44px">
@@ -1304,13 +1581,68 @@ html.js .rv.in{opacity:1;transform:none}
     <!-- A fallback chain stepping through candidates — one skip is an ordinary
          transport error, the other is the sovereignty gate, and the page treats
          both as the same kind of "try the next one" event. -->
+    <!-- ILLUSTRATION 03 — the fallback chain.
+         Drawn as a selector stepping down a bus rather than as three boxes in a
+         row, because the true thing here is ORDER and ARBITRATION: one marker
+         is on exactly one candidate at a time, two candidates dead-end for two
+         completely different reasons — a transport error and the sovereignty
+         gate — and only the third has an outgoing wire. -->
     <figure class="flow rv">
-      <div class="frow">
-        <div class="fnode stop"><b>1 · primary</b><span>503 → skip</span></div>
-        <span class="wire dash" aria-hidden="true"></span>
-        <div class="fnode stop"><b>2 · fallback</b><span>blocked · gate → skip</span></div>
-        <span class="wire dash" aria-hidden="true"></span>
-        <div class="fnode go"><b>3 · fallback</b><span>200 · served</span></div>
+      <div class="dgm">
+        <svg viewBox="0 0 780 300" role="img" aria-labelledby="il3t il3d">
+          <title id="il3t">A fallback chain stepping candidate to candidate until one serves</title>
+          <desc id="il3d">One request enters a selector that steps down three candidates in order.
+            Candidate one, openai, returns 503 and is retried twice with backoff before being skipped.
+            Candidate two, anthropic, is skipped by the sovereignty gate without being dialed at all.
+            Candidate three, a local provider on this box, returns 200 and serves the call. Your app
+            receives one response, not the attempts behind it.</desc>
+
+          <text class="t-k" x="224" y="24">CANDIDATES, IN ORDER</text>
+
+          <rect class="bx" x="8" y="124" width="140" height="56"/>
+          <text class="t-n" x="78" y="148" text-anchor="middle">one request</text>
+          <text class="t-s" x="78" y="166" text-anchor="middle">your app made</text>
+          <path class="ln" d="M148 152 H196"/>
+          <path class="ln" d="M196 68 V236"/>
+
+          <!-- the selector marker: on exactly one candidate at a time -->
+          <path class="go-f sel" d="M180 62 L192 68 L180 74 Z"/>
+
+          <!-- 1 · primary — a transport error -->
+          <path class="ln" d="M196 68 H218"/><path class="ln-f" d="M217 63.5 L224 68 L217 72.5 Z"/>
+          <rect class="no-bx" x="224" y="40" width="356" height="56"/>
+          <text class="t-n" x="240" y="66">1 · primary</text>
+          <text class="t-s" x="240" y="84">openai · 503 → retried ×2</text>
+          <rect class="bx" x="436" y="54" width="128" height="28"/>
+          <text class="t-no" x="500" y="73" text-anchor="middle">503 · skip</text>
+          <path class="no" d="M588 62 L600 74 M600 62 L588 74"/>
+          <text class="t-s" x="240" y="112">retryable status · backed off 200ms, then 400ms</text>
+
+          <!-- 2 · fallback — the gate, not an error -->
+          <path class="ln" d="M196 152 H218"/><path class="ln-f" d="M217 147.5 L224 152 L217 156.5 Z"/>
+          <rect class="no-bx" x="224" y="124" width="356" height="56"/>
+          <text class="t-n" x="240" y="150">2 · fallback</text>
+          <text class="t-s" x="240" y="168">anthropic · sovereignty gate</text>
+          <rect class="bx" x="436" y="138" width="128" height="28"/>
+          <text class="t-no" x="500" y="157" text-anchor="middle">blocked · skip</text>
+          <path class="no" d="M588 146 L600 158 M600 146 L588 158"/>
+          <text class="t-s" x="240" y="196">not an error · refused before any dial, so nothing is retried</text>
+
+          <!-- 3 · fallback — served -->
+          <path class="ln" d="M196 236 H218"/><path class="ln-f" d="M217 231.5 L224 236 L217 240.5 Z"/>
+          <rect class="go-bx" x="224" y="208" width="356" height="56"/>
+          <text class="t-n" x="240" y="234">3 · fallback</text>
+          <text class="t-s" x="240" y="252">local · on this box</text>
+          <rect class="bx" x="436" y="222" width="128" height="28"/>
+          <text class="t-go" x="500" y="241" text-anchor="middle">200 · served</text>
+
+          <!-- only the candidate that served has an outgoing wire -->
+          <path class="go" d="M580 236 H620 V152 H636"/>
+          <path class="go-f" d="M635 147.5 L644 152 L635 156.5 Z"/>
+          <rect class="bx" x="644" y="124" width="128" height="56"/>
+          <text class="t-n" x="708" y="148" text-anchor="middle">one response</text>
+          <text class="t-s" x="708" y="166" text-anchor="middle">not the attempts</text>
+        </svg>
       </div>
       <figcaption class="cap">One logical request, up to three tries. A primary that errors is retried with
         backoff on <code>429/500/502/503/504</code>; a fallback the sovereignty gate blocks is skipped
@@ -1359,27 +1691,89 @@ html.js .rv.in{opacity:1;transform:none}
 
     <!-- What a virtual key's budget actually gates: spend fills toward the cap,
          and a call that would cross it is refused before it's dialed. -->
+    <!-- ILLUSTRATION 04 — the budget.
+         A meter, drawn to scale: the fill is really 15.5/25 of the track, and
+         the two projection bars are really 1.20 and 12.00 wide on the same
+         scale, so the one that overshoots the cap tick visibly overshoots it.
+         The refusal is placed BEFORE the upstream module, not after — that
+         position is the claim being made. -->
     <figure class="flow rv">
-      <div class="frow" style="align-items:center">
-        <div class="fnode"><b>sk-team-a</b><span>virtual key</span></div>
-        <span class="wire" aria-hidden="true"></span>
-        <div style="flex:1 1 220px;min-width:180px">
-          <div style="height:12px;border:1px solid var(--line-2);background:var(--sunk);position:relative">
-            <div style="position:absolute;inset:0 38% 0 0;background:var(--teal)"></div>
-          </div>
-          <span class="mono" style="display:block;margin-top:8px;font-size:11.6px;color:var(--faint)">$15.50 spent / $25.00 budget_usd</span>
-        </div>
-      </div>
-      <div class="frow" style="margin-top:18px;gap:0">
-        <span class="wire go" aria-hidden="true"></span>
-        <div class="fnode go"><b>Under the cap</b><span>200 · billed, added to spend</span></div>
-        <span class="wire stop" aria-hidden="true" style="margin-left:18px"></span>
-        <div class="fnode stop"><b>Would cross it</b><span>402 · refused, never dialed</span></div>
+      <div class="dgm">
+        <svg viewBox="0 0 780 300" role="img" aria-labelledby="il4t il4d">
+          <title id="il4t">A virtual key's budget refusing a request before any upstream spend</title>
+          <desc id="il4d">The key sk-team-a has spent 15.50 US dollars of a 25.00 dollar budget_usd. A
+            request projected at 1 dollar 20 stays under the cap, is dialed, is billed, and is added to the
+            key's spend. A request projected at 12 dollars would carry the key past the cap: it is refused
+            with 402 budget_exceeded at the gateway, before any socket to the upstream provider is opened,
+            so nothing is spent upstream.</desc>
+
+          <text class="t-k" x="180" y="22">KEY BUDGET METER · DRAWN TO SCALE</text>
+          <text class="t-s" x="180" y="42">spend $15.50 · budget_usd $25.00</text>
+
+          <rect class="bx" x="8" y="42" width="152" height="48"/>
+          <text class="t-n" x="84" y="64" text-anchor="middle">sk-team-a</text>
+          <text class="t-s" x="84" y="82" text-anchor="middle">virtual key</text>
+          <path class="ln" d="M160 66 H174"/><path class="ln-f" d="M173 61.5 L180 66 L173 70.5 Z"/>
+
+          <!-- the meter -->
+          <rect class="bx-2" x="180" y="52" width="460" height="28"/>
+          <rect class="go-f" x="181" y="53" width="284" height="26"/>
+          <path class="ln" d="M180 80 V88 M272 80 V88 M364 80 V88 M456 80 V88 M548 80 V88 M640 80 V88"/>
+          <g class="t-s">
+            <text x="180" y="100" text-anchor="middle">$0</text>
+            <text x="272" y="100" text-anchor="middle">$5</text>
+            <text x="364" y="100" text-anchor="middle">$10</text>
+            <text x="456" y="100" text-anchor="middle">$15</text>
+            <text x="548" y="100" text-anchor="middle">$20</text>
+            <text x="640" y="100" text-anchor="middle">$25</text>
+          </g>
+          <!-- broken around the axis label so the $25 tick stays readable -->
+          <path class="no" style="stroke-dasharray:5 5" d="M640 24 V88 M640 106 V126"/>
+          <text class="t-k t-no" x="648" y="32">CAP</text>
+
+          <!-- what each pending request would add, on the same scale -->
+          <rect class="go-bx" x="465" y="26" width="23" height="14"/>
+          <text class="t-s t-go" x="496" y="38">+$1.20 → $16.70 fits</text>
+          <rect class="no-bx" x="465" y="110" width="220" height="14"/>
+          <text class="t-s t-no" x="465" y="138">+$12.00 → $27.50 · overshoots the cap</text>
+
+          <!-- lane A: under the cap -->
+          <rect class="bx" x="8" y="168" width="176" height="48"/>
+          <text class="t-n" x="96" y="190" text-anchor="middle">request A</text>
+          <text class="t-s" x="96" y="208" text-anchor="middle">+$1.20, under the cap</text>
+          <path class="go" d="M184 192 H293"/><path class="go-f" d="M292 187.5 L300 192 L292 196.5 Z"/>
+          <rect class="go-bx" x="300" y="168" width="196" height="48"/>
+          <text class="t-n t-go" x="398" y="190" text-anchor="middle">200 · billed</text>
+          <text class="t-s t-go" x="398" y="208" text-anchor="middle">added to this key's spend</text>
+          <path class="go" d="M496 192 H569"/><path class="go-f" d="M568 187.5 L576 192 L568 196.5 Z"/>
+
+          <!-- lane B: refused, and refused HERE -->
+          <rect class="bx" x="8" y="236" width="176" height="48"/>
+          <text class="t-n" x="96" y="258" text-anchor="middle">request B</text>
+          <text class="t-s" x="96" y="276" text-anchor="middle">+$12.00, would cross</text>
+          <path class="no" d="M184 260 H292"/>
+          <rect class="no-f" x="292" y="238" width="6" height="44"/>
+          <rect class="no-bx" x="300" y="236" width="196" height="48"/>
+          <text class="t-n t-no" x="398" y="258" text-anchor="middle">402 budget_exceeded</text>
+          <text class="t-s t-no" x="398" y="276" text-anchor="middle">refused, never dialed</text>
+          <text class="t-s t-no" x="502" y="256">no socket</text>
+          <text class="t-s t-no" x="502" y="272">$0 spend</text>
+
+          <!-- the upstream that never hears about request B -->
+          <rect class="bx" x="576" y="168" width="196" height="116"/>
+          <text class="t-n" x="674" y="206" text-anchor="middle">upstream provider</text>
+          <text class="t-s" x="674" y="228" text-anchor="middle">only ever billed for calls</text>
+          <text class="t-s" x="674" y="244" text-anchor="middle">that passed the budget</text>
+
+          <path class="pulse" d="M184 192 H576" style="stroke-dasharray:20 392;--chase-end:-412px;--dur:2.8s"/>
+          <path class="pulse no-p" d="M184 260 H292"
+                style="stroke-dasharray:20 110;--chase-end:-130px;--dur:2.8s;--del:.4s"/>
+        </svg>
       </div>
       <figcaption class="cap">Every virtual key carries its own USD budget. Each response's real cost fills
-        the bar; a request that would cross the cap is refused before it's ever dialed — <code>402</code>,
-        not a surprise invoice — while everything under the line is billed and added to that key's running
-        spend.</figcaption>
+        the bar; a request that would cross the cap is refused <b>before it is ever dialed</b> —
+        <code>402</code>, not a surprise invoice — while everything under the line is billed and added to
+        that key's running spend.</figcaption>
     </figure>
 
     <div class="triptych rv">
@@ -1424,10 +1818,10 @@ html.js .rv.in{opacity:1;transform:none}
       running gateway after 3,690 requests across seven models and four virtual keys, so every figure in
       them was computed by the binary rather than typed in by hand.</p>
 
-    <figure class="rv" style="margin:40px 0 0">
+    <figure class="rv" style="margin:34px 0 0">
       <div class="shot">
         <div class="code-bar"><i></i><span class="path">/ui#usage</span></div>
-        <div class="box">
+        <div class="box" style="--ar:2560/1330">
           <img class="themeshot" data-shot="dashboard-usage" width="2560" height="1600" decoding="async"
                alt="llmux admin dashboard, usage tab: request, token and cost totals as cards, then a per-model spend table.">
           <div class="ph" aria-hidden="true">
@@ -1447,7 +1841,7 @@ html.js .rv.in{opacity:1;transform:none}
       <figure class="rv" style="margin:0">
         <div class="shot">
           <div class="code-bar"><i></i><span class="path">/ui#keys</span></div>
-          <div class="box">
+          <div class="box" style="--ar:2560/1120">
             <img class="themeshot" data-shot="dashboard-keys" width="2560" height="1600" decoding="async"
                  alt="llmux admin dashboard, keys tab: every virtual key with its name, masked token, budget, current spend as a bar, and RPM limit.">
             <div class="ph" aria-hidden="true">
@@ -1465,7 +1859,7 @@ html.js .rv.in{opacity:1;transform:none}
       <figure class="rv" style="margin:0">
         <div class="shot">
           <div class="code-bar"><i></i><span class="path">/ui#models</span></div>
-          <div class="box">
+          <div class="box" style="--ar:2560/1120">
             <img class="themeshot" data-shot="dashboard-models" width="2560" height="1600" decoding="async"
                  alt="llmux admin dashboard, models tab: a filterable live catalog with input and output price per million tokens and context window per model.">
             <div class="ph" aria-hidden="true">
@@ -1526,12 +1920,16 @@ html.js .rv.in{opacity:1;transform:none}
           <div class="tabpanel" id="panel-build">
             <div class="code">
               <div class="code-bar"><i></i><span class="path">terminal</span></div>
+              <!-- bash: command names are functions, flags are meta, env-var
+                   names are variables. `build`, the two filenames and the `...`
+                   placeholder are plain shell words and stay default text —
+                   none of them is a quoted string. -->
               <pre><code><span class="cb-c"># 1. Build the binary (embeds web/ui.html — no Node, no build step)</span>
 <span class="cb-f">make</span> build
 
 <span class="cb-c"># 2. Configure providers</span>
-<span class="cb-k">export</span> <span class="cb-var">OPENAI_API_KEY</span><span class="cb-op">=</span><span class="cb-s">...</span>
-<span class="cb-k">export</span> <span class="cb-var">ANTHROPIC_API_KEY</span><span class="cb-op">=</span><span class="cb-s">...</span>
+<span class="cb-k">export</span> <span class="cb-var">OPENAI_API_KEY</span><span class="cb-op">=</span>...
+<span class="cb-k">export</span> <span class="cb-var">ANTHROPIC_API_KEY</span><span class="cb-op">=</span>...
 
 <span class="cb-c"># 3. Run — gateway on :4000, dashboard at /ui</span>
 <span class="cb-f">cp</span> llmux.example.json llmux.json
@@ -1541,11 +1939,17 @@ html.js .rv.in{opacity:1;transform:none}
           <div class="tabpanel" id="panel-call">
             <div class="code">
               <div class="code-bar"><i></i><span class="path">quickstart.py</span></div>
+              <!-- python: `from`/`import` are keywords; `OpenAI` and `create`
+                   and `print` are callables; `client`/`resp` are variables;
+                   `base_url=`/`model=` are keyword arguments (properties); the
+                   dict LITERAL inside messages=[…] really is data, so its keys
+                   are strings there, not properties — Python has no bare-key
+                   object syntax. -->
               <pre><code><span class="cb-k">from</span> openai <span class="cb-k">import</span> <span class="cb-f">OpenAI</span>
 
 <span class="cb-var">client</span> <span class="cb-op">=</span> <span class="cb-f">OpenAI</span><span class="cb-p">(</span><span class="cb-pr">base_url</span><span class="cb-op">=</span><span class="cb-s">"http://localhost:4000/v1"</span><span class="cb-p">,</span> <span class="cb-pr">api_key</span><span class="cb-op">=</span><span class="cb-s">"sk-team-a"</span><span class="cb-p">)</span>
 
-<span class="cb-var">resp</span> <span class="cb-op">=</span> <span class="cb-var">client</span><span class="cb-p">.</span><span class="cb-f">chat.completions.create</span><span class="cb-p">(</span>
+<span class="cb-var">resp</span> <span class="cb-op">=</span> <span class="cb-var">client</span><span class="cb-p">.</span>chat<span class="cb-p">.</span>completions<span class="cb-p">.</span><span class="cb-f">create</span><span class="cb-p">(</span>
     <span class="cb-pr">model</span><span class="cb-op">=</span><span class="cb-s">"cheapest"</span><span class="cb-p">,</span>       <span class="cb-c"># least-cost route from your config</span>
     <span class="cb-pr">messages</span><span class="cb-op">=</span><span class="cb-p">[{</span><span class="cb-s">"role"</span><span class="cb-p">:</span> <span class="cb-s">"user"</span><span class="cb-p">,</span> <span class="cb-s">"content"</span><span class="cb-p">:</span> <span class="cb-s">"hi"</span><span class="cb-p">}],</span>
 <span class="cb-p">)</span>
