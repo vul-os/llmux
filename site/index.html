@@ -934,6 +934,17 @@ html.js .rv.in{opacity:1;transform:none}
 @media (max-width:1140px){.secnav{display:none}}
 @media (max-width:1080px){:root{--pad:24px}}
 @media (max-width:520px){:root{--pad:18px}}
+
+  /* ── Vulos suite chrome — identical on every product landing ───────────────
+     Two elements, and only two: a logo-only home button in the top bar, and
+     one line in the footer. Deliberately free of repo variables so the block
+     is byte-identical across the suite and can be diffed as one thing. */
+  .vulos-home { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto; opacity: .72; transition: opacity .15s ease, transform .15s ease; }
+  .vulos-home:hover, .vulos-home:focus-visible { opacity: 1; transform: translateY(-1px); }
+  .vulos-home img { display: block; width: 22px; height: 22px; border-radius: 6px; }
+  .vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
+  .vulos-foot:hover { opacity: 1; text-decoration: none; }
+  .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -963,9 +974,7 @@ html.js .rv.in{opacity:1;transform:none}
         <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
-      <a class="hbtn sq" href="https://vulos.org" target="_blank" rel="noopener" aria-label="Vulos" title="Vulos">
-        <img src="./assets/vulos-logo.png" alt="" width="17" height="17">
-      </a>
+<a class="vulos-home" href="https://vulos.org" target="_blank" rel="noopener" title="Vulos — open, self-hostable software" aria-label="Vulos — open, self-hostable software"><img src="./assets/vulos-logo.png" alt="" width="22" height="22"></a>
     </div>
   </div>
 </header>
@@ -1357,7 +1366,7 @@ html.js .rv.in{opacity:1;transform:none}
         <span class="idx">TIER 2</span>
         <div><h3>Sovereign</h3><span class="verdict">On your say-so</span></div>
         <p>An off-box endpoint the operator personally vouches for — <code>"tier": "sovereign"</code>,
-          unverified by Vulos, allowed without <code>allow_egress</code>.</p>
+          unverified by anyone else, allowed without <code>allow_egress</code>.</p>
       </div>
       <div class="step allow">
         <span class="idx">TIER 3</span>
@@ -2003,6 +2012,7 @@ html.js .rv.in{opacity:1;transform:none}
           </tbody>
         </table>
       </div>
+      <p class="rv" style="margin-top:32px"><a href="./LICENSE.txt">MIT OR Apache-2.0</a> · one binary · runs on your own box.</p>
     </div>
   </div>
 </section>
@@ -2012,16 +2022,10 @@ html.js .rv.in{opacity:1;transform:none}
 <footer class="foot">
   <div class="wrap" style="padding-left:var(--pad)">
     <div class="foot-in">
-      <div class="foot-l">
-        <img src="./assets/vulos-logo.png" alt="">
-        <span>Part of <a href="https://vulos.org" target="_blank" rel="noopener">Vulos</a> — open,
-          self-hostable apps. Sovereign by design.</span>
-      </div>
+      <a class="vulos-foot" href="https://vulos.org" target="_blank" rel="noopener"><img src="./assets/vulos-logo.png" alt="" width="18" height="18"><span>Part of <strong>Vulos</strong> — open, self-hostable software</span></a>
       <nav class="foot-links">
         <a href="./docs.html">Docs</a>
         <a href="https://github.com/vul-os/llmux" target="_blank" rel="noopener">GitHub</a>
-        <a href="./LICENSE.txt">License</a>
-        <a href="https://vulos.org" target="_blank" rel="noopener">vulos.org</a>
       </nav>
     </div>
   </div>
