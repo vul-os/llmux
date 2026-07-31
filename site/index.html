@@ -6,7 +6,7 @@
 <title>llmux — the sovereign OpenAI-compatible gateway. Your AI runs on your box.</title>
 <meta name="description" content="A single Go binary that speaks the OpenAI HTTP API and routes every request to the provider behind it. Point any OpenAI SDK at llmux and get routing, fallback chains, per-key budgets, caching and live cost — across OpenAI, Anthropic, Gemini, Cohere, Bedrock and Azure. A default-deny sovereignty gate keeps inference on your box until you explicitly, loggably opt a provider out.">
 <link rel="canonical" href="https://vulos.org/projects/llmux/">
-<meta name="theme-color" content="#0A0F1A">
+<meta name="theme-color" content="#0A0F12">
 <meta name="color-scheme" content="dark light">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="llmux">
@@ -24,9 +24,13 @@
 <meta name="twitter:image" content="https://vulos.org/projects/llmux/assets/og-card.png">
 <meta name="twitter:image:alt" content="llmux — an OpenAI-compatible gateway with a default-deny sovereignty gate: inference stays on your box until you explicitly opt a provider out.">
 <link rel="icon" href="./assets/llmux-mark.svg">
+<link rel="preload" href="./assets/fonts/archivo-latin-standard.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="./assets/fonts/instrument-sans-latin-standard.woff2" as="font" type="font/woff2" crossorigin>
 
 <!-- Theme resolved before first paint, so there is no flash: same key the
-     toggle button writes to, read synchronously before anything renders. -->
+     toggle button writes to, read synchronously before anything renders.
+     `js` is set here too so the scroll-reveal's opacity:0 only ever applies
+     when there is a script alive to undo it. -->
 <script>
 (function(){try{var s=localStorage.getItem('llmux-site-theme');
 document.documentElement.setAttribute('data-theme',s==='light'||s==='dark'?s:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark'));
@@ -36,523 +40,815 @@ document.documentElement.classList.add('js');
 
 <style>
 /* ═══════════════════════════════════════════════════════════════════════════
-   llmux landing — "the multiplexer".
+   llmux — website.  Design thesis: THE PATCH BAY.
 
-   THE MOTIF: the mark itself, brand/logo.svg — a wide edge of many ports
-   funnelling through a solid trapezoid body into one narrow trunk. That is
-   also the literal shape of the product: many possible providers behind the
-   gateway, but your application only ever holds ONE connection. The page
-   draws that shape once, large, in the hero (as HTML/CSS nodes, not a single
-   scaling SVG — see the note on .diagram below) and then reuses its language
-   — a labelled port, a verdict pill, a trunk line — everywhere the sovereignty
-   story needs to be shown rather than told: the tier cards, the egress
-   example, the "what leaves the box" disclosure.
+   llmux is a multiplexer: many channels in, one channel out, and a gate most
+   of them never pass. So the page is built like the front panel of a piece of
+   routing equipment rather than like a product site — a continuous signal bus
+   running down the left of the content, six numbered CHANNELS instead of six
+   interchangeable "sections", ruled ledgers and schematics instead of cards,
+   and a zero-radius, hairline-drawn surface throughout. There is not one
+   rounded rectangle on this page except the logo tile.
 
-   THE ARGUMENT, IN ORDER: compatibility first (you already have the client
-   code — chat/completions, byte-identical SSE), then sovereignty (the actual
-   differentiator: a default-deny gate, stated with its one honest exception),
-   then the routing/ops machinery underneath, then quickstart. Nothing is
-   screenshotted — the previous landing embedded a screenshot of a *different,
-   deleted* product page, so every visual here is built from real markup.
+   Type: ARCHIVO, expanded, for display; ARCHIVO/INSTRUMENT SANS for text; IBM
+   PLEX MONO for every label, figure and route. The contrast axis between
+   display and text is WIDTH, not style — one grotesque skeleton stretched and
+   narrowed, which is the multiplexer argument made in the typography.
 
-   COLOUR — two brand values from brand/logo.svg, per the spec:
-     TEAL  #2DD4BF   the tile fill, the accent, the wordmark's second half.
-     INK   #0A0F1A   the tile's mark colour; dark-theme ground, light-theme
-                     type.
-   Supporting tones are derived, not new brand colours. TEAL is ~1.6:1 on
-   white — a superb FILL (ink text sits on it, as in the mark itself) but an
-   unusable ink for body-sized text on a light ground. So teal-as-TEXT in the
-   light theme resolves to a darker mix (--accent-ink, ~5:1 on white); on the
-   dark ink ground raw TEAL already clears ~11:1 and is used directly. This is
-   the same fill/ink split the sibling landings use for their brand colour.
+   One accent: the brand teal, and it means exactly one thing — a signal that
+   was permitted. A single second colour, rust, means blocked. Nothing else on
+   the page is coloured.
 
-   THE FOUR SOVEREIGNTY TIERS get their own verdict colours (teal/blue/amber/
-   rose) — a safety signal, not a branding choice, exactly mirroring how the
-   gate itself treats them as a fixed, meaningful ranking. Each has a light-
-   theme "ink" variant for text/icons and stays at brand-hue "wash" opacity
-   for fills, so the same four colours read correctly on both grounds.
-
-   CODE BLOCKS stay a fixed dark terminal (--cb-bg, near-black) in BOTH page
-   themes, like a real terminal does not repaint itself when your desktop
-   theme changes. That fixes one token palette for life instead of two, and
-   every span below is hand-authored against the exact snippet shown — not
-   run through a general tokenizer — so a claim above "the highlighting is
-   correct" is checkable by reading the span list next to the string it wraps.
-   The --cb-* tokens are a real 9-role palette (comment/keyword/string/number/
-   func/prop/var/meta/punct), each hue distinct enough from its neighbours to
-   scan at a glance — keyword and string in particular no longer share a hue,
-   which is the defect that made the terminal block upstream of this section
-   read as an undifferentiated teal wash.
-
-   THE DIAGRAM IS HTML, NOT ONE SVG. An early draft scaled a single 940-unit
-   viewBox down to a 360px phone and the port labels fell under 8px — a
-   generic scaling problem, not specific to this drawing. Building it from
-   ordinary DOM nodes (ports, a clipped trapezoid, an app card, small FIXED-
-   SIZE icons for the connectors) means text sizes are real px that obey the
-   same responsive rules as the rest of the page, and the layout can collapse
-   to a single column instead of shrinking into illegibility.
-
-   Self-contained: no CDN, no webfont fetch, no external image, no analytics,
-   no network call of any kind. System font stacks only. JS is additive only
-   — theme toggle and scroll-reveal; every code tab below is a CSS-only radio
-   group, so it reads and switches with JavaScript off.
+   Everything is vendored: no CDN, no external font, no remote image, no
+   analytics. Same sovereignty rule the product keeps.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+@font-face{font-family:'Archivo Variable';font-style:normal;font-display:swap;
+  font-weight:100 900;font-stretch:62% 125%;
+  src:url(./assets/fonts/archivo-latin-standard.woff2) format('woff2-variations')}
+@font-face{font-family:'Instrument Sans Variable';font-style:normal;font-display:swap;
+  font-weight:400 700;font-stretch:75% 100%;
+  src:url(./assets/fonts/instrument-sans-latin-standard.woff2) format('woff2-variations')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-display:swap;font-weight:400;
+  src:url(./assets/fonts/ibm-plex-mono-latin-400.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-display:swap;font-weight:500;
+  src:url(./assets/fonts/ibm-plex-mono-latin-500.woff2) format('woff2')}
+@font-face{font-family:'IBM Plex Mono';font-style:normal;font-display:swap;font-weight:600;
+  src:url(./assets/fonts/ibm-plex-mono-latin-600.woff2) format('woff2')}
+
 *,*::before,*::after{box-sizing:border-box}
+*{min-width:0}
 
 :root{
-  /* ---- dark (default): brand ink ground ---- */
-  --bg:#0A0F1A; --bg-soft:#0D1420; --panel:#111a2b; --panel-2:#16213a; --sunken:#080C15;
-  --border:rgba(148,163,184,.14); --border-2:rgba(148,163,184,.24); --hair:rgba(255,255,255,.05);
-  --text:#EAF1F5; --dim:#C2CEDB; --muted:#93A3B8; --faint:#5C6B84;
+  --display:'Archivo Variable',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --sans:'Instrument Sans Variable',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
 
-  --accent:#2DD4BF;          /* used directly as TEXT/ink on the dark ground: ~11:1 */
-  --accent-fill:#2DD4BF;     /* used as a FILL everywhere; ink sits on top, both themes */
-  --accent-ink:#04211D;      /* the only ink permitted on a teal fill: ~11:1 on --accent-fill */
-  --accent-wash:rgba(45,212,191,.12);
-  --accent-edge:rgba(45,212,191,.32);
-  --accent-glow:rgba(45,212,191,.45);
+  --max:1220px;
+  --pad:32px;
+  --bus:52px;              /* x-offset of the signal bus inside .wrap */
+  --ease:cubic-bezier(.16,1,.3,1);
+}
 
-  /* ---- the four sovereignty tiers, verdict colours ---- */
-  --local:#2DD4BF;     --local-wash:rgba(45,212,191,.13);     --local-edge:rgba(45,212,191,.34);
-  --sovereign:#7DB8FF; --sovereign-wash:rgba(96,165,250,.14); --sovereign-edge:rgba(96,165,250,.34);
-  --brokered:#FBBF24;  --brokered-wash:rgba(251,191,36,.14);  --brokered-edge:rgba(251,191,36,.34);
-  --external:#FB7185;  --external-wash:rgba(251,113,133,.14); --external-edge:rgba(251,113,133,.36);
-
-  /* code stays a fixed dark terminal in both page themes. This token set is
-     shared with the docs viewer so both surfaces read as one system — do not
-     drift these hexes locally. */
-  --code-chrome:#111a2b;
-  --cb-bg:#0C1116; --cb-text:#C8D4E3; --cb-comment:#6B7C93; --cb-keyword:#C4B5FD;
-  --cb-string:#5EEAD4; --cb-number:#FBBF24; --cb-func:#7DD3FC; --cb-prop:#93C5FD;
-  --cb-var:#FDA4AF; --cb-meta:#FDBA74; --cb-punct:#8195AC;
-
-  --shadow-card:0 1px 0 0 var(--hair) inset, 0 16px 40px -22px rgba(0,0,0,.6);
-  --shadow-lift:0 1px 0 0 rgba(255,255,255,.06) inset, 0 30px 60px -24px rgba(0,0,0,.75);
-
-  --quick:130ms; --base:220ms; --ease:cubic-bezier(.2,0,.2,1); --decel:cubic-bezier(.05,.7,.1,1);
-  --r:14px; --r-sm:10px; --r-lg:20px; --max:1180px;
-  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+/* ── DARK: the rack in a dim room. This is the DEFAULT set, written onto
+      :root rather than onto [data-theme="dark"], because the theme attribute
+      is only ever written by script — with JavaScript off no attribute is set
+      at all, and a page whose entire palette hangs off that selector renders
+      with no palette whatsoever. The attribute selectors below still win when
+      the script does run, so the toggle keeps working. ───────────────────── */
+:root{
   color-scheme:dark;
+  --canvas:#0A0F12;
+  --band-a:#0A0F12;
+  --band-b:#0F181C;
+  --panel:#101A1E;
+  --sunk:#070C0E;
+  --ink:#E9EFED;
+  --muted:#9AA9A8;
+  --faint:#8A9B9A;
+  --line:#1C2A2E;
+  --line-2:#25373C;
+  --line-3:#33494F;
+  --teal:#2DD4BF;
+  --teal-ink:#3EDBC7;      /* teal used as running text */
+  --teal-wash:#0C2B29;
+  --teal-edge:#1E5B55;
+  --rust:#EE8768;
+  --rust-wash:#2B140E;
+  --rust-edge:#5C2C1D;
+  --shadow:0 22px 48px -24px rgba(0,0,0,.85);
+  --gridline:rgba(255,255,255,.028);
 }
-:root[data-theme=light]{
-  --bg:#F6F8F9; --bg-soft:#FFFFFF; --panel:#FFFFFF; --panel-2:#F0F4F5; --sunken:#EDF2F3;
-  --border:rgba(10,15,26,.11); --border-2:rgba(10,15,26,.18); --hair:rgba(10,15,26,.05);
-  --text:#0A0F1A; --dim:#333F4E; --muted:#57667A; --faint:#7C8797;
 
-  --accent:#0F766E;          /* measured ~5:1 on white — teal AS TEXT resolves here */
-  --accent-fill:#2DD4BF;     /* fills stay brand teal; ink sits on top either theme */
-  --accent-ink:#04211D;
-  --accent-wash:rgba(15,118,110,.09);
-  --accent-edge:rgba(15,118,110,.26);
-  --accent-glow:rgba(45,212,191,.35);
+/* ── LIGHT: the same rack under drafting-room light ───────────────────────── */
+@media (prefers-color-scheme:light){
+  :root{
+    color-scheme:light;
+    --canvas:#EBEFED;
+    --band-a:#EBEFED;
+    --band-b:#E1E7E4;
+    --panel:#F8FAF9;
+    --sunk:#DDE4E1;
+    --ink:#0B1416;
+    --muted:#485658;
+    --faint:#505E60;
+    --line:#D2DAD8;
+    --line-2:#BFC9C7;
+    --line-3:#A6B3B1;
+    --teal:#0A6E63;
+    --teal-ink:#08655B;
+    --teal-wash:#DCE9E6;
+    --teal-edge:#8FBAB3;
+    --rust:#9C3E27;
+    --rust-wash:#F3E2DC;
+    --rust-edge:#D2A695;
+    --shadow:0 18px 40px -26px rgba(11,20,22,.45);
+    --gridline:rgba(11,20,22,.032);
+  }
+}
 
-  --local:#0F766E;     --local-wash:rgba(15,118,110,.08);     --local-edge:rgba(15,118,110,.24);
-  --sovereign:#1D4ED8; --sovereign-wash:rgba(29,78,216,.08);  --sovereign-edge:rgba(29,78,216,.24);
-  --brokered:#B45309;  --brokered-wash:rgba(180,83,9,.09);    --brokered-edge:rgba(180,83,9,.26);
-  --external:#BE123C;  --external-wash:rgba(190,18,60,.08);   --external-edge:rgba(190,18,60,.26);
-
-  --shadow-card:0 1px 2px rgba(10,15,26,.05);
-  --shadow-lift:0 2px 6px -2px rgba(10,15,26,.06),0 26px 50px -22px rgba(10,15,26,.18);
+/* The script's explicit choice outranks the system preference, both ways. */
+[data-theme="dark"]{
+  color-scheme:dark;
+  --canvas:#0A0F12;
+  --band-a:#0A0F12;
+  --band-b:#0F181C;
+  --panel:#101A1E;
+  --sunk:#070C0E;
+  --ink:#E9EFED;
+  --muted:#9AA9A8;
+  --faint:#8A9B9A;
+  --line:#1C2A2E;
+  --line-2:#25373C;
+  --line-3:#33494F;
+  --teal:#2DD4BF;
+  --teal-ink:#3EDBC7;      /* teal used as running text */
+  --teal-wash:#0C2B29;
+  --teal-edge:#1E5B55;
+  --rust:#EE8768;
+  --rust-wash:#2B140E;
+  --rust-edge:#5C2C1D;
+  --shadow:0 22px 48px -24px rgba(0,0,0,.85);
+  --gridline:rgba(255,255,255,.028);
+}
+[data-theme="light"]{
   color-scheme:light;
+  --canvas:#EBEFED;
+  --band-a:#EBEFED;
+  --band-b:#E1E7E4;
+  --panel:#F8FAF9;
+  --sunk:#DDE4E1;
+  --ink:#0B1416;
+  --muted:#485658;
+  --faint:#505E60;
+  --line:#D2DAD8;
+  --line-2:#BFC9C7;
+  --line-3:#A6B3B1;
+  --teal:#0A6E63;
+  --teal-ink:#08655B;
+  --teal-wash:#DCE9E6;
+  --teal-edge:#8FBAB3;
+  --rust:#9C3E27;
+  --rust-wash:#F3E2DC;
+  --rust-edge:#D2A695;
+  --shadow:0 18px 40px -26px rgba(11,20,22,.45);
+  --gridline:rgba(11,20,22,.032);
 }
 
-html{scroll-behavior:smooth;scroll-padding-top:76px}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
 body{
-  margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);
-  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased;overflow-x:hidden;
+  margin:0;background:var(--canvas);color:var(--ink);
+  font-family:var(--sans);font-size:16.5px;line-height:1.6;
+  font-variation-settings:'wdth' 100;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  overflow-x:hidden;
 }
 a{color:inherit;text-decoration:none}
-img,svg{max-width:100%;display:block}
-button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
-h1,h2,h3,h4{margin:0;letter-spacing:-.03em;font-weight:750;line-height:1.08}
-p{margin:0}
-code,kbd,pre,.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
-::selection{background:rgba(45,212,191,.28);color:#04211D}
-:where(a,button,input,summary,[tabindex]):focus-visible{outline:2px solid var(--accent-fill);outline-offset:3px;border-radius:6px}
+img{max-width:100%;display:block}
+::selection{background:var(--teal);color:var(--canvas)}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.skip{position:absolute;left:-9999px;top:0;z-index:200;background:var(--teal);color:#04100E;
+  font-family:var(--mono);font-size:13px;padding:12px 18px}
+/* In light the accent is a deep teal, so the knockout has to flip with it. */
+[data-theme="light"] .skip{color:#FFFFFF}
+.skip:focus{left:12px;top:12px}
 
-body::before{
-  content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:
-    radial-gradient(1000px 560px at 84% -8%, var(--accent-wash), transparent 60%),
-    radial-gradient(760px 460px at -6% 12%, var(--accent-wash), transparent 55%);
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--pad);position:relative}
+
+/* ═══ Type scale ══════════════════════════════════════════════════════════ */
+.disp{
+  font-family:var(--display);font-weight:800;font-variation-settings:'wdth' 122;
+  letter-spacing:-.028em;line-height:.94;margin:0;color:var(--ink);
+}
+h2.sec{
+  font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 114;
+  font-size:clamp(27px,3.5vw,44px);line-height:1.02;letter-spacing:-.026em;
+  margin:0;max-width:24ch;
+}
+.lead{font-size:clamp(16px,1.35vw,18.5px);line-height:1.62;color:var(--muted);
+  max-width:66ch;margin:20px 0 0}
+.lead b,.lead strong{color:var(--ink);font-weight:600}
+.mono{font-family:var(--mono)}
+code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
+.lead code,p code,.lrow code,.note code,.cap code,dd code,li code,.ds code,.tcell code{
+  background:var(--sunk);border:1px solid var(--line);padding:1px 5px;color:var(--ink);
+  font-size:.86em;white-space:nowrap}
+
+/* ═══ Header ══════════════════════════════════════════════════════════════ */
+.hdr{
+  position:sticky;top:0;z-index:80;background:var(--canvas);
+  border-bottom:1px solid var(--line);
+}
+.hdr-in{display:flex;align-items:center;gap:14px;height:60px}
+.brand{display:flex;align-items:center;gap:10px;flex:none;height:44px}
+.brand img{width:26px;height:26px;border-radius:7px}
+.brand .word{font-family:var(--mono);font-weight:600;font-size:18px;letter-spacing:-.045em}
+.brand .word i{font-style:normal;color:var(--teal-ink)}
+.hdr .spacer{flex:1}
+.secnav{display:flex;gap:2px}
+.secnav a{
+  font-family:var(--mono);font-size:12.2px;letter-spacing:.04em;color:var(--muted);
+  padding:0 11px;height:44px;display:inline-flex;align-items:center;
+  border-bottom:2px solid transparent;transition:color .18s,border-color .18s;
+}
+.secnav a:hover{color:var(--ink);border-bottom-color:var(--teal)}
+.hdr-act{display:flex;align-items:center;gap:6px;flex:none}
+.hbtn{
+  height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:0 12px;border:1px solid var(--line-2);background:transparent;color:var(--muted);
+  font-family:var(--mono);font-size:12.2px;cursor:pointer;transition:color .18s,border-color .18s;
+}
+.hbtn:hover{color:var(--ink);border-color:var(--line-3)}
+.hbtn svg{width:15px;height:15px;flex:none}
+.hbtn.sq{padding:0;width:44px}
+.hbtn img{width:17px;height:17px;border-radius:4px}
+#themeBtn .sun{display:none}
+[data-theme="light"] #themeBtn .sun{display:block}
+[data-theme="light"] #themeBtn .moon{display:none}
+
+/* ═══ Bands — the alternating grounds that replace the endless card grid ═══ */
+.band{position:relative;background:var(--band-a);padding:78px 0 84px}
+/* The alternate ground carries its own surface tokens rather than only a
+   background: on the dark theme a background swap alone is invisible, and the
+   panels sitting on it have to move with it or they vanish into the band. */
+.band.alt{
+  --band-a:var(--band-b);
+  background:var(--band-a);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+[data-theme="dark"] .band.alt{--panel:#162328;--sunk:#0A1215;--line:#243539;--line-2:#2E4349;--line-3:#3D585E}
+[data-theme="light"] .band.alt{--panel:#F7FAF9;--sunk:#D6DFDB;--line:#C9D2CF;--line-2:#B6C1BE;--line-3:#9AA8A5}
+
+/* The gate is always the darkest place on the page, in BOTH themes: in light
+   it inverts to ink, in dark it sinks below the canvas. */
+.band.ink{
+  --band-a:#0B1315;--panel:#111C1F;--sunk:#080F11;
+  --ink:#EDF3F1;--muted:#A4B2B1;--faint:#8A9B9A;
+  --line:#1E2C2F;--line-2:#2A3C40;--line-3:#3A5257;
+  --teal:#2DD4BF;--teal-ink:#3EDBC7;--teal-wash:#0D2C2A;--teal-edge:#1F5C56;
+  --rust:#EE8768;--rust-wash:#2C150F;--rust-edge:#5D2D1E;
+  --gridline:rgba(255,255,255,.03);
+  background:var(--band-a);color:var(--ink);
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+}
+[data-theme="dark"] .band.ink{--band-a:#05090B;--panel:#0C1517;--sunk:#03080A}
+
+/* A faint drafting grid, only on the ink band — the instrument's own faceplate */
+.band.ink::before{
+  content:"";position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(var(--gridline) 1px,transparent 1px),
+                   linear-gradient(90deg,var(--gridline) 1px,transparent 1px);
+  background-size:34px 34px;
 }
 
-.wrap{width:100%;max-width:var(--max);margin:0 auto;padding:0 24px}
-@media (max-width:560px){.wrap{padding:0 18px}}
-.skip{position:absolute;left:14px;top:-70px;z-index:200;padding:11px 18px;border-radius:10px;background:var(--accent-fill);color:var(--accent-ink);font-weight:750;font-size:14px;transition:top var(--quick) var(--ease)}
-.skip:focus{top:14px}
-
-/* Every collapsed grid track below is minmax(0,1fr): a bare 1fr keeps the
-   item's min-content as its floor, so one long unbroken string (a URL in a
-   code line, a wide table) widens the whole row past the viewport. This is
-   the entire reason the page holds at 360px with no body scrollbar. */
-.card,.port,.tier,.code-frame,.diagram *,.mech,.mnode,.mgauge,.mbranch,.shot-frame,.shot-box{min-width:0}
-
-/* ── Reveal on scroll — scoped to .js so scripting-off never hides content ── */
-.js .rv{opacity:0;transform:translateY(16px);transition:opacity .6s var(--decel),transform .6s var(--decel)}
-.js .rv.in{opacity:1;transform:none}
-@media (prefers-reduced-motion:reduce){.js .rv{opacity:1!important;transform:none!important;transition:none!important}}
-
-/* ── Section furniture ────────────────────────────────────────────────── */
-section{padding:88px 0;position:relative}
-@media (max-width:760px){section{padding:60px 0}}
-.marker{display:flex;align-items:center;gap:12px;margin-bottom:18px;font-family:var(--mono);font-size:11.5px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
-.marker .num{color:var(--accent)}
-.marker .rule{flex:1;height:1px;background:linear-gradient(90deg,var(--border-2),transparent)}
-h2.big{font-size:clamp(28px,4.2vw,42px);max-width:20ch}
-.lead{color:var(--muted);font-size:clamp(15.5px,1.4vw,17.5px);margin-top:16px;max-width:64ch}
-
-/* ── Buttons ──────────────────────────────────────────────────────────── */
-.btn{display:inline-flex;align-items:center;gap:9px;padding:12px 20px;border-radius:11px;font-weight:650;font-size:15px;border:1px solid transparent;transition:transform var(--quick) var(--ease),box-shadow var(--base) var(--ease),border-color var(--quick) var(--ease)}
-.btn:active{transform:translateY(1px)}
-.btn-primary{background:var(--accent-fill);color:var(--accent-ink);box-shadow:0 10px 28px -12px var(--accent-glow)}
-.btn-primary:hover{box-shadow:0 16px 36px -12px var(--accent-glow);transform:translateY(-1px)}
-.btn-ghost{background:var(--panel);border-color:var(--border-2);color:var(--text)}
-.btn-ghost:hover{border-color:var(--accent-edge);transform:translateY(-1px)}
-.btn svg{flex:none}
-
-/* ── Header ───────────────────────────────────────────────────────────── */
-.hdr{position:sticky;top:0;z-index:60;background:color-mix(in srgb,var(--bg) 80%,transparent);backdrop-filter:blur(14px) saturate(1.3);border-bottom:1px solid var(--border)}
-.hdr-in{display:flex;align-items:center;gap:16px;height:64px}
-/* THE WORDMARK FIX, in two parts, because the word was reading as "ll mux".
-   (1) "ll" and "mux" are one text node's worth of markup with zero whitespace
-   between them — `ll<span>mux</span>` — so no inherited gap from inline-flex
-   /gap rules on an ancestor can wedge a space between the two halves the way
-   `justify`/`gap` on .brand did before.
-   (2) The face is SANS, not the mono used elsewhere on this page. A monospace
-   face pads every glyph to one fixed cell, and the two narrow "l"s carry so
-   much side-bearing inside those cells that a visible gutter opens before the
-   "m" — at any tracking, including the negative tracking the brand lockup
-   uses. Sans + weight 700 + -.045em closes it; the admin dashboard's wordmark
-   (web/src/styles.css) is set the same way for the same reason. */
-.brand{display:inline-flex;align-items:center;gap:10px;font-family:var(--sans);font-weight:700;font-size:20px;letter-spacing:-.045em;flex:none}
-.brand .tile{width:30px;height:30px;border-radius:8px;flex:none;box-shadow:0 4px 14px -6px var(--accent-glow)}
-.brand .word{white-space:nowrap}
-.brand .word .mux{color:var(--accent)}
-.secnav{display:flex;gap:2px;margin-left:auto}
-.secnav a{padding:8px 12px;border-radius:8px;font-size:14px;font-weight:550;color:var(--muted);transition:color var(--quick) var(--ease),background var(--quick) var(--ease);white-space:nowrap}
-.secnav a:hover{color:var(--text);background:var(--panel-2)}
-@media (max-width:960px){.secnav{display:none}}
-.hdr-act{display:flex;align-items:center;gap:8px;margin-left:14px;flex:none}
-.iconbtn{width:36px;height:36px;border-radius:9px;border:1px solid var(--border-2);background:var(--panel);display:grid;place-items:center;color:var(--muted);transition:color var(--quick) var(--ease),border-color var(--quick) var(--ease)}
-.iconbtn:hover{color:var(--text);border-color:var(--accent-edge)}
-.iconbtn svg{width:17px;height:17px}
-:root[data-theme=light] .moon{display:none}
-:root[data-theme=dark] .sun{display:none}
-.ghlink{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 13px;border-radius:9px;border:1px solid var(--border-2);background:var(--panel);font-size:13.5px;font-weight:600;color:var(--dim);transition:color var(--quick) var(--ease),border-color var(--quick) var(--ease)}
-.ghlink:hover{color:var(--text);border-color:var(--accent-edge)}
-.ghlink svg{width:16px;height:16px}
-@media (max-width:520px){.ghlink span{display:none}.ghlink{padding:0 10px}}
-.vulos-badge{display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;border:1px solid var(--border-2);background:var(--panel);font-size:12.5px;color:var(--muted);transition:border-color var(--quick) var(--ease),color var(--quick) var(--ease)}
-.vulos-badge:hover{border-color:var(--accent-edge);color:var(--text)}
-.vulos-badge img{width:15px;height:15px;border-radius:4px}
-@media (max-width:1180px){.vulos-badge .hide-sm{display:none}}
-@media (max-width:660px){.vulos-badge{display:none}}
-
-/* ── Hero ─────────────────────────────────────────────────────────────── */
-.hero{padding:64px 0 24px}
-@media (max-width:760px){.hero{padding:44px 0 12px}}
-.hero-top{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
-.pill{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border-radius:999px;font-family:var(--mono);font-size:11.5px;border:1px solid var(--border-2);background:var(--panel);color:var(--dim)}
-.pill.t{border-color:var(--accent-edge);background:var(--accent-wash);color:var(--accent)}
-.dotlive{position:relative;display:inline-flex;width:6px;height:6px;flex:none}
-.dotlive i{position:absolute;inset:0;border-radius:99px;background:var(--accent)}
-.dotlive i:first-child{opacity:.6;animation:ping 2s cubic-bezier(0,0,.2,1) infinite}
-@keyframes ping{75%,100%{transform:scale(2.6);opacity:0}}
-@media (prefers-reduced-motion:reduce){.dotlive i:first-child{animation:none}}
-
-h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
-.hero .sub{color:var(--muted);font-size:clamp(16px,1.6vw,19px);margin-top:22px;max-width:60ch}
-.hero .sub b{color:var(--text);font-weight:650}
-.cta{display:flex;flex-wrap:wrap;gap:11px;margin-top:28px}
-
-.hero-facts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px 22px;margin-top:40px;padding-top:22px;border-top:1px solid var(--border)}
-.fact b{display:block;font-family:var(--mono);font-size:24px;font-weight:700;letter-spacing:-.02em;color:var(--accent)}
-.fact span{display:block;margin-top:3px;font-size:12.5px;color:var(--faint);line-height:1.35}
-@media (max-width:760px){.hero-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
-
-/* ── The diagram (HTML nodes, not one scaling SVG — see design-thesis note) */
-/* figure has a UA default margin of 1em 40px — zeroed here rather than in the
-   global reset, since this is the only <figure> on the page. */
-.diagram{margin:52px 0 0}
-.lanes{display:grid;grid-template-columns:minmax(0,1.15fr) 40px minmax(0,.8fr) 40px minmax(0,.85fr);gap:0 4px;align-items:center}
-@media (max-width:980px){.lanes{grid-template-columns:minmax(0,1fr)}}
-
-.ports{display:flex;flex-direction:column;gap:10px}
-.port{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;align-items:start;padding:13px 14px;border-radius:11px;border:1px solid var(--border);background:var(--panel);border-left:3px solid var(--pc,var(--border-2));box-shadow:var(--shadow-card);transition:transform var(--base) var(--ease),border-color var(--base) var(--ease)}
-.port:hover{transform:translateX(2px)}
-.port .verdict{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:var(--pc);border:1.5px solid currentColor}
-.port .verdict svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.port .head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
-.port b{font-size:14.5px;font-weight:700;letter-spacing:-.01em;text-transform:capitalize;color:var(--text)}
-.port .tag{font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:2px 7px;border-radius:5px;color:var(--pc);background:var(--pw)}
-.port p{margin-top:4px;font-size:12.8px;color:var(--muted);line-height:1.5}
-.port.local{--pc:var(--local);--pw:var(--local-wash)}
-.port.sovereign{--pc:var(--sovereign);--pw:var(--sovereign-wash)}
-.port.brokered{--pc:var(--brokered);--pw:var(--brokered-wash)}
-.port.external{--pc:var(--external);--pw:var(--external-wash)}
-
-.rail{position:relative;align-self:stretch;display:grid;place-items:center;color:var(--faint)}
-.rail i{position:absolute;top:10%;bottom:10%;left:50%;width:1px;background:linear-gradient(180deg,transparent,var(--border-2) 18%,var(--border-2) 82%,transparent)}
-.rail svg{position:relative;width:20px;height:20px;padding:3px;border-radius:99px;background:var(--bg)}
-
-.core{position:relative;border-radius:16px;padding:26px 20px;text-align:center;isolation:isolate}
-.core::before{
-  content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;
-  background:linear-gradient(155deg,var(--accent-fill),color-mix(in srgb,var(--accent-fill) 70%, var(--bg)));
-  clip-path:polygon(6% 4%,100% 20%,100% 80%,6% 96%);
-  box-shadow:var(--shadow-lift),0 0 50px -16px var(--accent-glow);
-}
-.core b{display:block;font-family:var(--mono);font-size:19px;font-weight:750;color:var(--accent-ink);letter-spacing:-.02em}
-.core span{display:block;margin-top:8px;font-size:11.5px;color:color-mix(in srgb,var(--accent-ink) 78%, transparent);line-height:1.5}
-
-.appcard{border-radius:14px;border:1px solid var(--accent-edge);background:var(--panel);padding:20px;box-shadow:var(--shadow-lift)}
-.appcard .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent)}
-.appcard b{display:block;margin-top:8px;font-size:17px;letter-spacing:-.02em}
-.appcard p{margin-top:7px;font-size:12.8px;color:var(--muted);line-height:1.5}
-.appcard .chip{margin-top:13px;display:inline-block;font-family:var(--mono);font-size:11.5px;padding:5px 9px;border-radius:7px;background:var(--sunken);border:1px solid var(--border);color:var(--dim)}
-
-@media (max-width:980px){
-  .rail{height:36px}
-  .rail i{top:0;bottom:0}
-  .rail svg{transform:rotate(90deg)}
-  .core{padding:30px 22px}
+/* ═══ The signal bus — a continuous hairline trace down the content column ══
+   Not a fixed spine: it lives inside the flow, at the same x in every band, so
+   it reads as one length of wire running the height of the document, tapped by
+   each channel header. Retracts entirely below 1080px, where the gutter it
+   needs no longer exists. */
+.bus{display:none}
+@media (min-width:1080px){
+  .wrap{padding-left:calc(var(--pad) + var(--bus))}
+  .bus{
+    display:block;position:absolute;left:var(--pad);top:0;bottom:0;width:1px;
+    background:var(--line-2);
+  }
+  .bus::after{ /* the tap: a node where this channel joins the bus */
+    content:"";position:absolute;left:-3.5px;top:16px;width:8px;height:8px;
+    background:var(--band-a);border:1px solid var(--teal);
+  }
+  .bus::before{ /* the spur: the run from the bus into this channel's header */
+    content:"";position:absolute;left:2px;top:20px;width:calc(var(--bus) - 4px);height:1px;
+    background:var(--line-2);
+  }
+  .band.hero .bus::after{top:0}
+  .band.hero .bus::before{top:4px}
 }
 
-.diagram-note{margin-top:22px;font-size:13px;color:var(--faint);max-width:74ch;line-height:1.6}
-.diagram-note code{background:var(--sunken);border:1px solid var(--border);padding:1px 6px;border-radius:5px;color:var(--dim);font-size:.92em}
+/* ═══ Channel header — the rack-unit label that opens every band ══════════ */
+.chead{
+  display:flex;align-items:center;gap:14px;margin:0 0 30px;
+  font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
+}
+.chead .ch{color:var(--teal-ink);font-weight:600;flex:none}
+.chead .cl{color:var(--ink);font-weight:500;flex:none}
+.chead .cr{flex:1;height:1px;background:var(--line-2);min-width:14px}
+.chead .cm{color:var(--faint);flex:none}
+@media (max-width:620px){.chead .cm{display:none}}
 
-/* ── Cards / grids ────────────────────────────────────────────────────── */
-.grid{display:grid;gap:16px;margin-top:40px}
-.g2{grid-template-columns:repeat(2,minmax(0,1fr))}
-.g4{grid-template-columns:repeat(4,minmax(0,1fr))}
-@media (max-width:900px){.g4{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:620px){.g2,.g4{grid-template-columns:minmax(0,1fr)}}
-.card{background:var(--panel);border:1px solid var(--border);border-radius:var(--r);padding:22px;box-shadow:var(--shadow-card);transition:border-color var(--base) var(--ease),transform var(--base) var(--ease)}
-.card:hover{border-color:var(--accent-edge);transform:translateY(-2px)}
-.card .ic{width:36px;height:36px;border-radius:10px;background:var(--accent-wash);border:1px solid var(--accent-edge);display:grid;place-items:center;color:var(--accent);margin-bottom:14px}
-.card .ic svg{width:18px;height:18px}
-.card h3{font-size:16px;letter-spacing:-.015em;margin-bottom:8px}
-.card p{color:var(--muted);font-size:13.8px}
-.card p+p{margin-top:8px}
-.card code{font-family:var(--mono);font-size:.87em;background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px;color:var(--dim)}
+/* ═══ HERO ════════════════════════════════════════════════════════════════ */
+.band.hero{padding:56px 0 0;border-bottom:1px solid var(--line)}
+.toprail{
+  display:flex;flex-wrap:wrap;align-items:center;gap:0;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:11.6px;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--faint);
+}
+.toprail span{padding:11px 18px;border-right:1px solid var(--line)}
+.toprail span:first-child{padding-left:0;color:var(--ink)}
+.toprail span:last-child{border-right:0;margin-left:auto;color:var(--teal-ink)}
+.toprail .live{display:inline-block;width:6px;height:6px;background:var(--teal);margin-right:8px;
+  position:relative;top:-1px}
+@media (max-width:720px){
+  .toprail span{padding:9px 12px;font-size:10.6px}
+  .toprail span:last-child{margin-left:0}
+}
 
-/* ── Tier cards (sovereignty section) ────────────────────────────────── */
-.tiers{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:40px}
-@media (max-width:980px){.tiers{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media (max-width:560px){.tiers{grid-template-columns:minmax(0,1fr)}}
-.tier{border:1px solid var(--border);border-top:3px solid var(--tc);border-radius:var(--r);background:var(--panel);padding:20px;box-shadow:var(--shadow-card)}
-.tier .verdict{display:inline-flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--tc);background:var(--tw);border:1px solid var(--tc);padding:3px 9px;border-radius:999px}
-.tier h3{margin-top:14px;font-size:16.5px;letter-spacing:-.02em;text-transform:capitalize}
-.tier p{margin-top:8px;color:var(--muted);font-size:13.6px;line-height:1.55}
-.tier.local{--tc:var(--local);--tw:var(--local-wash)}
-.tier.sovereign{--tc:var(--sovereign);--tw:var(--sovereign-wash)}
-.tier.brokered{--tc:var(--brokered);--tw:var(--brokered-wash)}
-.tier.external{--tc:var(--external);--tw:var(--external-wash)}
+.hero-h{margin:52px 0 0}
+.hero-h .l1,.hero-h .l2{display:block;font-size:clamp(40px,8vw,113px)}
+.hero-h .l3{
+  display:block;margin-top:26px;font-weight:600;font-variation-settings:'wdth' 104;
+  font-size:clamp(20px,2.9vw,38px);line-height:1.1;letter-spacing:-.02em;max-width:22ch;
+}
+.hero-h .l3 em{font-style:normal;color:var(--teal-ink)}
 
-.callout{margin-top:30px;border:1px solid var(--brokered-edge);background:var(--brokered-wash);border-radius:var(--r);padding:22px 24px;display:grid;grid-template-columns:auto minmax(0,1fr);gap:16px;align-items:start}
-.callout .ci{width:30px;height:30px;color:var(--brokered);flex:none}
-.callout .ci svg{width:100%;height:100%;stroke-width:2}
-.callout h3{font-size:16px;letter-spacing:-.015em;margin-bottom:8px}
-.callout p{color:var(--muted);font-size:14px;max-width:76ch}
-.callout p+p{margin-top:8px}
-.callout code{font-family:var(--mono);font-size:.88em;background:var(--sunken);border:1px solid var(--border);padding:1px 6px;border-radius:5px;color:var(--dim)}
-.callout b{color:var(--text)}
+.hero-body{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:44px;
+  align-items:start;margin-top:44px;
+}
+@media (max-width:960px){.hero-body{grid-template-columns:minmax(0,1fr);gap:34px}}
+.hero-body p{margin:0;color:var(--muted);font-size:16.5px;line-height:1.65}
+.hero-body p b{color:var(--ink);font-weight:600}
+.hero-body p + p{margin-top:16px}
 
-/* ── Code blocks ──────────────────────────────────────────────────────── */
-.code-frame{border-radius:var(--r);overflow:hidden;border:1px solid var(--border-2);box-shadow:var(--shadow-lift);background:var(--cb-bg)}
-.code-bar{display:flex;align-items:center;gap:9px;padding:11px 15px;background:var(--code-chrome);border-bottom:1px solid rgba(255,255,255,.06)}
-.code-bar i{width:9px;height:9px;border-radius:50%;background:rgba(255,255,255,.14);display:block;flex:none}
-.code-bar .path{margin-left:6px;font-family:var(--mono);font-size:11.5px;color:#7C8AA0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.code-frame pre{margin:0;padding:19px 20px;overflow-x:auto;font-size:13px;line-height:1.78;color:var(--cb-text)}
-.code-frame code{font-size:inherit}
-/* One block quotes a gateway error verbatim, and the real message is far wider
-   than any column here. Truncating it would be a lie about what the gate says,
-   and letting it scroll off the right edge reads as a rendering bug, so that
-   block alone wraps — with a hanging indent so a continued line is obviously a
-   continuation and not a new JSON key. */
-.code-frame.wrap pre{white-space:pre-wrap;overflow-wrap:anywhere}
-.cb-c{color:var(--cb-comment);font-style:italic}
-.cb-s{color:var(--cb-string)}
-.cb-k{color:var(--cb-keyword);font-weight:600}
-.cb-n{color:var(--cb-number)}
-.cb-pr{color:var(--cb-prop)}
-.cb-f{color:var(--cb-func)}
-.cb-flag{color:var(--cb-meta)}
-.cb-var{color:var(--cb-var)}
-.cb-p{color:var(--cb-punct)}
-.cb-op{color:var(--cb-punct)}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:26px}
+.btn{
+  display:inline-flex;align-items:center;gap:9px;height:46px;padding:0 20px;
+  font-family:var(--mono);font-size:13px;letter-spacing:.02em;
+  border:1px solid var(--line-2);color:var(--ink);transition:background .18s,border-color .18s,color .18s;
+}
+.btn svg{width:14px;height:14px}
+.btn.pri{background:var(--teal);border-color:var(--teal);color:#04120F;font-weight:600}
+[data-theme="light"] .btn.pri{color:#F4FAF8}
+.btn.pri:hover{filter:brightness(1.09)}
+.btn:not(.pri):hover{border-color:var(--line-3);background:var(--panel)}
 
-/* CSS-only tabs: a radio group hidden off-canvas, labels styled as tabs,
-   panel visibility driven by :checked + a general sibling selector. Works,
-   and switches, with JavaScript fully off. */
-.codetabs{margin-top:40px}
-.tabbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
-.tabbar label{padding:8px 14px;border-radius:9px;font-size:13.3px;font-weight:600;color:var(--muted);border:1px solid var(--border-2);background:var(--panel);cursor:pointer;transition:color var(--quick) var(--ease),border-color var(--quick) var(--ease),background var(--quick) var(--ease)}
-.tabbar label:hover{color:var(--text)}
-.tabin{position:absolute;opacity:0;pointer-events:none;width:1px;height:1px}
+/* ── Stat rail: four figures, ruled, mono ── */
+.rail{
+  display:grid;grid-template-columns:repeat(4,minmax(0,1fr));
+  border-top:1px solid var(--line-2);margin-top:56px;
+}
+.rail div{padding:20px 20px 24px;border-right:1px solid var(--line)}
+.rail div:first-child{padding-left:0}
+.rail div:last-child{border-right:0}
+.rail > div > b{
+  display:block;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 120;
+  font-size:38px;line-height:1;color:var(--teal-ink);letter-spacing:-.03em;
+}
+.rail span{display:block;margin-top:9px;font-size:12.8px;line-height:1.5;color:var(--faint)}
+@media (max-width:820px){
+  .rail{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rail div{border-bottom:1px solid var(--line);padding:16px 16px 18px}
+  .rail div:nth-child(3){padding-left:0}
+  .rail div:nth-child(2n){border-right:0}
+  .rail div:nth-last-child(-n+2){border-bottom:0}
+  .rail b{font-size:31px}
+}
+
+/* ═══ THE MUX — the hero schematic ════════════════════════════════════════
+   Four tiered inputs converge through the gate (the brand's own trapezoid)
+   into the single connection your application actually holds. */
+.mux{
+  margin:64px 0 0;padding:0 0 84px;
+}
+.mux-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.06fr) 74px auto 60px minmax(0,.82fr);
+  align-items:stretch;
+}
+.ports{display:grid;grid-template-rows:repeat(4,minmax(0,1fr));gap:8px}
+.port{
+  display:grid;grid-template-columns:22px 1fr;gap:12px;align-items:start;
+  padding:12px 14px;border:1px solid var(--line);background:var(--panel);
+}
+.port .vd{width:19px;height:19px;margin-top:2px}
+.port .vd svg{width:19px;height:19px;stroke-width:1.8;fill:none}
+.port.ok .vd svg{stroke:var(--teal)}
+.port.no .vd svg{stroke:var(--rust)}
+.port.no{border-color:var(--rust-edge);background:var(--rust-wash)}
+.port.ok{border-left:2px solid var(--teal)}
+.port h4{
+  margin:0;display:flex;flex-wrap:wrap;align-items:baseline;gap:9px;
+  font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
+}
+.port h4 em{
+  font-style:normal;font-size:10.4px;letter-spacing:.11em;text-transform:uppercase;font-weight:500;
+  color:var(--faint);
+}
+.port.no h4 em{color:var(--rust)}
+.port p{margin:5px 0 0;font-size:13px;line-height:1.5;color:var(--muted)}
+
+.trace{position:relative}
+.trace svg{position:absolute;inset:0;width:100%;height:100%}
+.trace .cut{
+  position:absolute;left:48%;top:87.5%;transform:translate(-50%,-50%);
+  font-family:var(--mono);font-size:12px;line-height:1;color:var(--rust);
+  background:var(--band-a);padding:3px 3px;
+}
+/* The gate body sits flush between the two trace strips, so the converging
+   wires actually land on its faces; its label is hung below it out of flow so
+   the column can stay exactly as wide as the glyph. */
+.core{
+  position:relative;width:66px;display:flex;align-items:center;justify-content:center;
+}
+.core .glyph{width:66px;height:112px;flex:none}
+.core .glyph path{fill:var(--teal)}
+.core .lbl{
+  position:absolute;top:calc(50% + 62px);left:50%;transform:translateX(-50%);width:122px;
+  text-align:center;background:var(--band-a);padding:6px 0;
+}
+.core .lbl > b{
+  display:block;font-family:var(--mono);font-size:15px;font-weight:600;letter-spacing:-.04em;
+  color:var(--ink);
+}
+.core span{
+  display:block;margin-top:5px;font-family:var(--mono);font-size:10.2px;line-height:1.6;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
+}
+.appcard{
+  border:1px solid var(--line-2);background:var(--panel);padding:22px;align-self:center;
+  display:flex;flex-direction:column;justify-content:center;
+}
+.appcard .k{font-family:var(--mono);font-size:10.6px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--faint)}
+.appcard > b{display:block;margin-top:9px;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;
+  font-size:19px;letter-spacing:-.02em;line-height:1.2}
+.appcard p{margin:10px 0 0;font-size:13.2px;line-height:1.55;color:var(--muted)}
+.appcard .chip{
+  display:inline-block;margin-top:14px;font-family:var(--mono);font-size:11.5px;
+  padding:6px 10px;border:1px solid var(--teal-edge);background:var(--teal-wash);color:var(--teal-ink);
+  align-self:flex-start;max-width:100%;overflow-wrap:anywhere;
+}
+.mux-note{
+  margin:26px 0 0;font-size:13.4px;line-height:1.65;color:var(--faint);max-width:88ch;
+  padding-top:18px;border-top:1px solid var(--line);
+}
+.mux-note code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;font-size:.86em}
+
+@media (max-width:1160px){
+  .mux-grid{grid-template-columns:minmax(0,1fr) 50px auto 40px minmax(0,.76fr)}
+  .core .lbl{width:104px;top:calc(50% + 58px)}
+  .core span{font-size:9.4px;letter-spacing:.06em}
+  .core .glyph{width:54px;height:94px}
+  .core{width:54px}
+}
+@media (max-width:960px){
+  .mux-grid{grid-template-columns:minmax(0,1fr)}
+  .trace{display:none}
+  .ports{grid-template-rows:none}
+  .core{width:auto;gap:18px;padding:26px 0;justify-content:flex-start}
+  .core .glyph{width:34px;height:58px}
+  .core .lbl{position:static;transform:none;width:auto;text-align:left}
+  .core span{margin-top:3px}
+}
+
+/* ═══ Ledger — the ruled rows that replaced every card grid ═══════════════ */
+.ledger{margin:0;border-top:1px solid var(--line-2)}
+.lrow{
+  display:grid;grid-template-columns:minmax(0,235px) minmax(0,1fr);gap:30px;
+  padding:22px 0;border-bottom:1px solid var(--line);align-items:start;
+}
+.lrow dt,.lrow .t{
+  margin:0;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;font-size:17px;
+  letter-spacing:-.02em;line-height:1.25;color:var(--ink);
+}
+.lrow dd,.lrow .d{margin:0;font-size:14.6px;line-height:1.6;color:var(--muted)}
+.lrow .n{
+  font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--faint);
+  display:block;margin-bottom:7px;text-transform:uppercase;
+}
+@media (max-width:760px){
+  .lrow{grid-template-columns:minmax(0,1fr);gap:8px}
+}
+
+/* ═══ Triptych — three ruled columns, hairline-separated, no boxes ═══════ */
+.triptych{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));
+  border-top:1px solid var(--line-2);margin-top:44px;
+}
+.triptych > div{padding:22px 26px 4px;border-right:1px solid var(--line)}
+.triptych > div:first-child{padding-left:0}
+.triptych > div:last-child{border-right:0;padding-right:0}
+.triptych .n{
+  display:block;font-family:var(--mono);font-size:10.8px;letter-spacing:.15em;text-transform:uppercase;
+  color:var(--teal-ink);
+}
+.triptych > div > b{
+  display:block;margin-top:10px;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;
+  font-size:17px;letter-spacing:-.02em;line-height:1.25;color:var(--ink);
+}
+.triptych p{margin:10px 0 0;font-size:14.2px;line-height:1.6;color:var(--muted)}
+@media (max-width:900px){
+  .triptych{grid-template-columns:minmax(0,1fr)}
+  .triptych > div{padding:20px 0;border-right:0;border-bottom:1px solid var(--line)}
+  .triptych > div:last-child{border-bottom:0}
+}
+
+/* ═══ Flow schematics ════════════════════════════════════════════════════ */
+.flow{margin:44px 0 0;padding:26px;border:1px solid var(--line);background:var(--panel)}
+.frow{display:flex;flex-wrap:wrap;align-items:center;gap:0}
+.fnode{
+  border:1px solid var(--line-2);background:var(--band-a);padding:12px 15px;min-width:0;
+}
+.fnode > b{display:block;font-family:var(--mono);font-size:13.4px;font-weight:600;letter-spacing:-.02em;
+  color:var(--ink)}
+.fnode span{display:block;margin-top:4px;font-family:var(--mono);font-size:11.4px;color:var(--faint)}
+.fnode.go{border-color:var(--teal-edge);background:var(--teal-wash)}
+.fnode.go b,.fnode.go span{color:var(--teal-ink)}
+.fnode.stop{border-color:var(--rust-edge);background:var(--rust-wash)}
+.fnode.stop b,.fnode.stop span{color:var(--rust)}
+.fnode.mid{border-color:var(--line-3)}
+.fnode.dim{opacity:.5}
+.wire{
+  flex:0 0 44px;height:1px;background:var(--line-3);position:relative;align-self:center;
+}
+.wire::after{
+  content:"";position:absolute;right:0;top:-3px;border:3.5px solid transparent;
+  border-left-color:var(--line-3);
+}
+.wire.go{background:var(--teal)}
+.wire.go::after{border-left-color:var(--teal)}
+.wire.stop{background:var(--rust)}
+.wire.stop::after{border-left-color:var(--rust)}
+.wire.dash{background:repeating-linear-gradient(90deg,var(--line-3) 0 5px,transparent 5px 10px)}
+.fbranch{display:flex;flex-direction:column;gap:10px;min-width:0}
+.fbranch .brow{display:flex;align-items:center;gap:0;min-width:0}
+.cap{
+  margin:20px 0 0;padding-top:16px;border-top:1px solid var(--line);
+  font-size:13.4px;line-height:1.65;color:var(--faint);
+}
+.cap code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;font-size:.86em}
+/* Wide: the caption becomes the drawing's legend, hung to the right of the
+   schematic rather than stacked under it — which is also what stops every
+   schematic from ending in the same wide band of empty panel. */
+@media (min-width:1100px){
+  .flow{display:grid;grid-template-columns:minmax(0,1fr) 286px;gap:0 34px;align-items:start}
+  .flow > *{grid-column:1}
+  .flow > .cap{
+    grid-column:2;grid-row:1 / span 12;margin:0;padding:0 0 0 22px;
+    border-top:0;border-left:1px solid var(--line);align-self:stretch;
+  }
+}
+@media (max-width:760px){
+  .flow{padding:18px}
+  .frow{flex-direction:column;align-items:stretch;gap:0}
+  .fnode{width:100%}
+  .wire{flex:none;width:1px;height:24px;margin:0 0 0 22px}
+  .wire::after{right:-3px;top:auto;bottom:0;border:3.5px solid transparent;
+    border-top-color:var(--line-3);border-left-color:transparent}
+  .wire.go::after{border-top-color:var(--teal);border-left-color:transparent}
+  .wire.stop::after{border-top-color:var(--rust);border-left-color:transparent}
+  .wire.dash{background:repeating-linear-gradient(180deg,var(--line-3) 0 5px,transparent 5px 10px)}
+  .fbranch{width:100%}
+  .fbranch .brow{flex-direction:column;align-items:stretch}
+}
+
+/* ═══ Code frames ════════════════════════════════════════════════════════ */
+.code{border:1px solid var(--line-2);background:var(--sunk)}
+.code-bar{
+  display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:11.4px;letter-spacing:.09em;text-transform:uppercase;color:var(--faint);
+  background:var(--panel);
+}
+.code-bar i{width:5px;height:5px;background:var(--line-3);flex:none}
+.code-bar .path{margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.code pre{margin:0;padding:16px;overflow-x:auto;font-family:var(--mono);font-size:12.9px;
+  line-height:1.72;color:var(--muted)}
+.code.soft pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.cb-f{color:var(--teal-ink)}
+.cb-s{color:var(--ink)}
+.cb-k{color:var(--teal-ink);font-weight:500}
+.cb-c{color:var(--faint);font-style:normal}
+.cb-pr{color:var(--ink);font-weight:500}
+.cb-n{color:var(--rust)}
+.cb-p{color:var(--faint)}
+.cb-flag{color:var(--rust)}
+.cb-var{color:var(--ink)}
+.cb-op{color:var(--faint)}
+
+/* ═══ Spec tables — the endpoint matrix and the error ledger ═════════════ */
+.tscroll{overflow-x:auto;border:1px solid var(--line-2);background:var(--panel)}
+table.spec{width:100%;border-collapse:collapse;font-size:13.6px;min-width:620px}
+table.spec thead th{
+  text-align:left;font-family:var(--mono);font-size:10.8px;font-weight:500;letter-spacing:.15em;
+  text-transform:uppercase;color:var(--faint);padding:12px 16px;border-bottom:1px solid var(--line-2);
+  background:var(--sunk);white-space:nowrap;
+}
+table.spec td{padding:13px 16px;border-bottom:1px solid var(--line);vertical-align:top;color:var(--muted);
+  line-height:1.55}
+table.spec tr:last-child td{border-bottom:0}
+table.spec td.m{font-family:var(--mono);font-size:11.6px;color:var(--faint);white-space:nowrap;
+  letter-spacing:.06em}
+table.spec td.r{font-family:var(--mono);font-size:13px;color:var(--ink);white-space:nowrap;font-weight:500}
+table.spec td.g{width:1%}
+.tag{
+  display:inline-block;font-family:var(--mono);font-size:10.4px;letter-spacing:.11em;
+  text-transform:uppercase;padding:4px 8px;border:1px solid var(--line-2);color:var(--faint);
+  white-space:nowrap;
+}
+.tag.routed{border-color:var(--teal-edge);background:var(--teal-wash);color:var(--teal-ink)}
+.tag.catalog{border-color:var(--line-3);color:var(--ink)}
+
+/* ═══ Provider roster ════════════════════════════════════════════════════ */
+.roster{
+  display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:0;
+  border-top:1px solid var(--line-2);margin-top:40px;
+}
+.roster .rcol{padding:24px 30px 26px;border-right:1px solid var(--line)}
+.roster .rcol:first-child{padding-left:0}
+.roster .rcol:last-child{border-right:0;padding-right:0}
+.rhead > b{
+  display:block;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 114;font-size:22px;
+  letter-spacing:-.028em;line-height:1.1;color:var(--ink);
+}
+.rhead span{display:block;margin-top:8px;font-size:13.6px;line-height:1.55;color:var(--muted);max-width:42ch}
+ul.chips{list-style:none;display:flex;flex-wrap:wrap;gap:8px;margin:18px 0 0;padding:0}
+ul.chips li{
+  font-family:var(--mono);font-size:12.4px;color:var(--ink);padding:7px 11px;
+  border:1px solid var(--line-2);background:var(--panel);
+}
+ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spacing:.06em;margin-left:7px}
+@media (max-width:900px){
+  .roster{grid-template-columns:minmax(0,1fr)}
+  .roster .rcol{padding:22px 0;border-right:0;border-bottom:1px solid var(--line)}
+  .roster .rcol:last-child{border-bottom:0}
+}
+
+/* ═══ Tier ladder (the gate) ═════════════════════════════════════════════ */
+.ladder{border-top:1px solid var(--line-2);margin-top:8px}
+.step{
+  display:grid;grid-template-columns:56px minmax(0,180px) minmax(0,1fr);gap:24px;
+  padding:22px 0;border-bottom:1px solid var(--line);align-items:start;
+}
+.step .idx{font-family:var(--mono);font-size:11.6px;color:var(--faint);letter-spacing:.1em;padding-top:4px}
+.step h3{
+  margin:0;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 114;font-size:24px;
+  letter-spacing:-.03em;line-height:1;color:var(--ink);
+}
+.step .verdict{
+  display:inline-block;margin-top:10px;font-family:var(--mono);font-size:10.4px;letter-spacing:.11em;
+  text-transform:uppercase;padding:4px 8px;border:1px solid var(--teal-edge);background:var(--teal-wash);
+  color:var(--teal-ink);
+}
+.step p{margin:0;font-size:14.6px;line-height:1.62;color:var(--muted)}
+.step.deny{border-left:2px solid var(--rust);padding-left:16px}
+.step.deny .verdict{border-color:var(--rust-edge);background:var(--rust-wash);color:var(--rust)}
+.step.allow{border-left:2px solid var(--teal);padding-left:16px}
+@media (max-width:760px){
+  .step{grid-template-columns:minmax(0,1fr);gap:10px}
+  .step .idx{padding-top:0}
+}
+
+/* ═══ Split ══════════════════════════════════════════════════════════════ */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:900px){.split{grid-template-columns:minmax(0,1fr);gap:22px}}
+.split.wide-left{grid-template-columns:minmax(0,1.25fr) minmax(0,1fr)}
+@media (max-width:900px){.split.wide-left{grid-template-columns:minmax(0,1fr)}}
+.aside{margin:14px 0 0;font-size:13.2px;line-height:1.62;color:var(--faint)}
+.aside code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;font-size:.86em}
+
+/* ═══ Note / disclosure ══════════════════════════════════════════════════ */
+.note{
+  margin-top:44px;border:1px solid var(--rust-edge);background:var(--rust-wash);
+  display:grid;grid-template-columns:44px minmax(0,1fr);gap:18px;padding:24px;
+}
+.note .ic svg{width:22px;height:22px;stroke:var(--rust);fill:none;stroke-width:1.8}
+.note h3{
+  margin:0 0 10px;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;font-size:18px;
+  letter-spacing:-.02em;line-height:1.3;color:var(--ink);
+}
+.note p{margin:0;font-size:14.4px;line-height:1.62;color:var(--muted)}
+.note p + p{margin-top:11px}
+.note b{color:var(--ink);font-weight:600}
+@media (max-width:620px){.note{grid-template-columns:minmax(0,1fr);padding:18px;gap:12px}}
+
+/* ═══ Language chips ═════════════════════════════════════════════════════ */
+.langs{display:flex;flex-wrap:wrap;gap:0;margin-top:16px;border-top:1px solid var(--line);
+  border-left:1px solid var(--line)}
+.langs span{
+  font-family:var(--mono);font-size:11.8px;color:var(--muted);padding:9px 13px;
+  border-right:1px solid var(--line);border-bottom:1px solid var(--line);flex:1 0 auto;text-align:center;
+}
+
+/* ═══ Screenshots — presented in instrument chrome ═══════════════════════ */
+.shot{border:1px solid var(--line-2);background:var(--panel)}
+.shot .box{position:relative;background:var(--sunk);aspect-ratio:2560/1600;overflow:hidden}
+.shot img{width:100%;height:100%;object-fit:cover;object-position:top center;opacity:0;
+  transition:opacity .4s var(--ease)}
+.shot img.loaded{opacity:1}
+.shot .ph{
+  position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:8px;text-align:center;padding:20px;color:var(--faint);
+}
+.shot img.loaded + .ph{display:none}
+.shot .ph svg{width:26px;height:26px;stroke:var(--line-3);fill:none;stroke-width:1.5}
+.shot .ph b{font-family:var(--mono);font-size:12.4px;font-weight:500;color:var(--muted)}
+.shot .ph span{font-size:12.4px;max-width:34ch;line-height:1.5}
+.shotcap{margin-top:14px}
+.shotcap > b{display:block;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;font-size:16px;
+  letter-spacing:-.02em;color:var(--ink)}
+.shotcap span{display:block;margin-top:6px;font-size:13.4px;line-height:1.6;color:var(--muted)}
+.shotcap code{background:var(--sunk);border:1px solid var(--line);padding:1px 5px;font-size:.86em}
+.shotgrid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:26px;margin-top:34px}
+@media (max-width:820px){.shotgrid{grid-template-columns:minmax(0,1fr)}}
+.shot-noscript img{opacity:1;position:static}
+
+/* ═══ Tabs (radio-driven; works without JS) ══════════════════════════════ */
+.tabs .tabin{position:absolute;opacity:0;pointer-events:none;width:0;height:0}
+.tabbar{display:flex;flex-wrap:wrap;gap:0;border:1px solid var(--line-2);border-bottom:0}
+.tabbar label{
+  font-family:var(--mono);font-size:12.4px;color:var(--muted);padding:0 16px;height:44px;
+  display:inline-flex;align-items:center;cursor:pointer;border-right:1px solid var(--line);
+  border-bottom:2px solid transparent;flex:1 0 auto;justify-content:center;
+}
+.tabbar label:last-of-type{border-right:0}
 .tabpanel{display:none}
-#tab-build:checked ~ .tabbar label[for=tab-build],
-#tab-call:checked ~ .tabbar label[for=tab-call],
-#tab-conf:checked ~ .tabbar label[for=tab-conf]{background:var(--accent-wash);border-color:var(--accent-edge);color:var(--accent)}
+#tab-build:checked ~ .tabbar label[for="tab-build"],
+#tab-call:checked ~ .tabbar label[for="tab-call"],
+#tab-conf:checked ~ .tabbar label[for="tab-conf"]{color:var(--ink);border-bottom-color:var(--teal);
+  background:var(--panel)}
 #tab-build:checked ~ .tabpanels #panel-build,
 #tab-call:checked ~ .tabpanels #panel-call,
 #tab-conf:checked ~ .tabpanels #panel-conf{display:block}
+.tabs .tabin:focus-visible ~ .tabbar label{outline:2px solid var(--teal);outline-offset:-2px}
+/* Without JS or CSS :checked support nothing would show — so make every panel
+   visible when no radio can be checked at all is not expressible; instead the
+   default-checked radio guarantees one panel always renders. */
 
-/* ── Steps ────────────────────────────────────────────────────────────── */
-.steps{list-style:none;margin:22px 0 0;padding:0;display:flex;flex-direction:column;gap:18px}
-.steps li{display:flex;gap:14px}
-.steps .n{flex:none;width:28px;height:28px;border-radius:9px;display:grid;place-items:center;font-family:var(--mono);font-size:12.5px;color:var(--accent);background:var(--accent-wash);border:1px solid var(--accent-edge)}
-.steps b{display:block;font-size:15px;font-weight:700;letter-spacing:-.015em;margin-bottom:3px}
-.steps span{color:var(--muted);font-size:13.6px}
-.steps code{font-family:var(--mono);font-size:12px;background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px;color:var(--dim)}
+/* ═══ Steps list ═════════════════════════════════════════════════════════ */
+ol.steps{list-style:none;margin:0;padding:0;border-top:1px solid var(--line-2)}
+ol.steps li{display:grid;grid-template-columns:44px minmax(0,1fr);gap:18px;padding:18px 0;
+  border-bottom:1px solid var(--line)}
+ol.steps .n{font-family:var(--mono);font-size:12px;color:var(--teal-ink);letter-spacing:.1em;padding-top:3px}
+ol.steps li > div > b{display:block;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;font-size:16px;
+  letter-spacing:-.02em;color:var(--ink)}
+ol.steps span{display:block;margin-top:5px;font-size:13.8px;line-height:1.58;color:var(--muted)}
 
-.split2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:34px;align-items:start;margin-top:40px}
-@media (max-width:900px){.split2{grid-template-columns:minmax(0,1fr)}}
+/* ═══ Footer ═════════════════════════════════════════════════════════════ */
+.foot{border-top:1px solid var(--line-2);background:var(--band-b);padding:34px 0 46px}
+.foot-in{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
+.foot-l{display:flex;align-items:center;gap:10px;color:var(--faint);font-size:13px}
+.foot-l img{width:18px;height:18px;border-radius:4px}
+.foot-l a{color:var(--muted)}
+.foot-l a:hover{color:var(--ink)}
+.foot-links{display:flex;flex-wrap:wrap;gap:0}
+.foot-links a{font-family:var(--mono);font-size:12.4px;color:var(--muted);padding:0 14px;height:44px;
+  display:inline-flex;align-items:center;border-left:1px solid var(--line)}
+.foot-links a:first-child{padding-left:0;border-left:0}
+.foot-links a:hover{color:var(--teal-ink)}
 
-/* ── Errors table ─────────────────────────────────────────────────────── */
-.etable{margin-top:16px;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--panel)}
-.erow{display:grid;grid-template-columns:60px 170px minmax(0,1fr);gap:14px;padding:12px 16px;border-bottom:1px solid var(--border);align-items:baseline;font-size:13px}
-.erow:last-child{border-bottom:0}
-.erow .st{font-family:var(--mono);font-weight:700;color:var(--external)}
-.erow .cd{font-family:var(--mono);font-size:12px;color:var(--accent)}
-.erow .ds{color:var(--muted)}
-@media (max-width:640px){.erow{grid-template-columns:minmax(0,1fr);gap:4px}}
-
-/* ── FAQ-ish detail rows used for the "what doesn't cover" disclosure ──── */
-.dl{margin-top:18px;border-top:1px solid var(--border)}
-.dl>div{padding:16px 0;border-bottom:1px solid var(--border);display:grid;grid-template-columns:220px minmax(0,1fr);gap:18px}
-@media (max-width:700px){.dl>div{grid-template-columns:minmax(0,1fr);gap:6px}}
-.dl b{font-size:13.6px;color:var(--text)}
-.dl span{font-size:13.6px;color:var(--muted);line-height:1.55}
-.dl code{font-family:var(--mono);font-size:.9em;background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px;color:var(--dim)}
-
-/* ── Mechanism illustrations ──────────────────────────────────────────────
-   Four small diagrams — one call fanning out and folding back through one
-   shape, where the gate sits in the dispatch path, a fallback chain stepping
-   through candidates, what a budget actually gates. Read as siblings of the
-   hero .diagram and the .tier cards on purpose: same radius (--r/--r-lg),
-   same card border/shadow, same tier-colour vocabulary (go = --local,
-   stop = --external) instead of a new palette invented for these alone.
-
-   Built the same way as the hero diagram, for the exact reason documented at
-   the top of this file — real HTML nodes with real px text, plus small
-   FIXED-SIZE inline SVG for the connectors only. A first draft tried one
-   scaling SVG per illustration; at a 390px column a ~900-unit viewBox with
-   normal-sized labels put body text under 7px, the identical failure mode
-   the hero diagram's own comment already diagnoses. HTML text has no such
-   floor, and the row-to-column collapse below mirrors .lanes/.rail exactly:
-   the connector rotates 90°, nothing is hidden, nothing overflows. ───────── */
-.mech{margin-top:40px;border:1px solid var(--border);border-radius:var(--r-lg);background:var(--panel);box-shadow:var(--shadow-card);padding:28px clamp(16px,3vw,34px) 24px}
-.mech-row{display:flex;align-items:center;gap:0;flex-wrap:wrap;row-gap:22px}
-.mnode{flex:none;border-radius:var(--r-sm);border:1px solid var(--border-2);background:var(--panel-2);padding:12px 16px;box-shadow:var(--shadow-card)}
-.mnode b{display:block;font-size:14.5px;font-weight:700;letter-spacing:-.01em;color:var(--text)}
-.mnode span{display:block;margin-top:3px;font-size:11.5px;color:var(--muted);font-family:var(--mono)}
-.mnode.go{border-color:var(--local);background:var(--local-wash)}
-.mnode.go b,.mnode.go span{color:var(--local)}
-.mnode.stop{border-color:var(--external);background:var(--external-wash)}
-.mnode.stop b,.mnode.stop span{color:var(--external)}
-.mnode.dim{opacity:.6}
-.mbranch{display:flex;flex-direction:column;gap:12px}
-.mbranch-row{display:flex;align-items:center}
-.marrow{flex:none;display:flex;align-items:center;color:var(--faint);padding:0 10px}
-.marrow svg{width:22px;height:22px}
-.marrow.go{color:var(--local)}
-.marrow.stop{color:var(--external)}
-.marrow.dash{opacity:.65}
-.mgauge{flex:1 1 260px;min-width:0;margin:0 16px}
-.mgauge-track{height:12px;border-radius:999px;background:var(--sunken);border:1px solid var(--border)}
-.mgauge-fill{height:100%;border-radius:999px;background:var(--accent-fill)}
-.mgauge-label{display:block;margin-top:9px;font-family:var(--mono);font-size:12px;color:var(--muted)}
-.mcap{margin-top:22px;font-size:13px;color:var(--faint);line-height:1.62;max-width:76ch}
-.mcap code{font-family:var(--mono);font-size:.92em;background:var(--sunken);border:1px solid var(--border);padding:1px 6px;border-radius:5px;color:var(--dim)}
-@media (max-width:640px){
-  .mech-row{flex-direction:column;align-items:stretch}
-  .marrow{transform:rotate(90deg);padding:8px 0;align-self:center}
-  .mnode{width:100%}
-  .mgauge{margin:14px 0}
+/* ═══ Scroll reveal ══════════════════════════════════════════════════════ */
+html.js .rv{opacity:0;transform:translateY(14px);
+  transition:opacity .62s var(--ease),transform .62s var(--ease)}
+html.js .rv.in{opacity:1;transform:none}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  html.js .rv,html.js .rv.in{opacity:1;transform:none;transition:none}
+  *,*::before,*::after{animation:none!important;transition:none!important}
 }
 
-/* ── Endpoint matrix — reuses the .etable grammar (mono status column, path,
-   description); the path column is widened past the error table's 170px
-   because a route like /v1/audio/transcriptions doesn't fit it. ─────────── */
-.routes .erow{grid-template-columns:60px 240px minmax(0,1fr)}
-@media (max-width:640px){.routes .erow{grid-template-columns:minmax(0,1fr)}}
-.rbadge{display:inline-flex;align-items:center;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-right:7px;white-space:nowrap}
-.rbadge.routed{color:var(--local);background:var(--local-wash);border:1px solid var(--local-edge)}
-.rbadge.forward{color:var(--brokered);background:var(--brokered-wash);border:1px solid var(--brokered-edge)}
-.rbadge.catalog{color:var(--sovereign);background:var(--sovereign-wash);border:1px solid var(--sovereign-edge)}
+@media print{
+  html.js .rv{opacity:1!important;transform:none!important}
+  .hdr,.bus{display:none}
+}
 
-/* ── Language chips — the 17-language client story. Unlabelled beyond a
-   name on purpose: the point is breadth, the code sample beside them
-   already carries the depth. ──────────────────────────────────────────── */
-.langs{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
-.langs span{font-family:var(--mono);font-size:12px;font-weight:600;padding:5px 10px;border-radius:8px;border:1px solid var(--border-2);background:var(--panel);color:var(--dim)}
-
-/* ── Screenshot frames — the .code-bar chrome, reused for pixels instead of
-   text, so a capture and a code sample read as the same kind of object. An
-   aspect-ratio box reserves the exact real-capture footprint before any
-   image exists, so there is zero layout shift once one lands; a dashed
-   placeholder — never the browser's broken-image icon — fills that box
-   until then, and stays the only thing shown if a request 404s, because the
-   <img> itself has no src until JS resolves the theme (see the script at
-   the bottom) and only becomes visible once it has actually loaded. ────── */
-.shot-frame{border-radius:var(--r);overflow:hidden;border:1px solid var(--border-2);box-shadow:var(--shadow-lift);background:var(--panel)}
-.shot-box{position:relative;aspect-ratio:8/5;background:var(--sunken)}
-.shot-box img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;opacity:0;transition:opacity .4s var(--ease)}
-.shot-box img.loaded{opacity:1}
-.shot-placeholder{position:absolute;inset:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;padding:16px;border:1.5px dashed var(--border-2);border-radius:calc(var(--r) - 4px);color:var(--faint)}
-.shot-box img.loaded ~ .shot-placeholder{display:none}
-.shot-placeholder svg{width:24px;height:24px;color:var(--faint);flex:none}
-.shot-placeholder b{display:block;color:var(--muted);font-size:12.5px;font-weight:650}
-.shot-placeholder span{display:block;font-size:11.5px;line-height:1.5;max-width:32ch}
-.shots{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin-top:40px}
-@media (max-width:900px){.shots{grid-template-columns:minmax(0,1fr);max-width:520px}}
-.shot-cap{margin-top:14px}
-.shot-cap b{display:block;color:var(--text);font-size:14.5px;font-weight:700;letter-spacing:-.01em;margin-bottom:5px}
-.shot-cap span{display:block;color:var(--muted);font-size:13.4px;line-height:1.55}
-.shot-cap code{font-family:var(--mono);font-size:.87em;background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px;color:var(--dim)}
-
-/* ── Footer ───────────────────────────────────────────────────────────── */
-.site-foot{border-top:1px solid var(--border);padding:30px 0 44px}
-.foot-in{display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
-.foot-l{display:flex;align-items:center;gap:9px;color:var(--faint);font-size:13px}
-.foot-l img{width:17px;height:17px;border-radius:4px}
-.foot-links{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
-.foot-links a:hover{color:var(--text)}
+/* The channel nav is six items of mono text; below this it can only survive by
+   shrinking each one under a 44px target, so it retracts instead — every one of
+   its destinations is on this page and reachable by scrolling. */
+@media (max-width:1140px){.secnav{display:none}}
+@media (max-width:1080px){:root{--pad:24px}}
+@media (max-width:520px){:root{--pad:18px}}
 </style>
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 
 <header class="hdr">
-  <div class="wrap hdr-in">
+  <div class="wrap hdr-in" style="padding-left:var(--pad)">
     <a class="brand" href="./index.html" aria-label="llmux — home">
-      <img class="tile" src="./assets/llmux-mark.svg" alt="" width="30" height="30"><span class="word">ll<span class="mux">mux</span></span>
+      <img src="./assets/llmux-mark.svg" alt="" width="26" height="26">
+      <span class="word">ll<i>mux</i></span>
     </a>
-    <nav class="secnav" aria-label="Sections">
-      <a href="#sovereignty">Sovereignty</a>
-      <a href="#providers">Providers</a>
-      <a href="#operate">Operate</a>
-      <a href="#dashboard">Dashboard</a>
-      <a href="#quickstart">Quickstart</a>
+    <nav class="secnav" aria-label="Channels">
+      <a href="#wire">01 · Wire</a>
+      <a href="#gate">02 · Gate</a>
+      <a href="#routes">03 · Routes</a>
+      <a href="#controls">04 · Controls</a>
+      <a href="#panel">05 · Panel</a>
+      <a href="#start">06 · Start</a>
     </nav>
+    <span class="spacer"></span>
     <div class="hdr-act">
-      <a class="ghlink" href="./docs.html"><span>Docs</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      <a class="hbtn" href="./docs.html">Docs</a>
+      <a class="hbtn sq" href="https://github.com/vul-os/llmux" target="_blank" rel="noopener" aria-label="Source on GitHub" title="Source on GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
       </a>
-      <a class="ghlink" href="https://github.com/vul-os/llmux" target="_blank" rel="noopener"><span>GitHub</span>
-        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" width="16" height="16"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
-      </a>
-      <button class="iconbtn" id="themeBtn" type="button" aria-label="Switch theme" title="Switch theme">
-        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      <button class="hbtn sq" id="themeBtn" type="button" aria-label="Switch theme" title="Switch theme">
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
       </button>
-      <a class="vulos-badge" href="https://vulos.org" target="_blank" rel="noopener" title="Part of Vulos — open, self-hostable apps">
-        <img src="./assets/vulos-logo.png" alt=""><span class="hide-sm">Part of</span> Vulos
+      <a class="hbtn sq" href="https://vulos.org" target="_blank" rel="noopener" aria-label="Vulos" title="Vulos">
+        <img src="./assets/vulos-logo.png" alt="" width="17" height="17">
       </a>
     </div>
   </div>
@@ -560,269 +856,344 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
 
 <main id="main">
 
-<!-- ══ HERO ═══════════════════════════════════════════════════════════════ -->
-<section class="hero">
+<!-- ══════ HERO ══════════════════════════════════════════════════════════ -->
+<section class="band hero">
   <div class="wrap">
-    <div class="hero-top rv in">
-      <span class="pill t"><span class="dotlive"><i></i><i></i></span> self-hosted · MIT OR Apache-2.0</span>
-      <span class="pill">no accounts, bearer tokens only</span>
-      <span class="pill">no telemetry</span>
+    <span class="bus" aria-hidden="true"></span>
+
+    <div class="toprail rv in">
+      <span><i class="live" aria-hidden="true"></i>self-hosted</span>
+      <span>MIT or Apache-2.0</span>
+      <span>no accounts · bearer tokens only</span>
+      <span>no telemetry</span>
+      <span>v0.2.0</span>
     </div>
 
-    <h1 class="rv in">One endpoint. Every model. Nothing leaves your box unless you say so.</h1>
-    <p class="sub rv in">llmux is a single Go binary that speaks the <b>OpenAI HTTP API</b> and routes every
-      request to the provider behind it. Point any OpenAI SDK at it and get routing, fallback chains,
-      per-key budgets, caching and live cost — across OpenAI, Anthropic, Gemini, Cohere, Bedrock and Azure,
-      with zero per-language code. A default-deny <b>sovereignty gate</b> runs before every dispatch, so
-      inference stays on your box until you explicitly, loggably opt a provider out.</p>
+    <h1 class="hero-h disp rv in">
+      <span class="l1">One endpoint.</span>
+      <span class="l2">Every model.</span>
+      <span class="l3">Nothing leaves your box <em>unless you say so.</em></span>
+    </h1>
 
-    <div class="cta rv in">
-      <a class="btn btn-primary" href="#quickstart">Get started
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-      </a>
-      <a class="btn btn-ghost" href="#sovereignty">See the sovereignty gate</a>
-      <a class="btn btn-ghost" href="./docs.html">Read the docs</a>
+    <div class="hero-body">
+      <div class="rv in">
+        <p>llmux is a single Go binary that speaks the <b>OpenAI HTTP API</b> and routes every request to
+          the provider behind it. Point any OpenAI SDK at it and get routing, fallback chains, per-key
+          budgets, caching and live cost — across OpenAI, Anthropic, Gemini, Cohere, Bedrock and Azure,
+          with zero per-language code.</p>
+        <p>A default-deny <b>sovereignty gate</b> runs before every dispatch, so inference stays on your
+          box until you explicitly, loggably opt a provider out.</p>
+      </div>
+      <div class="rv in">
+        <div class="code">
+          <div class="code-bar"><i></i><span class="path">the whole change · any OpenAI client</span></div>
+          <pre><code><span class="cb-c">-</span> <span class="cb-var">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"https://api.openai.com/v1"</span>
+<span class="cb-f">+</span> <span class="cb-var">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"http://localhost:4000/v1"</span></code></pre>
+        </div>
+        <div class="cta">
+          <a class="btn pri" href="#start">Get started
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          </a>
+          <a class="btn" href="#gate">See the gate</a>
+          <a class="btn" href="./docs.html">Read the docs</a>
+        </div>
+      </div>
     </div>
 
-    <div class="hero-facts rv">
-      <div class="fact"><b>1</b><span>Go binary — no required runtime dependencies</span></div>
-      <div class="fact"><b>4</b><span>sovereignty tiers: local, sovereign, brokered, external</span></div>
-      <div class="fact"><b>6</b><span>provider types, one JSON block each</span></div>
-      <div class="fact"><b>0</b><span>accounts — an operator-issued bearer token is the whole login</span></div>
+    <div class="rail rv">
+      <div><b>1</b><span>Go binary — no required runtime dependencies</span></div>
+      <div><b>4</b><span>sovereignty tiers: local, sovereign, brokered, external</span></div>
+      <div><b>6</b><span>provider types, one JSON block each</span></div>
+      <div><b>0</b><span>accounts — an operator-issued bearer token is the whole login</span></div>
     </div>
 
-    <!-- THE DIAGRAM: many possible providers (left, tiered and gated) funnel
-         through llmux (centre, the mark's own trapezoid) into the one
-         connection your application actually holds (right). Built from real
-         DOM nodes — see the design-thesis comment at the top of this file
-         for why it isn't a single scaling SVG. -->
-    <figure class="diagram rv">
-      <div class="lanes">
+    <!-- THE MUX. Four tiered inputs, the gate, one output. The gate body is the
+         brand mark's own trapezoid; the converging traces are one SVG per
+         strip, stretched with preserveAspectRatio="none" so they land on the
+         port rows whatever height those rows take, with non-scaling strokes so
+         the hairlines stay hairlines. -->
+    <figure class="mux rv">
+      <div class="mux-grid">
         <div class="ports">
-          <div class="port local">
-            <span class="verdict" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.3" fill="none"/><path d="M6 10.3l2.6 2.6L14.2 7"/></svg></span>
-            <div><div class="head"><b>local</b><span class="tag">always allowed</span></div>
+          <div class="port ok">
+            <span class="vd" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.4"/><path d="M6 10.3l2.7 2.7L14.3 7"/></svg></span>
+            <div><h4>local <em>always allowed</em></h4>
               <p>Loopback or a unix socket — Ollama, llama.cpp, vLLM on this box.</p></div>
           </div>
-          <div class="port sovereign">
-            <span class="verdict" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.3" fill="none"/><path d="M6 10.3l2.6 2.6L14.2 7"/></svg></span>
-            <div><div class="head"><b>sovereign</b><span class="tag">on your declaration</span></div>
-              <p>An off-box endpoint <em>you</em> vouch for — set <code>"tier":"sovereign"</code>.</p></div>
+          <div class="port ok">
+            <span class="vd" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.4"/><path d="M6 10.3l2.7 2.7L14.3 7"/></svg></span>
+            <div><h4>sovereign <em>on your declaration</em></h4>
+              <p>An off-box endpoint <span class="mono">you</span> vouch for — set <code>"tier":"sovereign"</code>.</p></div>
           </div>
-          <div class="port brokered">
-            <span class="verdict" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.3" fill="none"/><path d="M6 10.3l2.6 2.6L14.2 7"/></svg></span>
-            <div><div class="head"><b>brokered</b><span class="tag">opt-in required</span></div>
+          <div class="port ok">
+            <span class="vd" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.4"/><path d="M6 10.3l2.7 2.7L14.3 7"/></svg></span>
+            <div><h4>brokered <em>opt-in required</em></h4>
               <p>A named third party under a claimed no-train agreement.</p></div>
           </div>
-          <div class="port external">
-            <span class="verdict" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.3" fill="none"/><path d="M7 7l6 6M13 7l-6 6"/></svg></span>
-            <div><div class="head"><b>external</b><span class="tag">blocked by default</span></div>
+          <div class="port no">
+            <span class="vd" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8.4"/><path d="M7 7l6 6M13 7l-6 6"/></svg></span>
+            <div><h4>external <em>blocked by default</em></h4>
               <p>OpenAI, Anthropic, Gemini, Cohere, Bedrock, Azure — until you set <code>allow_egress</code>.</p></div>
           </div>
         </div>
 
-        <div class="rail" aria-hidden="true"><i></i>
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        <div class="trace" aria-hidden="true">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <g fill="none" stroke="var(--teal)" stroke-width="1" vector-effect="non-scaling-stroke">
+              <path d="M0 12.5 H52 L100 50"/>
+              <path d="M0 37.5 H72 L100 50"/>
+              <path d="M0 62.5 H72 L100 50"/>
+            </g>
+            <!-- The blocked lane does not reach the gate: it is cut short of it,
+                 which is literally what "never dialed" means. -->
+            <path d="M0 87.5 H44" fill="none" stroke="var(--rust)" stroke-width="1"
+                  stroke-dasharray="4 4" vector-effect="non-scaling-stroke" opacity=".85"/>
+          </svg>
+          <span class="cut">&#10005;</span>
         </div>
 
         <div class="core">
-          <b>llmux</b>
-          <span>default-deny gate · router · budgets · cache</span>
+          <svg class="glyph" viewBox="0 0 60 100" aria-hidden="true">
+            <path d="M6 4 L54 34 L54 66 L6 96 Z"/>
+          </svg>
+          <div class="lbl"><b>llmux</b><span>gate · router · budgets · cache</span></div>
         </div>
 
-        <div class="rail" aria-hidden="true"><i></i>
-          <svg viewBox="0 0 24 24" fill="none" stroke="var(--faint)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h13M13 6l6 6-6 6"/></svg>
+        <div class="trace" aria-hidden="true">
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none">
+            <path d="M0 50 H100" fill="none" stroke="var(--teal)" stroke-width="1"
+                  vector-effect="non-scaling-stroke"/>
+          </svg>
         </div>
 
         <div class="appcard">
           <span class="k">Your app</span>
           <b>Any OpenAI SDK, unchanged</b>
-          <p>One <code style="font-family:var(--mono)">base_url</code>, one virtual key. The gateway decides which port above actually gets dialed.</p>
+          <p>One <code>base_url</code>, one virtual key. The gateway decides which port above actually gets
+            dialed.</p>
           <span class="chip">POST /v1/chat/completions</span>
         </div>
       </div>
-      <figcaption class="diagram-note">This is the default posture out of the box. Opting a provider in
-        — <code>allow_egress</code>, or a <code>sovereign</code>/<code>brokered</code> tier — moves it from
-        blocked to logged-and-allowed; nothing changes silently. Every permitted off-box call is logged
-        with its tier, and every blocked one increments <code>llmux_egress_blocked_total</code>.</figcaption>
+      <figcaption class="mux-note">This is the default posture out of the box. Opting a provider in —
+        <code>allow_egress</code>, or a <code>sovereign</code>/<code>brokered</code> tier — moves it from
+        blocked to logged-and-allowed; nothing changes silently. Every permitted off-box call is logged with
+        its tier, and every blocked one increments <code>llmux_egress_blocked_total</code>.</figcaption>
     </figure>
   </div>
 </section>
 
-<!-- ══ 01 · COMPATIBLE ══════════════════════════════════════════════════ -->
-<section id="compatible">
+<!-- ══════ CH 01 · THE WIRE ══════════════════════════════════════════════ -->
+<section class="band" id="wire">
   <div class="wrap">
-    <div class="marker rv"><span class="num">01</span><span>Speaks the API you already call</span><span class="rule"></span></div>
-    <h2 class="big rv">The OpenAI HTTP API, verbatim — so nothing about your client code changes.</h2>
-    <p class="lead rv">Every language already ships a mature OpenAI client that accepts a custom
-      <code style="font-family:var(--mono)">base_url</code>. Point it at llmux and routing, budgets,
-      caching and cost accounting happen underneath — no new SDK, no new wire format to learn.</p>
+    <span class="bus" aria-hidden="true"></span>
 
-    <div class="split2">
-      <div class="rv">
-        <div class="code-frame">
-          <div class="code-bar"><i></i><i></i><i></i><span class="path">chat/completions · curl</span></div>
+    <div class="chead rv"><span class="ch">CH·01</span><span class="cl">The wire</span>
+      <span class="cr"></span><span class="cm">OpenAI HTTP API, verbatim</span></div>
+
+    <h2 class="sec rv">Nothing about your client code changes.</h2>
+    <p class="lead rv">Every language already ships a mature OpenAI client that accepts a custom
+      <code>base_url</code>. Point it at llmux and routing, budgets, caching and cost accounting happen
+      underneath — no new SDK, no new wire format to learn.</p>
+
+    <!-- What you send, and what comes back — the two halves of the one shape
+         your client already speaks, set against each other. -->
+    <div class="split rv" style="margin-top:40px">
+      <div>
+        <div class="code">
+          <div class="code-bar"><i></i><span class="path">↑ request · curl</span></div>
           <pre><code><span class="cb-f">curl</span> <span class="cb-s">http://localhost:4000/v1/chat/completions</span> <span class="cb-p">\</span>
   <span class="cb-flag">-H</span> <span class="cb-s">"Authorization: Bearer sk-team-a"</span> <span class="cb-p">\</span>
   <span class="cb-flag">-H</span> <span class="cb-s">"Content-Type: application/json"</span> <span class="cb-p">\</span>
-  <span class="cb-flag">-d</span> <span class="cb-s">'{"model":"assistant","messages":[{"role":"user","content":"Hello!"}]}'</span></code></pre>
+  <span class="cb-flag">-d</span> <span class="cb-s">'{"model":"assistant",
+       "messages":[{"role":"user","content":"Hello!"}]}'</span></code></pre>
         </div>
-        <p style="margin-top:14px;font-size:13.4px;color:var(--faint);line-height:1.6">The <code style="font-family:var(--mono);background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px">model</code>
-          string is what selects the route — an alias, a <code style="font-family:var(--mono);background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px">provider/model</code>
-          prefix, a wildcard, or a least-cost pseudo-model. Streaming (<code style="font-family:var(--mono);background:var(--sunken);border:1px solid var(--border);padding:1px 5px;border-radius:5px">"stream":true</code>)
-          returns byte-identical OpenAI SSE, so every language's stream parser just works unchanged.</p>
+        <p class="aside">The <code>model</code> string is what selects the route — an alias, a
+          <code>provider/model</code> prefix, a wildcard, or a least-cost pseudo-model. Streaming
+          (<code>"stream":true</code>) returns byte-identical OpenAI SSE, so every language's stream parser
+          just works unchanged.</p>
       </div>
-
-      <div class="grid" style="margin-top:0;grid-template-columns:minmax(0,1fr);gap:12px">
-        <div class="card rv">
-          <h3>Every core route</h3>
-          <p><code>chat/completions</code>, <code>completions</code>, <code>embeddings</code>, <code>models</code>,
-            plus <code>responses</code>, <code>rerank</code>, <code>moderations</code>, <code>images/generations</code>,
-            <code>audio/speech</code>, and <code>audio/transcriptions</code> / <code>audio/translations</code>
-            (multipart speech-to-text).</p>
+      <div>
+        <div class="code">
+          <div class="code-bar"><i></i><span class="path">↓ response · usage block</span></div>
+          <pre><code><span class="cb-p">{</span> <span class="cb-pr">"usage"</span><span class="cb-p">:</span> <span class="cb-p">{</span>
+    <span class="cb-pr">"prompt_tokens"</span><span class="cb-p">:</span> <span class="cb-n">9</span><span class="cb-p">,</span> <span class="cb-pr">"completion_tokens"</span><span class="cb-p">:</span> <span class="cb-n">12</span><span class="cb-p">,</span>
+    <span class="cb-pr">"total_tokens"</span><span class="cb-p">:</span> <span class="cb-n">21</span><span class="cb-p">,</span>
+    <span class="cb-pr">"cost"</span><span class="cb-p">:</span> <span class="cb-p">{</span> <span class="cb-pr">"input_cost"</span><span class="cb-p">:</span>  <span class="cb-n">0.0000014</span><span class="cb-p">,</span>
+              <span class="cb-pr">"output_cost"</span><span class="cb-p">:</span> <span class="cb-n">0.0000072</span><span class="cb-p">,</span>
+              <span class="cb-pr">"total_cost"</span><span class="cb-p">:</span>  <span class="cb-n">0.0000086</span><span class="cb-p">,</span>
+              <span class="cb-pr">"currency"</span><span class="cb-p">:</span>    <span class="cb-s">"USD"</span> <span class="cb-p">}</span> <span class="cb-p">}</span> <span class="cb-p">}</span></code></pre>
         </div>
-        <div class="card rv">
-          <h3>Routed vs. forwarded</h3>
-          <p><code>chat/completions</code> and <code>embeddings</code> go through native per-provider
-            translation. The other modality routes are proxied only to <code>passthrough</code> providers —
-            a translating adapter like Anthropic or Gemini answers them with <code>501</code>, stated here
-            rather than discovered the hard way.</p>
-        </div>
-        <div class="card rv">
-          <h3>Cost, in the response you already read</h3>
-          <p>Each response's <code>usage.cost</code> object carries <code>input_cost</code>, <code>output_cost</code>
-            and <code>total_cost</code> from the live pricing catalog — no separate call, no separate dashboard
-            tab to reconcile against.</p>
-        </div>
+        <p class="aside">The standard OpenAI <code>usage</code> shape plus exactly one additive
+          extension — a <code>cost</code> object priced from the live catalog, which any OpenAI client
+          ignores harmlessly if it isn't looking for it.</p>
       </div>
     </div>
 
-    <!-- MECHANISM 1: one OpenAI-shaped call, fanned to whichever provider the
-         route resolves to, folded back through the same shape before your
-         app ever sees it — the request/response half of the story the hero
-         diagram tells about sovereignty tiers. -->
-    <figure class="mech rv">
-      <div class="mech-row">
-        <div class="mnode"><b>Your app</b><span>POST /v1/chat/completions</span></div>
-        <div class="marrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-        <div class="mnode" style="border-color:var(--accent-edge);background:var(--accent-wash)"><b style="color:var(--accent)">llmux</b><span style="color:var(--accent)">translates the shape</span></div>
-        <div class="marrow go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-        <div class="mbranch">
-          <div class="mnode go"><b>anthropic</b><span>dialed this call</span></div>
-          <div class="mnode dim"><b>local</b><span>candidate, not dialed</span></div>
-          <div class="mnode dim"><b>bedrock</b><span>candidate, not dialed</span></div>
+    <!-- Three facts about the surface, as ruled columns rather than cards. -->
+    <div class="triptych rv">
+      <div>
+        <span class="n">Coverage</span>
+        <b>Every core route</b>
+        <p><code>chat/completions</code>, <code>completions</code>, <code>embeddings</code>,
+          <code>models</code>, plus <code>responses</code>, <code>rerank</code>, <code>moderations</code>,
+          <code>images/generations</code>, <code>audio/speech</code>, and
+          <code>audio/transcriptions</code> / <code>audio/translations</code> (multipart
+          speech-to-text).</p>
+      </div>
+      <div>
+        <span class="n">Two models</span>
+        <b>Routed vs. forwarded</b>
+        <p><code>chat/completions</code> and <code>embeddings</code> go through native per-provider
+          translation on every adapter that has an embeddings API (<code>passthrough</code>, Gemini,
+          Cohere and Azure — Anthropic and Bedrock have none upstream and return <code>501</code>). The
+          other modality routes are proxied only to <code>passthrough</code> providers — a translating
+          adapter like Anthropic or Gemini answers them with <code>501</code>, stated here rather than
+          discovered the hard way.</p>
+      </div>
+      <div>
+        <span class="n">Accounting</span>
+        <b>Cost, in the response you already read</b>
+        <p>Each response's <code>usage.cost</code> object carries <code>input_cost</code>,
+          <code>output_cost</code>, <code>total_cost</code> and <code>currency</code> from the live
+          pricing catalog — no separate call, no separate dashboard tab to reconcile against.</p>
+      </div>
+    </div>
+
+    <!-- One OpenAI-shaped call, fanned to whichever provider the route
+         resolves to, folded back through the same shape before your app sees
+         it — the request/response half of the story the hero tells about
+         sovereignty tiers. -->
+    <figure class="flow rv">
+      <div class="frow">
+        <div class="fnode"><b>Your app</b><span>POST /v1/chat/completions</span></div>
+        <span class="wire" aria-hidden="true"></span>
+        <div class="fnode mid"><b>llmux</b><span>translates the shape</span></div>
+        <span class="wire go" aria-hidden="true"></span>
+        <div class="fbranch">
+          <div class="fnode go"><b>anthropic</b><span>dialed this call</span></div>
+          <div class="fnode dim"><b>local</b><span>candidate, not dialed</span></div>
+          <div class="fnode dim"><b>bedrock</b><span>candidate, not dialed</span></div>
         </div>
       </div>
-      <figcaption class="mcap">Every call arrives in the same OpenAI shape and is translated to whichever
+      <figcaption class="cap">Every call arrives in the same OpenAI shape and is translated to whichever
         provider the route resolves to — here, Anthropic. The reply is translated back before your app ever
         sees it, so your client only ever holds the one shape it already speaks, in and out — streaming
         included: <code>"stream":true</code> returns byte-identical OpenAI SSE regardless of which provider
         actually answered.</figcaption>
     </figure>
 
-    <!-- THE FULL ENDPOINT SURFACE — every route the gateway serves, not just
-         the three headline ones, with which of the two coverage models each
-         one gets. -->
-    <div class="routes rv" style="margin-top:44px">
-      <div class="etable">
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/chat/completions</span><span class="ds"><span class="rbadge routed">routed</span>Native per-provider translation; streaming is byte-identical OpenAI SSE.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/embeddings</span><span class="ds"><span class="rbadge routed">routed</span>Native translation on <code>passthrough</code>, <code>gemini</code> and <code>cohere</code>.</span></div>
-        <div class="erow"><span class="st">GET</span><span class="cd">/v1/models</span><span class="ds"><span class="rbadge catalog">catalog</span>Every model with live price and context window.</span></div>
-        <div class="erow"><span class="st">GET</span><span class="cd">/v1/catalog.json</span><span class="ds"><span class="rbadge catalog">catalog</span>The full merged pricing catalog behind that list.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/completions</span><span class="ds"><span class="rbadge forward">forwarded</span>Legacy text completions — <code>passthrough</code> providers only.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/responses</span><span class="ds"><span class="rbadge forward">forwarded</span>OpenAI Responses API; the get/cancel lifecycle isn't ported yet.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/rerank</span><span class="ds"><span class="rbadge forward">forwarded</span>Reranking, passed through as-is.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/moderations</span><span class="ds"><span class="rbadge forward">forwarded</span>Moderation, passed through as-is.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/images/generations</span><span class="ds"><span class="rbadge forward">forwarded</span>Image generation, passed through as-is.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/audio/speech</span><span class="ds"><span class="rbadge forward">forwarded</span>Text-to-speech, passed through as-is.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/audio/transcriptions</span><span class="ds"><span class="rbadge forward">forwarded</span>Multipart upload, speech-to-text. No per-minute price exists yet, so a served call meters as an auditable $0 line rather than billing silently.</span></div>
-        <div class="erow"><span class="st">POST</span><span class="cd">/v1/audio/translations</span><span class="ds"><span class="rbadge forward">forwarded</span>Same as transcription, plus translation to English. Also multipart.</span></div>
+    <!-- The full endpoint surface: every route the gateway serves, not just the
+         three headline ones, with which of the two coverage models each gets. -->
+    <div class="rv" style="margin-top:44px">
+      <div class="chead"><span class="ch">Matrix</span><span class="cl">Endpoint surface</span>
+        <span class="cr"></span><span class="cm">12 routes</span></div>
+      <div class="tscroll">
+        <table class="spec">
+          <thead><tr><th>Method</th><th>Route</th><th class="g">Mode</th><th>Behaviour</th></tr></thead>
+          <tbody>
+            <tr><td class="m">POST</td><td class="r">/v1/chat/completions</td><td class="g"><span class="tag routed">routed</span></td><td>Native per-provider translation; streaming is byte-identical OpenAI SSE.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/embeddings</td><td class="g"><span class="tag routed">routed</span></td><td>Native translation on <code>passthrough</code>, <code>gemini</code>, <code>cohere</code> and <code>azure</code>.</td></tr>
+            <tr><td class="m">GET</td><td class="r">/v1/models</td><td class="g"><span class="tag catalog">catalog</span></td><td>Every model with live price and context window.</td></tr>
+            <tr><td class="m">GET</td><td class="r">/v1/catalog.json</td><td class="g"><span class="tag catalog">catalog</span></td><td>The full merged pricing catalog behind that list.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/completions</td><td class="g"><span class="tag">forwarded</span></td><td>Legacy text completions — <code>passthrough</code> providers only.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/responses</td><td class="g"><span class="tag">forwarded</span></td><td>OpenAI Responses API; the get/cancel lifecycle isn't ported yet.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/rerank</td><td class="g"><span class="tag">forwarded</span></td><td>Reranking, passed through as-is.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/moderations</td><td class="g"><span class="tag">forwarded</span></td><td>Moderation, passed through as-is.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/images/generations</td><td class="g"><span class="tag">forwarded</span></td><td>Image generation, passed through as-is.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/audio/speech</td><td class="g"><span class="tag">forwarded</span></td><td>Text-to-speech, passed through as-is.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/audio/transcriptions</td><td class="g"><span class="tag">forwarded</span></td><td>Multipart upload, speech-to-text. No per-minute price exists yet, so a served call meters as an auditable $0 line rather than billing silently.</td></tr>
+            <tr><td class="m">POST</td><td class="r">/v1/audio/translations</td><td class="g"><span class="tag">forwarded</span></td><td>Same as transcription, plus translation to English. Also multipart.</td></tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
-    <div class="rv" style="margin-top:36px">
-      <p style="font-size:13.6px;color:var(--muted)"><b style="color:var(--text)">17 languages</b> already
-        ship an OpenAI client that works against llmux unchanged — curl, plus:</p>
+    <div class="rv" style="margin-top:40px">
+      <p class="lead" style="margin-top:0"><b>17 languages</b> already ship an OpenAI client that works
+        against llmux unchanged — curl, plus:</p>
       <div class="langs" aria-label="Supported client languages">
         <span>Python</span><span>Node.js</span><span>TypeScript</span><span>Go</span><span>Ruby</span>
         <span>PHP</span><span>Java</span><span>C#</span><span>Rust</span><span>C++</span><span>C</span>
         <span>Swift</span><span>Kotlin</span><span>Elixir</span><span>R</span><span>Dart</span>
       </div>
-      <p style="margin-top:13px;font-size:13px;color:var(--faint)">Go can also embed the gateway
-        <b style="color:var(--dim)">in-process</b> with no child process at all; Python, Node, Ruby, PHP,
-        Rust, Java, .NET and Elixir can run it as a local sidecar instead of a standalone service.
-        <a href="./docs.html#client-examples" style="color:var(--accent);font-weight:600">See every example →</a></p>
+      <p class="aside">Go can also embed the gateway <b style="color:var(--muted)">in-process</b> with no
+        child process at all; Python, Node, Ruby, PHP, Rust, Java, .NET and Elixir can run it as a local
+        sidecar instead of a standalone service.
+        <a href="./docs.html#client-examples" style="color:var(--teal-ink);font-weight:600">See every example →</a></p>
     </div>
   </div>
 </section>
 
-<!-- ══ 02 · SOVEREIGNTY ═════════════════════════════════════════════════ -->
-<section id="sovereignty">
+<!-- ══════ CH 02 · THE GATE — the darkest band in both themes ════════════ -->
+<section class="band ink" id="gate">
   <div class="wrap">
-    <div class="marker rv"><span class="num">02</span><span>Where your AI actually runs</span><span class="rule"></span></div>
-    <h2 class="big rv">A default-deny gate runs before every dispatch. Nothing leaves the box by accident.</h2>
-    <p class="lead rv">Most gateways route your prompts to someone else's cloud and call that "integration."
-      llmux inverts the default: a loopback or unix-socket <code style="font-family:var(--mono)">base_url</code>
-      is <b style="color:var(--text)">local</b> and always allowed; any off-box endpoint is blocked until you
-      opt it in, <b style="color:var(--text)">per provider, never globally</b>. A blocked provider is never
-      dialed — the request gets a <code style="font-family:var(--mono)">403</code> and the denial is counted.</p>
+    <span class="bus" aria-hidden="true"></span>
 
-    <div class="tiers">
-      <div class="tier local rv">
-        <span class="verdict">Always allowed</span>
-        <h3>Local</h3>
-        <p>Inference on this box. A loopback URL is always classified <code style="font-family:var(--mono)">local</code>
-          regardless of how it's marked — you can't mislabel an on-box endpoint into looking remote.</p>
+    <div class="chead rv"><span class="ch">CH·02</span><span class="cl">The gate</span>
+      <span class="cr"></span><span class="cm">default deny</span></div>
+
+    <h2 class="sec rv">A default-deny gate runs before every dispatch.</h2>
+    <p class="lead rv">Most gateways route your prompts to someone else's cloud and call that
+      "integration." llmux inverts the default: a loopback or unix-socket <code>base_url</code> is
+      <b>local</b> and always allowed; any off-box endpoint is blocked until you opt it in,
+      <b>per provider, never globally</b>. A blocked provider is never dialed — the request gets a
+      <code>403</code> and the denial is counted.</p>
+
+    <div class="ladder rv" style="margin-top:40px">
+      <div class="step allow">
+        <span class="idx">TIER 1</span>
+        <div><h3>Local</h3><span class="verdict">Always allowed</span></div>
+        <p>Inference on this box. A loopback URL is always classified <code>local</code> regardless of how
+          it's marked — you can't mislabel an on-box endpoint into looking remote.</p>
       </div>
-      <div class="tier sovereign rv">
-        <span class="verdict">On your say-so</span>
-        <h3>Sovereign</h3>
-        <p>An off-box endpoint the operator personally vouches for — <code style="font-family:var(--mono)">"tier": "sovereign"</code>,
-          unverified by Vulos, allowed without <code style="font-family:var(--mono)">allow_egress</code>.</p>
+      <div class="step allow">
+        <span class="idx">TIER 2</span>
+        <div><h3>Sovereign</h3><span class="verdict">On your say-so</span></div>
+        <p>An off-box endpoint the operator personally vouches for — <code>"tier": "sovereign"</code>,
+          unverified by Vulos, allowed without <code>allow_egress</code>.</p>
       </div>
-      <div class="tier brokered rv">
-        <span class="verdict">Opt-in required</span>
-        <h3>Brokered</h3>
-        <p>A named third party under a claimed no-train agreement — <code style="font-family:var(--mono)">"tier": "brokered"</code>
-          plus <code style="font-family:var(--mono)">allow_brokered</code> (or <code style="font-family:var(--mono)">allow_egress</code>).</p>
+      <div class="step allow">
+        <span class="idx">TIER 3</span>
+        <div><h3>Brokered</h3><span class="verdict">Opt-in required</span></div>
+        <p>A named third party under a claimed no-train agreement — <code>"tier": "brokered"</code> plus
+          <code>allow_brokered</code> (or <code>allow_egress</code>).</p>
       </div>
-      <div class="tier external rv">
-        <span class="verdict">Blocked by default</span>
-        <h3>External</h3>
+      <div class="step deny">
+        <span class="idx">TIER 4</span>
+        <div><h3>External</h3><span class="verdict">Blocked by default</span></div>
         <p>Anything else off-box — OpenAI, Anthropic, Gemini, Cohere, Bedrock, Azure. Requires an explicit
-          <code style="font-family:var(--mono)">"allow_egress": true</code> on that provider.</p>
+          <code>"allow_egress": true</code> on that provider.</p>
       </div>
     </div>
 
-    <!-- MECHANISM 2: where the gate actually sits — between route resolution
-         and the network call, never after it. A blocked provider is never
-         dialed at all, not dialed-then-discarded. -->
-    <figure class="mech rv">
-      <div class="mech-row">
-        <div class="mnode"><b>Request</b><span>route resolved</span></div>
-        <div class="marrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-        <div class="mnode"><b>Sovereignty gate</b><span>runs before every dispatch</span></div>
-        <div class="mbranch">
-          <div class="mbranch-row">
-            <span class="marrow go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-            <div class="mnode go"><b>Provider dialed</b><span>logged with its tier</span></div>
+    <!-- Where the gate actually sits: between route resolution and the network
+         call, never after it. -->
+    <figure class="flow rv">
+      <div class="frow">
+        <div class="fnode"><b>Request</b><span>route resolved</span></div>
+        <span class="wire" aria-hidden="true"></span>
+        <div class="fnode mid"><b>Sovereignty gate</b><span>runs before every dispatch</span></div>
+        <div class="fbranch">
+          <div class="brow">
+            <span class="wire go" aria-hidden="true"></span>
+            <div class="fnode go"><b>Provider dialed</b><span>logged with its tier</span></div>
           </div>
-          <div class="mbranch-row">
-            <span class="marrow stop" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-            <div class="mnode stop"><b>403 · blocked</b><span>never dialed, counted</span></div>
+          <div class="brow">
+            <span class="wire stop" aria-hidden="true"></span>
+            <div class="fnode stop"><b>403 · blocked</b><span>never dialed, counted</span></div>
           </div>
         </div>
       </div>
-      <figcaption class="mcap">The gate sits between route resolution and the network call — never after
-        it. An allowed provider gets dialed and logged with its tier; a blocked one is never dialed at all:
-        the request fails with <code>403</code> before a single byte leaves the box, and
+      <figcaption class="cap">The gate sits between route resolution and the network call — never after it.
+        An allowed provider gets dialed and logged with its tier; a blocked one is never dialed at all: the
+        request fails with <code>403</code> before a single byte leaves the box, and
         <code>llmux_egress_blocked_total</code> counts it.</figcaption>
     </figure>
 
-    <div class="split2" style="margin-top:44px">
+    <div class="split" style="margin-top:44px">
       <div class="rv">
-        <div class="code-frame">
-          <div class="code-bar"><i></i><i></i><i></i><span class="path">llmux.json</span></div>
+        <div class="code">
+          <div class="code-bar"><i></i><span class="path">llmux.json</span></div>
           <pre><code><span class="cb-p">{</span>
   <span class="cb-pr">"providers"</span><span class="cb-p">:</span> <span class="cb-p">[</span>
     <span class="cb-c">// loopback = local, always allowed</span>
@@ -843,10 +1214,9 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
 <span class="cb-p">}</span></code></pre>
         </div>
       </div>
-
       <div class="rv">
-        <div class="code-frame wrap">
-          <div class="code-bar"><i></i><i></i><i></i><span class="path">403 · blocked, and told why</span></div>
+        <div class="code soft">
+          <div class="code-bar"><i></i><span class="path">403 · blocked, and told why</span></div>
           <pre><code><span class="cb-p">{</span>
   <span class="cb-pr">"error"</span><span class="cb-p">:</span> <span class="cb-p">{</span>
     <span class="cb-pr">"message"</span><span class="cb-p">:</span> <span class="cb-s">"sovereignty: provider \"openai\" is a non-local endpoint and egress is not enabled; set \"allow_egress\": true on this provider to permit off-box calls"</span><span class="cb-p">,</span>
@@ -855,16 +1225,16 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
   <span class="cb-p">}</span>
 <span class="cb-p">}</span></code></pre>
         </div>
-        <p style="margin-top:14px;font-size:13.4px;color:var(--faint);line-height:1.6">On a fallback chain, a
-          sovereignty-blocked primary is simply skipped so a local fallback can still serve — the gate costs
-          availability of one route, never a silent privacy leak.</p>
+        <p class="aside">On a fallback chain, a sovereignty-blocked primary is simply skipped so a local
+          fallback can still serve — the gate costs availability of one route, never a silent privacy
+          leak.</p>
       </div>
     </div>
 
-    <div class="callout rv">
-      <div class="ci" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.3 3.9 2.5 17.4A2 2 0 0 0 4.2 20.4h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 17h.01"/></svg></div>
+    <div class="note rv">
+      <div class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M10.3 3.9 2.5 17.4A2 2 0 0 0 4.2 20.4h15.6a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 17h.01"/></svg></div>
       <div>
-        <h3>The one outbound call the gate does <em>not</em> cover — stated, not buried</h3>
+        <h3>The one outbound call the gate does <span class="mono">not</span> cover — stated, not buried</h3>
         <p><b>The gate governs inference dispatch only.</b> A stock gateway also ships two public
           <b>price-catalog</b> feeds (openrouter.ai, raw.githubusercontent.com) and issues a plain
           <code>GET</code> at startup and every <code>sync_interval_minutes</code> (default 360) — no
@@ -876,233 +1246,274 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
   </div>
 </section>
 
-<!-- ══ 03 · PROVIDERS / ROUTING ═════════════════════════════════════════ -->
-<section id="providers">
+<!-- ══════ CH 03 · THE ROUTES ════════════════════════════════════════════ -->
+<section class="band alt" id="routes">
   <div class="wrap">
-    <div class="marker rv"><span class="num">03</span><span>Every provider, one interface</span><span class="rule"></span></div>
-    <h2 class="big rv">Native translation where it earns its keep, passthrough for everything else.</h2>
-    <p class="lead rv">Six provider types cover the field: five native adapters that translate tool-calling,
-      vision and streaming per provider, plus <code style="font-family:var(--mono)">passthrough</code> for
-      any OpenAI-shaped upstream — including a local Ollama/llama.cpp/vLLM server.</p>
+    <span class="bus" aria-hidden="true"></span>
 
-    <div class="grid g4">
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M2 12h4M18 12h4M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/></svg></div>
-        <h3>Native adapters</h3>
-        <p>Anthropic, Gemini, Cohere, Bedrock (SigV4) and Azure — each translating tool-calling, vision and
-          streaming into the canonical OpenAI shape.</p>
+    <div class="chead rv"><span class="ch">CH·03</span><span class="cl">The routes</span>
+      <span class="cr"></span><span class="cm">six provider types</span></div>
+
+    <h2 class="sec rv">Native translation where it earns its keep, passthrough for everything else.</h2>
+    <p class="lead rv">Six provider types cover the field: five native adapters that translate tool-calling,
+      vision and streaming per provider, plus <code>passthrough</code> for any OpenAI-shaped upstream —
+      including a local Ollama/llama.cpp/vLLM server.</p>
+
+    <!-- The roster: which upstreams get a translating adapter and which are
+         simply spoken to in the shape they already speak. -->
+    <div class="roster rv">
+      <div class="rcol">
+        <div class="rhead"><b>Native adapters</b><span>five, each translating tool-calling, vision and
+          streaming into the canonical OpenAI shape</span></div>
+        <ul class="chips">
+          <li>anthropic</li><li>gemini</li><li>cohere</li><li>bedrock <em>SigV4</em></li><li>azure</li>
+        </ul>
       </div>
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
-        <h3>Passthrough, for the rest</h3>
-        <p>Any OpenAI-shaped upstream — DeepSeek, Groq, Mistral, Together, Fireworks, xAI, OpenRouter, or a
-          local Ollama/llama.cpp/vLLM server.</p>
-      </div>
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12h4l3-8 4 16 3-8h4"/></svg></div>
-        <h3>Flexible routes</h3>
-        <p>Aliases, <code>provider/model</code> prefixes, wildcards (<code>claude-*</code>), a catch-all
-          <code>*</code>, and a <code>least-cost</code> strategy across named candidates.</p>
-      </div>
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></div>
-        <h3>Fallback chains</h3>
-        <p>Retries on <code>429/500/502/503/504</code> and transport errors, exponential backoff (2 retries,
-          200ms default). A blocked primary is skipped, not fatal.</p>
+      <div class="rcol">
+        <div class="rhead"><b>Passthrough</b><span>one type covering every OpenAI-shaped upstream,
+          including the one running on this box</span></div>
+        <ul class="chips">
+          <li>local <em>ollama · llama.cpp · vLLM</em></li><li>openai</li><li>deepseek</li><li>groq</li>
+          <li>mistral</li><li>together</li><li>fireworks</li><li>xai</li><li>openrouter</li>
+        </ul>
       </div>
     </div>
 
-    <!-- MECHANISM 3: a fallback chain stepping through candidates — one of
-         the skips is an ordinary transport error, the other is the
-         sovereignty gate, and the page treats both as the same kind of
-         "try the next one" event rather than two different mechanisms. -->
-    <figure class="mech rv">
-      <div class="mech-row">
-        <div class="mnode stop"><b>1 · primary</b><span>503 → skip</span></div>
-        <div class="marrow dash" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-        <div class="mnode stop"><b>2 · fallback</b><span>blocked · gate → skip</span></div>
-        <div class="marrow dash" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-        <div class="mnode go"><b>3 · fallback</b><span>200 · served</span></div>
+    <!-- Route resolution, in the order the router actually tries it. -->
+    <div class="rv" style="margin-top:44px">
+      <div class="chead"><span class="ch">Order</span><span class="cl">How a model string resolves</span>
+        <span class="cr"></span><span class="cm">first match wins</span></div>
+      <div class="tscroll">
+        <table class="spec">
+          <thead><tr><th class="g">Step</th><th>Pattern</th><th>Resolves to</th></tr></thead>
+          <tbody>
+            <tr><td class="m g">1</td><td class="r">"assistant"</td><td>Exact match — the route whose <code>model</code> is that string.</td></tr>
+            <tr><td class="m g">2</td><td class="r">"claude-*"</td><td>The longest matching trailing-<code>*</code> wildcard route.</td></tr>
+            <tr><td class="m g">3</td><td class="r">"*"</td><td>The catch-all route, forwarding the requested name unchanged.</td></tr>
+            <tr><td class="m g">4</td><td class="r">"openai/gpt-4o"</td><td>Only if no route matched at all: <code>provider/model</code> prefix syntax dials that named provider directly.</td></tr>
+            <tr><td class="m g">—</td><td class="r">"strategy": "least-cost"</td><td>A route with a <code>candidates[]</code> list picks the cheapest by catalog price (input+output per MTok) at request time; the rest become its fallback chain in cost order, unpriced candidates last.</td></tr>
+          </tbody>
+        </table>
       </div>
-      <figcaption class="mcap">One logical request, up to three tries. A primary that errors is retried
-        with backoff on <code>429/500/502/503/504</code>; a fallback the sovereignty gate blocks is skipped
+      <p class="aside"><code>fallbacks</code> name providers to try in order when the primary fails —
+        retryable on <code>429/500/502/503/504</code> and transport errors, with exponential backoff
+        (<code>max_retries</code> 2, <code>backoff_ms</code> 200 by default). A sovereignty-blocked primary
+        is skipped so a local fallback can still serve.</p>
+    </div>
+
+    <!-- A fallback chain stepping through candidates — one skip is an ordinary
+         transport error, the other is the sovereignty gate, and the page treats
+         both as the same kind of "try the next one" event. -->
+    <figure class="flow rv">
+      <div class="frow">
+        <div class="fnode stop"><b>1 · primary</b><span>503 → skip</span></div>
+        <span class="wire dash" aria-hidden="true"></span>
+        <div class="fnode stop"><b>2 · fallback</b><span>blocked · gate → skip</span></div>
+        <span class="wire dash" aria-hidden="true"></span>
+        <div class="fnode go"><b>3 · fallback</b><span>200 · served</span></div>
+      </div>
+      <figcaption class="cap">One logical request, up to three tries. A primary that errors is retried with
+        backoff on <code>429/500/502/503/504</code>; a fallback the sovereignty gate blocks is skipped
         outright, the same as any other unusable candidate — until one serves the call. Your application
         sees one response, not the attempts behind it.</figcaption>
     </figure>
   </div>
 </section>
 
-<!-- ══ 04 · OPERATE ═════════════════════════════════════════════════════ -->
-<section id="operate">
+<!-- ══════ CH 04 · THE CONTROLS ══════════════════════════════════════════ -->
+<section class="band" id="controls">
   <div class="wrap">
-    <div class="marker rv"><span class="num">04</span><span>Budgets, keys, caching, cost</span><span class="rule"></span></div>
-    <h2 class="big rv">The controls a fleet of applications actually needs — built in, not bolted on.</h2>
+    <span class="bus" aria-hidden="true"></span>
+
+    <div class="chead rv"><span class="ch">CH·04</span><span class="cl">The controls</span>
+      <span class="cr"></span><span class="cm">budgets · keys · cache · cost</span></div>
+
+    <h2 class="sec rv">The controls a fleet of applications actually needs — built in, not bolted on.</h2>
     <p class="lead rv">Every application gets its own virtual key rather than the master key. Caches never
       cross a key boundary, and every response already knows what it cost.</p>
 
-    <div class="grid g4">
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-        <h3>Virtual keys &amp; budgets</h3>
-        <p>Per-key USD <code>budget_usd</code>, <code>rpm</code>, and a model allow-list. Over budget is
+    <dl class="ledger rv" style="margin-top:40px">
+      <div class="lrow">
+        <dt><span class="n">keys</span>Virtual keys &amp; budgets</dt>
+        <dd>Per-key USD <code>budget_usd</code>, <code>rpm</code>, and a model allow-list. Over budget is
           <code>402</code>, over the RPM limit is <code>429</code>. Spend persists to Postgres; tokens are
-          <code>sha256</code>-hashed at rest.</p>
+          <code>sha256</code>-hashed at rest.</dd>
       </div>
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3.5-7.1"/><path d="M21 3v6h-6"/></svg></div>
-        <h3>Caching, exact and semantic</h3>
-        <p>LRU + TTL exact-match, or embedding-similarity semantic matching — in-memory or shared via Redis,
-          scoped per virtual key so keys never see each other's completions.</p>
+      <div class="lrow">
+        <dt><span class="n">cache</span>Exact and semantic</dt>
+        <dd>LRU + TTL exact-match, or embedding-similarity semantic matching — in-memory or shared via
+          Redis, scoped per virtual key so keys never see each other's completions.</dd>
       </div>
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
-        <h3>Live pricing, offline-first</h3>
-        <p>A built-in seed prices requests with zero network access; it auto-syncs from OpenRouter and
-          LiteLLM when allowed. Merged catalog at <code>GET /v1/catalog.json</code>.</p>
+      <div class="lrow">
+        <dt><span class="n">pricing</span>Live, offline-first</dt>
+        <dd>A built-in seed prices requests with zero network access; it auto-syncs from OpenRouter and
+          LiteLLM when allowed. Merged catalog at <code>GET /v1/catalog.json</code>.</dd>
       </div>
-      <div class="card rv">
-        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 16v-4M12 16V8M16 16v-7"/></svg></div>
-        <h3>Embedded dashboard</h3>
-        <p>Usage by model, key budgets, and the live catalog — served from the binary at <code>/ui</code> via
-          <code>go:embed</code>. Plus Prometheus <code>/metrics</code>, structured logs, <code>/health</code>.</p>
+      <div class="lrow">
+        <dt><span class="n">console</span>Embedded dashboard</dt>
+        <dd>Usage by model, key budgets, and the live catalog — served from the binary at <code>/ui</code>
+          via <code>go:embed</code>. Plus Prometheus <code>/metrics</code>, structured logs,
+          <code>/health</code>.</dd>
       </div>
-    </div>
+    </dl>
 
-    <!-- MECHANISM 4: what a virtual key's budget actually gates — spend
-         fills toward the cap, and a call that would cross it is refused
-         before it's dialed, not billed and then apologised for. -->
-    <figure class="mech rv">
-      <div class="mech-row" style="align-items:center">
-        <div class="mnode"><b>sk-team-a</b><span>virtual key</span></div>
-        <div class="marrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div>
-        <div class="mgauge">
-          <div class="mgauge-track"><div class="mgauge-fill" style="width:62%"></div></div>
-          <span class="mgauge-label">$15.50 spent / $25.00 budget_usd</span>
+    <!-- What a virtual key's budget actually gates: spend fills toward the cap,
+         and a call that would cross it is refused before it's dialed. -->
+    <figure class="flow rv">
+      <div class="frow" style="align-items:center">
+        <div class="fnode"><b>sk-team-a</b><span>virtual key</span></div>
+        <span class="wire" aria-hidden="true"></span>
+        <div style="flex:1 1 220px;min-width:180px">
+          <div style="height:12px;border:1px solid var(--line-2);background:var(--sunk);position:relative">
+            <div style="position:absolute;inset:0 38% 0 0;background:var(--teal)"></div>
+          </div>
+          <span class="mono" style="display:block;margin-top:8px;font-size:11.6px;color:var(--faint)">$15.50 spent / $25.00 budget_usd</span>
         </div>
       </div>
-      <div class="mech-row" style="margin-top:20px">
-        <span class="marrow go" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        <div class="mnode go"><b>Under the cap</b><span>200 · billed, added to spend</span></div>
-        <span class="marrow stop" aria-hidden="true" style="margin-left:20px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></span>
-        <div class="mnode stop"><b>Would cross it</b><span>402 · refused, never dialed</span></div>
+      <div class="frow" style="margin-top:18px;gap:0">
+        <span class="wire go" aria-hidden="true"></span>
+        <div class="fnode go"><b>Under the cap</b><span>200 · billed, added to spend</span></div>
+        <span class="wire stop" aria-hidden="true" style="margin-left:18px"></span>
+        <div class="fnode stop"><b>Would cross it</b><span>402 · refused, never dialed</span></div>
       </div>
-      <figcaption class="mcap">Every virtual key carries its own USD budget. Each response's real cost
-        fills the bar; a request that would cross the cap is refused before it's ever dialed —
-        <code>402</code>, not a surprise invoice — while everything under the line is billed and added to
-        that key's running spend.</figcaption>
+      <figcaption class="cap">Every virtual key carries its own USD budget. Each response's real cost fills
+        the bar; a request that would cross the cap is refused before it's ever dialed — <code>402</code>,
+        not a surprise invoice — while everything under the line is billed and added to that key's running
+        spend.</figcaption>
     </figure>
 
-    <div class="dl rv">
+    <div class="triptych rv">
       <div>
-        <b>Fail-closed metering</b>
-        <span>A <b>budgeted</b> key requesting an unpriced model is refused pre-flight — <code>403 model_not_priced</code>
-          — before any upstream spend, so an unmeterable request can never quietly burn real provider budget.</span>
+        <span class="n">Metering</span>
+        <b>Fail-closed</b>
+        <p>A <b style="color:var(--ink);font-weight:600">budgeted</b> key requesting an unpriced model is
+          refused pre-flight — <code>403 model_not_priced</code> — before any upstream spend, so an
+          unmeterable request can never quietly burn real provider budget.</p>
       </div>
       <div>
-        <b>Open-core seam</b>
-        <span>Self-hosted is the default: no telemetry, no central billing. Setting <code>LLMUX_CP_URL</code>
-          links an optional control-plane for centralized billing across a fleet — same binary, either way.</span>
+        <span class="n">Open core</span>
+        <b>An optional seam, not a default</b>
+        <p>Self-hosted is the default: no telemetry, no central billing. Setting <code>LLMUX_CP_URL</code>
+          links an optional control-plane for centralized billing across a fleet — same binary, either
+          way.</p>
       </div>
       <div>
-        <b>Per-account BYOK</b>
-        <span>With a key-encryption key configured, an account can register its own provider key via
-          <code>PUT /admin/byok/{account}/{provider}</code>; those calls are then unmetered and never billed
-          centrally.</span>
+        <span class="n">BYOK</span>
+        <b>Per-account provider keys</b>
+        <p>With a key-encryption key configured, an account can register its own provider key via
+          <code>PUT /admin/byok/{account}/{provider}</code>; those calls are then unmetered and never
+          billed centrally.</p>
       </div>
     </div>
   </div>
 </section>
 
-<!-- ══ 05 · THE EMBEDDED DASHBOARD ══════════════════════════════════════ -->
-<section id="dashboard">
+<!-- ══════ CH 05 · THE PANEL ═════════════════════════════════════════════ -->
+<section class="band alt" id="panel">
   <div class="wrap">
-    <div class="marker rv"><span class="num">05</span><span>What you actually see</span><span class="rule"></span></div>
-    <h2 class="big rv">One binary, one UI. No separate service to run.</h2>
-    <p class="lead rv">The admin console ships inside the gateway itself — <code>web/ui.html</code>, a
-      single hand-written page with no framework and no build step, <code>go:embed</code>ed into the
-      binary and served at <code>/ui</code>. There is no Node toolchain anywhere in this repo. Below are
-      real screenshot slots, swapped for whichever theme you're reading this page in — the captures land
-      in a later pass across the whole suite; until then, each slot shows an honest placeholder instead of
-      a broken image.</p>
+    <span class="bus" aria-hidden="true"></span>
 
-    <div class="shots rv">
-      <figure>
-        <div class="shot-frame">
-          <div class="code-bar"><i></i><i></i><i></i><span class="path">/ui#usage</span></div>
-          <div class="shot-box">
-            <img class="themeshot" data-shot="dashboard-usage" width="2560" height="1600" loading="lazy" decoding="async" alt="llmux admin dashboard, usage tab: request, token and cost totals as cards, then a per-model spend table.">
-            <div class="shot-placeholder" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 16v-4M12 16V8M16 16v-7"/></svg>
-              <b>Usage tab — screenshot pending</b>
-              <span>Requests, tokens, cost, then spend broken down by model.</span>
-            </div>
+    <div class="chead rv"><span class="ch">CH·05</span><span class="cl">The panel</span>
+      <span class="cr"></span><span class="cm">3,690 requests · real capture</span></div>
+
+    <h2 class="sec rv">One binary, one UI. No separate service to run.</h2>
+    <p class="lead rv">The admin console ships inside the gateway itself — <code>web/ui.html</code>, a
+      single hand-written page with no framework and no build step, <code>go:embed</code>ed into the binary
+      and served at <code>/ui</code>. There is no Node toolchain anywhere in this repo. The screenshots
+      below are the real thing, swapped for whichever theme you're reading this page in — captured from a
+      running gateway after 3,690 requests across seven models and four virtual keys, so every figure in
+      them was computed by the binary rather than typed in by hand.</p>
+
+    <figure class="rv" style="margin:40px 0 0">
+      <div class="shot">
+        <div class="code-bar"><i></i><span class="path">/ui#usage</span></div>
+        <div class="box">
+          <img class="themeshot" data-shot="dashboard-usage" width="2560" height="1600" decoding="async"
+               alt="llmux admin dashboard, usage tab: request, token and cost totals as cards, then a per-model spend table.">
+          <div class="ph" aria-hidden="true">
+            <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18"/><path d="M8 16v-4M12 16V8M16 16v-7"/></svg>
+            <b>Usage tab — screenshot pending</b>
+            <span>Requests, tokens, cost, then spend broken down by model.</span>
           </div>
+          <noscript><div class="shot-noscript"><img src="./assets/screenshots/dashboard-usage-dark.png" width="2560" height="1600" alt="llmux admin dashboard, usage tab."></div></noscript>
         </div>
-        <figcaption class="shot-cap"><b>What it cost, by model</b><span>Requests, total tokens and cost
-          across every key, then the same numbers broken down per model — exactly what
-          <code>usage.cost</code> already put in each response.</span></figcaption>
-      </figure>
-      <figure>
-        <div class="shot-frame">
-          <div class="code-bar"><i></i><i></i><i></i><span class="path">/ui#keys</span></div>
-          <div class="shot-box">
-            <img class="themeshot" data-shot="dashboard-keys" width="2560" height="1600" loading="lazy" decoding="async" alt="llmux admin dashboard, keys tab: every virtual key with its name, masked token, budget, current spend as a bar, and RPM limit.">
-            <div class="shot-placeholder" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+      </div>
+      <figcaption class="shotcap"><b>What it cost, by model</b><span>Requests, total tokens and cost across
+        every key, then the same numbers broken down per model — exactly what <code>usage.cost</code>
+        already put in each response.</span></figcaption>
+    </figure>
+
+    <div class="shotgrid">
+      <figure class="rv" style="margin:0">
+        <div class="shot">
+          <div class="code-bar"><i></i><span class="path">/ui#keys</span></div>
+          <div class="box">
+            <img class="themeshot" data-shot="dashboard-keys" width="2560" height="1600" decoding="async"
+                 alt="llmux admin dashboard, keys tab: every virtual key with its name, masked token, budget, current spend as a bar, and RPM limit.">
+            <div class="ph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="10"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
               <b>Keys tab — screenshot pending</b>
               <span>Every virtual key, its budget, spend bar and RPM.</span>
             </div>
+            <noscript><div class="shot-noscript"><img src="./assets/screenshots/dashboard-keys-dark.png" width="2560" height="1600" alt="llmux admin dashboard, keys tab."></div></noscript>
           </div>
         </div>
-        <figcaption class="shot-cap"><b>Every key, one bar each</b><span>Name, masked token, budget vs.
+        <figcaption class="shotcap"><b>Every key, one bar each</b><span>Name, masked token, budget vs.
           spend as a bar that turns red near the cap, and the RPM ceiling — the same shape
           <code>GET /admin/keys</code> returns.</span></figcaption>
       </figure>
-      <figure>
-        <div class="shot-frame">
-          <div class="code-bar"><i></i><i></i><i></i><span class="path">/ui#models</span></div>
-          <div class="shot-box">
-            <img class="themeshot" data-shot="dashboard-models" width="2560" height="1600" loading="lazy" decoding="async" alt="llmux admin dashboard, models tab: a filterable live catalog with input and output price per million tokens and context window per model.">
-            <div class="shot-placeholder" aria-hidden="true">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <figure class="rv" style="margin:0">
+        <div class="shot">
+          <div class="code-bar"><i></i><span class="path">/ui#models</span></div>
+          <div class="box">
+            <img class="themeshot" data-shot="dashboard-models" width="2560" height="1600" decoding="async"
+                 alt="llmux admin dashboard, models tab: a filterable live catalog with input and output price per million tokens and context window per model.">
+            <div class="ph" aria-hidden="true">
+              <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
               <b>Models tab — screenshot pending</b>
               <span>The filterable live catalog: price and context window.</span>
             </div>
+            <noscript><div class="shot-noscript"><img src="./assets/screenshots/dashboard-models-dark.png" width="2560" height="1600" alt="llmux admin dashboard, models tab."></div></noscript>
           </div>
         </div>
-        <figcaption class="shot-cap"><b>The live catalog, filterable</b><span>Every model llmux can price,
+        <figcaption class="shotcap"><b>The live catalog, filterable</b><span>Every model llmux can price,
           with input/output cost per million tokens and context window — filtered client-side as you
           type.</span></figcaption>
       </figure>
     </div>
 
-    <div class="dl rv">
-      <div>
-        <b>Live, on a poll</b>
-        <span>The dashboard refreshes itself every 15s by default (a <code>Live</code> / <code>Paused</code>
-          toggle controls it), and every fetch is same-origin unless you point it at a remote gateway URL.</span>
+    <dl class="ledger rv" style="margin-top:44px">
+      <div class="lrow">
+        <dt>Live, on a poll</dt>
+        <dd>The dashboard refreshes itself every 15s by default (a <code>Live</code> / <code>Paused</code>
+          toggle controls it), and every fetch is same-origin unless you point it at a remote gateway
+          URL.</dd>
       </div>
-      <div>
-        <b>Ops surface beyond the UI</b>
-        <span><code>GET /metrics</code> is a Prometheus endpoint; <code>GET /health</code> is
-          unauthenticated liveness, and with the master key it additionally discloses the full
-          provider/sovereignty posture. Structured (<code>slog</code>) access logs never carry prompt or
-          completion content.</span>
+      <div class="lrow">
+        <dt>Ops surface beyond the UI</dt>
+        <dd><code>GET /metrics</code> is a Prometheus endpoint; <code>GET /health</code> is unauthenticated
+          liveness, and with the master key it additionally discloses the full provider/sovereignty
+          posture. Structured (<code>slog</code>) access logs never carry prompt or completion
+          content.</dd>
       </div>
-    </div>
+    </dl>
   </div>
 </section>
 
-<!-- ══ 06 · QUICKSTART ══════════════════════════════════════════════════ -->
-<section id="quickstart">
+<!-- ══════ CH 06 · THE START ═════════════════════════════════════════════ -->
+<section class="band" id="start">
   <div class="wrap">
-    <div class="marker rv"><span class="num">06</span><span>Quick start</span><span class="rule"></span></div>
-    <h2 class="big rv">Build it, point a key at it, call it. No account to create.</h2>
+    <span class="bus" aria-hidden="true"></span>
+
+    <div class="chead rv"><span class="ch">CH·06</span><span class="cl">The start</span>
+      <span class="cr"></span><span class="cm">go 1.25+, nothing else</span></div>
+
+    <h2 class="sec rv">Build it, point a key at it, call it. No account to create.</h2>
     <p class="lead rv">Go 1.25+ and nothing else — the admin console is a hand-written file, so there's no
       Node toolchain anywhere in this repo. No database or cache is required for a single replica.</p>
 
-    <div class="split2">
-      <div class="codetabs rv">
+    <div class="split" style="margin-top:40px">
+      <div class="tabs rv">
         <input class="tabin" type="radio" name="qs" id="tab-build" checked>
         <input class="tabin" type="radio" name="qs" id="tab-call">
         <input class="tabin" type="radio" name="qs" id="tab-conf">
@@ -1113,9 +1524,9 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
         </div>
         <div class="tabpanels">
           <div class="tabpanel" id="panel-build">
-            <div class="code-frame">
-              <div class="code-bar"><i></i><i></i><i></i><span class="path">terminal</span></div>
-              <pre><code><span class="cb-c"># 1. Build the binary (embeds the prebuilt web UI)</span>
+            <div class="code">
+              <div class="code-bar"><i></i><span class="path">terminal</span></div>
+              <pre><code><span class="cb-c"># 1. Build the binary (embeds web/ui.html — no Node, no build step)</span>
 <span class="cb-f">make</span> build
 
 <span class="cb-c"># 2. Configure providers</span>
@@ -1128,26 +1539,27 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
             </div>
           </div>
           <div class="tabpanel" id="panel-call">
-            <div class="code-frame">
-              <div class="code-bar"><i></i><i></i><i></i><span class="path">quickstart.py</span></div>
+            <div class="code">
+              <div class="code-bar"><i></i><span class="path">quickstart.py</span></div>
               <pre><code><span class="cb-k">from</span> openai <span class="cb-k">import</span> <span class="cb-f">OpenAI</span>
 
 <span class="cb-var">client</span> <span class="cb-op">=</span> <span class="cb-f">OpenAI</span><span class="cb-p">(</span><span class="cb-pr">base_url</span><span class="cb-op">=</span><span class="cb-s">"http://localhost:4000/v1"</span><span class="cb-p">,</span> <span class="cb-pr">api_key</span><span class="cb-op">=</span><span class="cb-s">"sk-team-a"</span><span class="cb-p">)</span>
 
 <span class="cb-var">resp</span> <span class="cb-op">=</span> <span class="cb-var">client</span><span class="cb-p">.</span><span class="cb-f">chat.completions.create</span><span class="cb-p">(</span>
-    <span class="cb-pr">model</span><span class="cb-op">=</span><span class="cb-s">"cheapest"</span><span class="cb-p">,</span>                       <span class="cb-c"># least-cost route from your config</span>
+    <span class="cb-pr">model</span><span class="cb-op">=</span><span class="cb-s">"cheapest"</span><span class="cb-p">,</span>       <span class="cb-c"># least-cost route from your config</span>
     <span class="cb-pr">messages</span><span class="cb-op">=</span><span class="cb-p">[{</span><span class="cb-s">"role"</span><span class="cb-p">:</span> <span class="cb-s">"user"</span><span class="cb-p">,</span> <span class="cb-s">"content"</span><span class="cb-p">:</span> <span class="cb-s">"hi"</span><span class="cb-p">}],</span>
 <span class="cb-p">)</span>
-<span class="cb-f">print</span><span class="cb-p">(</span><span class="cb-var">resp</span><span class="cb-p">.</span><span class="cb-pr">usage</span><span class="cb-p">)</span>                       <span class="cb-c"># usage.cost = {input_cost, output_cost, total_cost}</span></code></pre>
+<span class="cb-f">print</span><span class="cb-p">(</span><span class="cb-var">resp</span><span class="cb-p">.</span><span class="cb-pr">usage</span><span class="cb-p">)</span>
+<span class="cb-c"># usage.cost = {input_cost, output_cost, total_cost, currency}</span></code></pre>
             </div>
           </div>
           <div class="tabpanel" id="panel-conf">
-            <div class="code-frame">
-              <div class="code-bar"><i></i><i></i><i></i><span class="path">llmux.json</span></div>
+            <div class="code">
+              <div class="code-bar"><i></i><span class="path">llmux.json</span></div>
               <pre><code><span class="cb-p">{</span>
   <span class="cb-pr">"keys"</span><span class="cb-p">:</span> <span class="cb-p">[</span>
     <span class="cb-p">{</span> <span class="cb-pr">"key"</span><span class="cb-p">:</span> <span class="cb-s">"sk-team-a"</span><span class="cb-p">,</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"team-a"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"budget_usd"</span><span class="cb-p">:</span> <span class="cb-n">25.0</span><span class="cb-p">,</span>                    <span class="cb-c">// 0 = unlimited</span>
+      <span class="cb-pr">"budget_usd"</span><span class="cb-p">:</span> <span class="cb-n">25.0</span><span class="cb-p">,</span>          <span class="cb-c">// 0 = unlimited</span>
       <span class="cb-pr">"rpm"</span><span class="cb-p">:</span> <span class="cb-n">60</span><span class="cb-p">,</span>
       <span class="cb-pr">"allowed_models"</span><span class="cb-p">:</span> <span class="cb-p">[</span><span class="cb-s">"assistant"</span><span class="cb-p">,</span> <span class="cb-s">"cheapest"</span><span class="cb-p">]</span> <span class="cb-p">}</span>
   <span class="cb-p">]</span>
@@ -1158,37 +1570,49 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
       </div>
 
       <ol class="steps rv">
-        <li><span class="n">1</span><div><b>Build</b><span>Go 1.25+, and at least one provider API key. One
-          binary, no required runtime dependencies — or use the repo's <code>Dockerfile</code>.</span></div></li>
-        <li><span class="n">2</span><div><b>Configure</b><span>Declare providers in JSON, or set env vars and
-          let llmux auto-detect them — including an on-box <code>local</code> provider from
+        <li><span class="n">01</span><div><b>Build</b><span>Go 1.25+, and at least one provider API key.
+          One binary, no required runtime dependencies — or use the repo's <code>Dockerfile</code>.</span></div></li>
+        <li><span class="n">02</span><div><b>Configure</b><span>Declare providers in JSON, or set env vars
+          and let llmux auto-detect them — including an on-box <code>local</code> provider from
           <code>OLLAMA_HOST</code>.</span></div></li>
-        <li><span class="n">3</span><div><b>Point your SDK at it</b><span>Set <code>base_url = http://host:4000/v1</code>
-          and a virtual key. The <code>model</code> string picks the route; <code>usage.cost.total_cost</code>
-          carries the price.</span></div></li>
-        <li><span class="n">4</span><div><b>Scale when you need to</b><span>Add Postgres (<code>DATABASE_URL</code>)
-          and Redis (<code>LLMUX_REDIS</code>) for multi-replica keys, spend, rate limits and cache — both
-          optional on one replica.</span></div></li>
+        <li><span class="n">03</span><div><b>Point your SDK at it</b><span>Set
+          <code>base_url = http://host:4000/v1</code> and a virtual key. The <code>model</code> string picks
+          the route; <code>usage.cost.total_cost</code> carries the price.</span></div></li>
+        <li><span class="n">04</span><div><b>Scale when you need to</b><span>Add Postgres
+          (<code>DATABASE_URL</code>) and Redis (<code>LLMUX_REDIS</code>) for multi-replica keys, spend,
+          rate limits and cache — both optional on one replica.</span></div></li>
       </ol>
     </div>
 
-    <div class="etable rv" style="margin-top:44px">
-      <div class="erow"><span class="st">402</span><span class="cd">budget_exceeded</span><span class="ds">The key or account is over its USD budget. Fail-closed: an unreadable spend store is treated as over budget, not unspent.</span></div>
-      <div class="erow"><span class="st">403</span><span class="cd">egress_not_allowed</span><span class="ds">The sovereignty gate blocked an off-box provider the operator hasn't opted in.</span></div>
-      <div class="erow"><span class="st">403</span><span class="cd">model_not_allowed</span><span class="ds">The key's model allow-list doesn't include the requested model.</span></div>
-      <div class="erow"><span class="st">429</span><span class="cd">rate_limit_exceeded</span><span class="ds">The key's RPM limit — or a control-plane per-account cap — was hit.</span></div>
-      <div class="erow"><span class="st">404</span><span class="cd">model_not_found</span><span class="ds">No route matches the requested model string.</span></div>
+    <div class="rv" style="margin-top:48px">
+      <div class="chead"><span class="ch">Refusals</span><span class="cl">What a rejection means</span>
+        <span class="cr"></span><span class="cm">error ledger</span></div>
+      <div class="tscroll">
+        <table class="spec">
+          <thead><tr><th class="g">Status</th><th>Code</th><th>Meaning</th></tr></thead>
+          <tbody>
+            <tr><td class="m g">402</td><td class="r">budget_exceeded</td><td>The key or account is over its USD budget. Fail-closed: an unreadable spend store is treated as over budget, not unspent.</td></tr>
+            <tr><td class="m g">403</td><td class="r">egress_not_allowed</td><td>The sovereignty gate blocked an off-box provider the operator hasn't opted in.</td></tr>
+            <tr><td class="m g">403</td><td class="r">model_not_allowed</td><td>The key's model allow-list doesn't include the requested model.</td></tr>
+            <tr><td class="m g">429</td><td class="r">rate_limit_exceeded</td><td>The key's RPM limit — or a control-plane per-account cap — was hit.</td></tr>
+            <tr><td class="m g">404</td><td class="r">model_not_found</td><td>No route matches the requested model string.</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </div>
 </section>
 
 </main>
 
-<footer class="site-foot">
-  <div class="wrap">
+<footer class="foot">
+  <div class="wrap" style="padding-left:var(--pad)">
     <div class="foot-in">
-      <div class="foot-l"><img src="./assets/vulos-logo.png" alt="">
-        <span>Part of <a href="https://vulos.org" target="_blank" rel="noopener" style="color:var(--muted)">Vulos</a> — open, self-hostable apps. Sovereign by design.</span></div>
+      <div class="foot-l">
+        <img src="./assets/vulos-logo.png" alt="">
+        <span>Part of <a href="https://vulos.org" target="_blank" rel="noopener">Vulos</a> — open,
+          self-hostable apps. Sovereign by design.</span>
+      </div>
       <nav class="foot-links">
         <a href="./docs.html">Docs</a>
         <a href="https://github.com/vul-os/llmux" target="_blank" rel="noopener">GitHub</a>
@@ -1206,14 +1630,20 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
   /* Screenshot slots follow the SAME data-theme attribute the toggle below
      writes to — the same source of truth resolved before first paint in the
      <head> script, so there is no flash of the wrong set. Every .themeshot
-     <img> starts with no src at all: the theme is only known once this
-     script runs, which is after the parser would otherwise have already
-     started fetching whatever src the markup declared, so a hardcoded
-     `-dark` src would be requested and immediately cancelled for half of
-     readers. Setting src exactly once, in the right theme, avoids that.
-     A dashed placeholder (in the CSS) is what shows until a real capture
-     exists on disk or loads — never the browser's broken-image icon,
-     because failing to load simply never adds .loaded. */
+     <img> starts with no src at all: the theme is only known once this script
+     runs, which is after the parser would otherwise already have started
+     fetching whatever src the markup declared, so a hardcoded `-dark` src
+     would be requested and immediately cancelled for half of readers.
+     Setting src exactly once, in the right theme, avoids that.
+
+     Deliberately NO loading="lazy" here. These <img>s sit inside a reveal
+     wrapper that starts at opacity:0 — an opacity-0 element still has a
+     layout box so lazy would in fact fire, but the rule this page keeps is
+     simpler and safer: never make a fetch conditional on layout for an image
+     whose visibility is script-controlled. A dashed placeholder shows until a
+     real capture loads; failing to load simply never adds .loaded, so the
+     browser's broken-image icon is never what a reader sees.
+     Readers with JS off get the <noscript> copies instead. */
   var shots=Array.prototype.slice.call(document.querySelectorAll('.themeshot'));
   function shotTheme(){ return document.documentElement.getAttribute('data-theme')==='light'?'light':'dark'; }
   function paintShots(){
@@ -1239,29 +1669,40 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
       paintShots();
     });
   }
-  /* Scroll reveal: a plain rAF-throttled bounding-rect check rather than
-     IntersectionObserver. A fast, script-driven or flick scroll can outrun
-     IO's own internal sampling and skip an element's one visible frame —
-     this instead re-checks every element still pending on every animation
-     frame a scroll/resize fires, so nothing can be scrolled past unseen. */
+
+  /* ── Scroll reveal ─────────────────────────────────────────────────────
+     A plain rAF-throttled bounding-rect check rather than IntersectionObserver:
+     a fast, script-driven or flick scroll can outrun IO's internal sampling and
+     skip an element's one visible frame.
+
+     The condition is ONLY `r.top < vh*0.94`. It deliberately does NOT also
+     require r.bottom > 0. A single large jump — the End key, a scrollbar drag,
+     window.scrollTo, a fast fling — moves scrollY past an element's entire box
+     in ONE scroll event, with no intermediate frame in which that box ever
+     intersected the viewport. Requiring bottom > 0 would leave such an element
+     pinned at opacity:0 forever, because it can only become "in" on a later
+     scroll that brings it back. Once the reader is past it, it counts as seen.
+
+     Because r.top only decreases as the page scrolls down, the predicate is
+     monotonic: anything at or above the fold is revealed, and nothing can be
+     stranded behind the reader. */
   var pending=Array.prototype.slice.call(document.querySelectorAll('.rv'));
-  /* Two cases never scroll, and in both the reveal must not be the reason the
-     page is blank: printing (the print box renders the whole document without
-     a scroll event) and a reader who has asked for reduced motion. Both get
-     everything revealed outright. */
-  function revealAll(){
-    pending.forEach(function(el){ el.classList.add('in'); });
-    pending=[];
-  }
+  function revealAll(){ pending.forEach(function(el){ el.classList.add('in'); }); pending=[]; }
+  /* Two cases never scroll, and in neither may the reveal be the reason the
+     page is blank: printing (the print box renders the whole document with no
+     scroll event) and a reader who asked for reduced motion. */
   window.addEventListener('beforeprint',revealAll);
+
   function reveal(){
     var vh=window.innerHeight||document.documentElement.clientHeight;
     pending=pending.filter(function(el){
-      var r=el.getBoundingClientRect();
-      if(r.top<vh*0.94 && r.bottom>0){ el.classList.add('in'); return false; }
+      if(el.getBoundingClientRect().top < vh*0.94){ el.classList.add('in'); return false; }
       return true;
     });
-    if(!pending.length){ window.removeEventListener('scroll',onScroll); window.removeEventListener('resize',onScroll); }
+    if(!pending.length){
+      window.removeEventListener('scroll',onScroll);
+      window.removeEventListener('resize',onScroll);
+    }
   }
   var ticking=false;
   function onScroll(){
@@ -1274,6 +1715,9 @@ h1{font-size:clamp(34px,5.6vw,58px);letter-spacing:-.035em;max-width:17ch}
     window.addEventListener('scroll',onScroll,{passive:true});
     window.addEventListener('resize',onScroll);
     reveal();
+    /* Late webfont/image layout can move an element up into view without any
+       scroll event of its own; sweep once more when everything has settled. */
+    window.addEventListener('load',reveal);
   }
 })();
 </script>

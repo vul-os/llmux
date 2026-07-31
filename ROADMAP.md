@@ -26,7 +26,7 @@ llmux/
     keys/       # virtual keys, budgets, rate limits
     cache/      # exact + semantic response cache
   integration/cp/ # optional control-plane billing seam (spool + reconcile)
-  web/          # embedded admin dashboard (React, served via go:embed at /ui)
+  web/          # embedded admin dashboard (one hand-written ui.html, go:embed at /ui)
   docs/         # user guide, admin/ops, troubleshooting, architecture
   ee/, cloud/   # planned: hosted llmux Cloud (SSO/RBAC/audit, multi-tenant)
 ```
@@ -70,13 +70,21 @@ llmux/
 - Optional shared Postgres via `DATABASE_URL`/`VULOS_DATABASE_URL` under a
   dedicated `llmux` schema, so llmux can share one database with the rest of
   the suite.
-- Embedded admin dashboard at `/ui` (usage, keys, live catalog, docs) —
-  no separate service; Prometheus `/metrics`, structured logs, `/health`.
+- Embedded admin dashboard at `/ui` (usage, keys, live catalog) — a single
+  hand-written HTML page, no framework and no build step; no separate
+  service; Prometheus `/metrics`, structured logs, `/health`.
 - Comprehensive docs: quickstart, API reference, configuration, architecture,
   admin guide, troubleshooting, control-plane seam.
 
 ## Next
 
+- Installable dashboard: a web manifest and icons for `/ui` so an operator
+  can add it to a phone home screen or run it as its own desktop-style
+  window — small, mostly-assets work. Offline support (service worker,
+  cache invalidation, update/staleness handling) is a separate and
+  materially bigger job, not planned alongside it: `/ui` exists to show
+  live spend, keys and catalog state, and a cached snapshot of that has
+  limited value once it can no longer reach the gateway.
 - Multipart `images/edits`; `/v1/responses` lifecycle (get/cancel).
 - Native passthrough for provider-native routes (`/anthropic`, `/gemini`,
   `/bedrock`, …) alongside the OpenAI-compat surface.
