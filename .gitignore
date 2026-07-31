@@ -25,13 +25,8 @@ __pycache__/
 
 # Node
 node_modules/
-# NOTE: web/dist is intentionally committed — it is embedded into the Go binary
-# via go:embed, so `go build` works without a Node toolchain. CI rebuilds it.
-
-# Playwright (E2E boot guard) output
-web/test-results/
-web/playwright-report/
-web/blob-report/
+# NOTE: the admin console (web/ui.html) is a single hand-written file with no
+# build step — there is no dist/ to commit and nothing here needs Node.
 
 # Rust
 /sdks/rust/target/
@@ -62,6 +57,19 @@ web/blob-report/
 
 # OS
 .DS_Store
+Thumbs.db
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Go test coverage
+coverage.out
+coverage.html
+*.cover
 
 # Release staging directory (built in CI; the SHA256SUMS manifest covers it)
 /release/

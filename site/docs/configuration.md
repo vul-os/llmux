@@ -125,6 +125,6 @@ connections llmux can make, gated and ungated, is in
 
 ## Related
 
-- [Routing & reliability](https://github.com/vul-os/llmux/blob/main/web/docs/routing.md) — how requests map to providers
-- [Pricing & cost](https://github.com/vul-os/llmux/blob/main/web/docs/pricing.md) — the catalog and cost accounting
+- [Model routing and selection](admin-guide.md#model-routing-and-selection) — how requests map to providers
+- [Cost accounting](admin-guide.md#cost-accounting) — the pricing catalog, precedence, and per-request cost
 - [Hardening](https://github.com/vul-os/llmux/blob/main/HARDENING.md) — production posture

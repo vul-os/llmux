@@ -1,28 +1,13 @@
-# Quickstart
+# Client examples
 
-llmux is a single Go binary that speaks the **OpenAI-compatible HTTP API** and
-routes to any provider behind it. Run it, point any OpenAI client at it, done.
+llmux speaks the **OpenAI HTTP API**, so any existing OpenAI client works
+unchanged — point its `base_url` at the gateway and pass a virtual key as the
+API key. The `model` string selects the [route](./ADMIN-GUIDE.md#model-routing-and-selection):
+a configured alias, a `provider/model` prefix, or a least-cost strategy alias
+like `"cheapest"`. This page is copy-paste examples in curl and 17 languages,
+plus how to run llmux **without a separate server process** at all.
 
-## Run the gateway
-
-```bash
-# build the binary (or grab a release)
-make build
-
-# providers are auto-detected from environment variables
-export OPENAI_API_KEY=sk-...
-export ANTHROPIC_API_KEY=sk-ant-...
-
-./dist/llmux            # listening on http://localhost:4000
-```
-
-## Call it from any language
-
-llmux speaks the OpenAI wire protocol, so **any OpenAI SDK works** — point its
-base URL at llmux and use your virtual key. The `model` string selects the route
-(an alias, a `provider/model`, or a strategy like `"cheapest"`). For languages
-without an SDK it's a plain HTTP `POST` to `/v1/chat/completions`. Add
-`"stream": true` for byte-identical OpenAI SSE.
+## Any OpenAI SDK, any language
 
 **curl**
 
@@ -304,27 +289,77 @@ final res = await http.post(
 print(jsonDecode(res.body)['choices'][0]['message']['content']);
 ```
 
-## Embed it locally — no server to run
+Streaming (`"stream": true`) returns byte-identical OpenAI SSE for every one of
+these — the same stream parser your SDK already ships works against llmux
+unchanged. A client disconnect cancels the in-flight upstream request.
 
-```bash
-pip install llmux      # or: npm install llmux
+## Embed it locally — no separate server to run
+
+Beyond talking to a gateway over HTTP, the same binary can run **as a local
+dependency** instead of a standalone service. Thin per-language packages live
+in [`sdks/`](https://github.com/vul-os/llmux/blob/main/sdks) in the repo:
+
+| Language | Mechanism |
+|---|---|
+| Go (`sdks/go/llmux`) | Runs the gateway **in-process** — imports `core/server` directly, no subprocess |
+| Python, Node, Ruby, PHP, Rust, Java, .NET, Elixir (`sdks/<lang>`) | Spawn the built `llmux` binary as a local sidecar on `127.0.0.1:<free port>`, wait for `/health`, then hand you a `base_url` |
+
+Every spawning package follows the same contract: resolve the binary
+(`LLMUX_BINARY` env var → a bundled binary → `llmux` on `PATH`), launch it with
+`LLMUX_ADDR=127.0.0.1:<port>` (inheriting your environment, so provider keys
+such as `OPENAI_API_KEY` pass straight through), poll `/health`, then expose
+`base_url()` / `openai_base_url()` (`…/v1`, default key `llmux-local`).
+Streaming works natively in every language because each just reads its own
+local socket.
+
+**Go** — embed in-process, no child process at all:
+
+```go
+import "github.com/llmux/llmux/sdks/go/llmux"
+
+local, err := llmux.Start(llmux.Options{}) // auto-detects providers from env; ephemeral port
+if err != nil {
+    log.Fatal(err)
+}
+defer local.Close()
+
+// point any OpenAI-compatible Go client at the embedded gateway
+cfg := openai.DefaultConfig("llmux-local")        // github.com/sashabaranov/go-openai
+cfg.BaseURL = local.OpenAIBaseURL()               // → http://127.0.0.1:<port>/v1
 ```
+
+**Python** — spawns the binary as a sidecar (source: `sdks/python`):
 
 ```python
 import llmux
-client = llmux.OpenAI()     # spawns the gateway as a local sidecar
+client = llmux.OpenAI()     # spawns the gateway, returns an openai.OpenAI client
+res = client.chat.completions.create(
+    model="anthropic/claude-3-5-sonnet",
+    messages=[{"role": "user", "content": "hi"}],
+)
 ```
 
-In Go, llmux runs **in-process** — no subprocess at all:
+**Node.js** — same idea (source: `sdks/node`):
 
-```go
-local, _ := llmux.Start(llmux.Options{})
-defer local.Close()
-// point any OpenAI Go client at local.OpenAIBaseURL()
+```javascript
+const llmux = require("llmux");
+const client = await llmux.OpenAI();   // spawns the gateway, returns an openai client
+const res = await client.chat.completions.create({
+  model: "anthropic/claude-3-5-sonnet",
+  messages: [{ role: "user", content: "hi" }],
+});
 ```
 
-## Selecting a model
+Both packages require the `openai` package for the `OpenAI()` convenience
+constructor (or use `llmux.openai_base_url()` / `llmux.openaiBaseURL()` with
+any HTTP client). Build the binary the sidecar looks for with
+`go build -o sdks/<lang>/.../bin/llmux ./cmd/llmux`, or set `LLMUX_BINARY` to
+an existing build — see [`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md)
+for the exact binary-resolution path per language, the full package list
+(Ruby, PHP, Rust, Java, .NET, Elixir), and `make sdk-bins` / `make sdk-test`.
 
-- a configured **alias** — `"claude-3-5-sonnet"`
-- a **provider/model** prefix — `"anthropic/claude-3-5-sonnet"`
-- a **strategy** alias — `"cheapest"` (least-cost across candidates)
+## Related
+
+- [Getting started](./GETTING-STARTED.md) — deploy the gateway and connect providers
+- [Model routing and selection](./ADMIN-GUIDE.md#model-routing-and-selection) — how the `model` string resolves
+- [API reference](./api.md) — every endpoint, header, and error code

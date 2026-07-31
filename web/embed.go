@@ -1,17 +1,26 @@
-// Package webui embeds the built Vite/React web app (landing, docs, and the
-// admin/usage dashboard) so the gateway can serve it at /ui — no separate Node
-// server at runtime. Run `npm --prefix web run build` to regenerate dist/.
+// Package webui embeds the admin console — a single hand-written HTML file
+// with inline CSS and JS, no build step and no npm dependency — so the
+// gateway can serve it at /ui with nothing beyond `go build`.
+//
+// The whole admin surface is three read-only JSON endpoints (GET /admin/keys,
+// GET /admin/usage, GET /v1/models), so ui.html is the entire UI: no React,
+// no bundler, no committed build artifact to go stale against its source.
+// THIRD-PARTY-NOTICES-GO.txt documents the Go binary's own dependency graph
+// (unrelated to the browser page, which ships zero third-party code) and is
+// served alongside it at /ui/licenses.txt.
 package webui
 
-import (
-	"embed"
-	"io/fs"
-)
+import _ "embed"
 
-//go:embed all:dist
-var assets embed.FS
+//go:embed ui.html
+var uiHTML []byte
 
-// FS returns the built site rooted at dist/.
-func FS() (fs.FS, error) {
-	return fs.Sub(assets, "dist")
-}
+//go:embed THIRD-PARTY-NOTICES-GO.txt
+var licensesTxt []byte
+
+// HTML returns the embedded admin console page.
+func HTML() []byte { return uiHTML }
+
+// Licenses returns the embedded third-party notices for the Go binary's
+// dependency graph, served at /ui/licenses.txt.
+func Licenses() []byte { return licensesTxt }

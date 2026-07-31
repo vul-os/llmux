@@ -5,19 +5,16 @@ Building, testing, and running llmux in production.
 
 ## Build & run
 
-**Prerequisites:** Go 1.25+ and at least one provider API key. Node is needed
-only to *rebuild* the embedded web UI, and then it must be **Node 20.19+ or
-22.12+** — `web/` builds with vite 8, whose declared engine range is
-`^20.19.0 || >=22.12.0`. CI pins Node 20.
+**Prerequisites:** Go 1.25+ and at least one provider API key. That's it —
+there is no Node toolchain in the repo at all; the embedded admin console
+(`web/ui.html`) is one hand-written HTML file with inline CSS/JS, embedded via
+`go:embed`, so editing it needs nothing beyond a text editor and `go build`.
 
 ```bash
-make web        # rebuild the embedded React/Vite admin UI into web/dist
-make build      # build the gateway binary (embeds web/dist)
+make build      # build the gateway binary (embeds web/ui.html)
 make run        # build and run on :4000
 make docker     # build the Docker image
 ```
-
-The web app uses `.jsx` only (never `.tsx`).
 
 ## Testing
 

@@ -44,6 +44,7 @@ type page struct {
 // pages is the docs the site bundle ships, in nav order.
 var pages = []page{
 	{"docs/GETTING-STARTED.md", "getting-started.md"},
+	{"docs/client-examples.md", "client-examples.md"},
 	{"docs/architecture.md", "architecture.md"},
 	{"docs/configuration.md", "configuration.md"},
 	{"docs/api.md", "api.md"},
@@ -53,15 +54,25 @@ var pages = []page{
 	{"docs/operations.md", "operations.md"},
 	{"docs/TROUBLESHOOTING.md", "troubleshooting.md"},
 	{"ROADMAP.md", "roadmap.md"},
+	{"docs/parity.md", "parity.md"},
 	{"CHANGELOG.md", "changelog.md"},
 }
 
 // linkRE matches a markdown link/image target.
 var linkRE = regexp.MustCompile(`\]\(([^)\s]+)\)`)
 
+// screenshotsPrefix is the docs/ subtree that ships alongside site/docs as a
+// sibling directory (site/screenshots), rather than through this generator.
+const screenshotsPrefix = "docs/screenshots/"
+
 // rewriteLinks re-points every relative link in a doc so it resolves inside the
 // site bundle. A link to another generated page becomes that page's site
-// filename; anything else (repo-root files, web/docs/, source paths) becomes an
+// filename; a link into docs/screenshots/ becomes a "../screenshots/…" link,
+// which site/docs.html's own loader further normalizes at render time to
+// "./screenshots/…" (relative to site/docs.html, where site/screenshots
+// lives) — this form also resolves for TestSiteDocsHaveNoBrokenLinks, since
+// path.Join("site/docs", "../screenshots/x.png") cleans straight to the real
+// file. Anything else (repo-root files, web/docs/, source paths) becomes an
 // absolute URL into the repository. Absolute URLs and bare fragments pass
 // through untouched.
 func rewriteLinks(srcPath, body string) string {
@@ -89,6 +100,9 @@ func rewriteLinks(srcPath, body string) string {
 		rel := path.Clean(path.Join(srcDir, file))
 		if dst, ok := byPath[rel]; ok {
 			return "](" + dst + frag + ")"
+		}
+		if strings.HasPrefix(rel, screenshotsPrefix) {
+			return "](../screenshots/" + strings.TrimPrefix(rel, screenshotsPrefix) + frag + ")"
 		}
 		return "](" + repoURL + rel + frag + ")"
 	})

@@ -31,7 +31,7 @@ Legend: ✅ have · 🟡 partial · ⬜ missing.
 ## Providers (~146 in LiteLLM; we have 6 adapter types)
 Six is the number of `config.ProviderType` constants: `passthrough` plus five
 native adapters. Per-adapter stability comes from `providers.Stability()` and is
-tabulated in [SUPPORT.md](SUPPORT.md).
+tabulated in [SUPPORT.md](../SUPPORT.md).
 
 - ✅ passthrough (covers OpenAI/Azure-AI/DeepSeek/Groq/Mistral/Together/Fireworks/xAI/OpenRouter/Ollama/vLLM/Perplexity/Cerebras/SambaNova/Nebius/Novita/DeepInfra… — most "openai_like" providers, cheaply)
 - 🟡 anthropic, gemini, azure (beta), cohere, bedrock (experimental)

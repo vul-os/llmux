@@ -23,7 +23,7 @@ Authorization: Bearer <token>
 | `/v1/*` | A **virtual key** |
 | `/admin/*`, `/metrics` | The **master key** (`LLMUX_MASTER_KEY`) |
 | `/health` | None for the minimal body; master key (or a loopback caller on a keyless gateway) for the full posture |
-| `/ui`, `/ui/docs` | None |
+| `/ui` | None |
 
 Virtual keys are issued by the operator — defined in the config file (or
 resolved by the optional [control-plane](control-plane.md)), never
@@ -67,7 +67,7 @@ provider directly.
 > **Routed vs. forwarded.** `chat/completions` and `embeddings` go through native
 > per-provider translation. The other modality routes are forwarded to the
 > resolved upstream; every *served* forward is still metered. See
-> [Providers](https://github.com/vul-os/llmux/blob/main/web/docs/providers.md).
+> [Connecting providers](getting-started.md#2-connect-providers).
 >
 > **Audio input is multipart.** `audio/transcriptions` and `audio/translations`
 > take a `multipart/form-data` body (the audio file plus a `model` form field),
@@ -103,7 +103,7 @@ provider directly.
 | `DELETE /admin/byok/{account}/{provider}` | master key | Clear an account's BYOK key → revert to central (metered). |
 | `GET /metrics` | master key | Prometheus metrics. |
 | `GET /health` | none (minimal `{"status":"ok"}` for any caller); master key (or loopback when keyless) additionally unlocks the full provider/sovereignty topology | Liveness probe. |
-| `GET /ui`, `GET /ui/docs` | none | Embedded admin dashboard + docs. |
+| `GET /ui` | none | Embedded admin dashboard (usage, keys, live model catalog). |
 
 ## Example
 
@@ -118,13 +118,14 @@ curl http://localhost:4000/v1/chat/completions \
 ```
 
 The model string (`claude-3-5-sonnet` above) is matched against your
-[routes](https://github.com/vul-os/llmux/blob/main/web/docs/routing.md): an alias, a `provider/model` prefix, a wildcard,
-a least-cost pseudo-model like `cheapest`, or the catch-all.
+[routes](admin-guide.md#model-routing-and-selection): an alias, a
+`provider/model` prefix, a wildcard, a least-cost pseudo-model like
+`cheapest`, or the catch-all.
 
 ## Cost in every response
 
 Each response's `usage` block includes the computed per-request cost, drawn from
-the live [pricing catalog](https://github.com/vul-os/llmux/blob/main/web/docs/pricing.md). Streaming responses are
+the live [pricing catalog](admin-guide.md#cost-accounting). Streaming responses are
 metered too — llmux forces a final usage chunk and falls back to a token estimate
 if the upstream omits one.
 
@@ -151,7 +152,8 @@ ever calls a provider:
 
 ## Related
 
-- [Routing & reliability](https://github.com/vul-os/llmux/blob/main/web/docs/routing.md)
-- [Providers](https://github.com/vul-os/llmux/blob/main/web/docs/providers.md)
-- [Pricing & cost](https://github.com/vul-os/llmux/blob/main/web/docs/pricing.md)
+- [Client examples](client-examples.md) — curl and 17+ languages, plus embedding llmux locally
+- [Model routing and selection](admin-guide.md#model-routing-and-selection)
+- [Connecting providers](getting-started.md#2-connect-providers)
+- [Cost accounting](admin-guide.md#cost-accounting)
 - [Configuration](configuration.md)

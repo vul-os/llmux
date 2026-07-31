@@ -4,12 +4,12 @@ llmux is the sovereign LLM gateway: a single Go binary that speaks the OpenAI HT
 
 ## 1. Deploy llmux
 
-**Prerequisites:** Go 1.25+ (Node **20.19+ or 22.12+** only if you rebuild the embedded web UI — vite 8 requires it; the built bundle ships committed, so a plain build needs no Node at all). No database or cache is required for a single replica.
+**Prerequisites:** Go 1.25+ and nothing else — there is no Node toolchain anywhere in this repo; the embedded admin console (`web/ui.html`) is a single hand-written HTML file with inline CSS/JS. No database or cache is required for a single replica.
 
 ### Build and run from source
 
 ```bash
-git clone https://github.com/llmux/llmux
+git clone https://github.com/vul-os/llmux
 cd llmux
 make build                      # builds ./dist/llmux with the web UI embedded
 
@@ -17,7 +17,7 @@ cp llmux.example.json llmux.json
 ./dist/llmux -config llmux.json # gateway on :4000, dashboard at /ui
 ```
 
-The config path comes from `-config` or the `LLMUX_CONFIG` env var. Useful `make` targets: `make web` (rebuild the admin SPA), `make run`, `make docker`, `make test`.
+The config path comes from `-config` or the `LLMUX_CONFIG` env var. Useful `make` targets: `make run`, `make docker`, `make test`.
 
 ### Docker
 
@@ -36,7 +36,7 @@ docker run -p 4000:4000 \
 
 ```bash
 curl http://localhost:4000/health          # {"status":"ok"}
-open http://localhost:4000/ui              # embedded dashboard (usage, keys, catalog, docs)
+open http://localhost:4000/ui              # embedded dashboard (usage, keys, live model catalog)
 ./dist/llmux models                        # CLI: models with pricing + context window
 ```
 
@@ -70,14 +70,20 @@ Cache hits carry `cached: true` in the usage record and cost nothing upstream. C
 
 Providers are declared in the JSON config (`providers[]`), each with a `name`, a `type`, a `base_url` and a credential. The accepted `type` values — the complete list, validated at startup — are:
 
-| `type` | What it talks to |
-|---|---|
-| `passthrough` | Any OpenAI-shaped upstream: OpenAI itself, DeepSeek, Groq, Mistral, Together, Fireworks, xAI, OpenRouter, a local Ollama/llama.cpp/vLLM server, … |
-| `anthropic` | Anthropic Messages API (native translation) |
-| `gemini` | Google Gemini (native translation) |
-| `cohere` | Cohere v2 (native translation) |
-| `bedrock` | AWS Bedrock (Anthropic Claude models, SigV4 signing) |
-| `azure` | Azure OpenAI |
+| `type` | What it talks to | Stability |
+|---|---|---|
+| `passthrough` | Any OpenAI-shaped upstream: OpenAI itself, DeepSeek, Groq, Mistral, Together, Fireworks, xAI, OpenRouter, Perplexity, Cerebras, SambaNova, a local Ollama/llama.cpp/vLLM server, … | stable |
+| `anthropic` | Anthropic Messages API (native translation) | beta |
+| `gemini` | Google Gemini (native translation) | beta |
+| `azure` | Azure OpenAI | beta |
+| `cohere` | Cohere v2 (native translation) | experimental |
+| `bedrock` | AWS Bedrock (Anthropic Claude models, SigV4 signing) | experimental |
+
+> **Stability** reflects live verification, not code maturity: `stable`
+> (`passthrough`) is checked against the real API via golden fixtures in CI;
+> `beta`/`experimental` adapters are translated to spec but not yet
+> live-verified against the provider. `GET /health` (master key) reports each
+> configured provider's tier live; see also [Admin guide → adapter maturity](./ADMIN-GUIDE.md#model-routing-and-selection).
 
 Credentials come from `api_key` (inline) or, preferably, `api_key_env` (name of an env var). Bedrock reads standard `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `AWS_SESSION_TOKEN`.
 
@@ -153,7 +159,7 @@ curl http://localhost:4000/v1/chat/completions \
   -d '{"model":"assistant","messages":[{"role":"user","content":"Hello!"}]}'
 ```
 
-Streaming (`"stream": true`) returns byte-identical OpenAI SSE. Besides `chat/completions`, the gateway serves `/v1/embeddings`, `/v1/models`, `/v1/catalog.json`, and forwarded modality routes: `/v1/completions`, `/v1/responses`, `/v1/rerank`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/speech`. Note the forwarded modality routes are served by `passthrough`-type providers; the translating adapters (anthropic, bedrock, …) answer them with 501. Copy-paste examples for 17+ languages live at `/ui/docs` in the running gateway.
+Streaming (`"stream": true`) returns byte-identical OpenAI SSE. Besides `chat/completions`, the gateway serves `/v1/embeddings`, `/v1/models`, `/v1/catalog.json`, and forwarded modality routes: `/v1/completions`, `/v1/responses`, `/v1/rerank`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/speech`. Note the forwarded modality routes are served by `passthrough`-type providers; the translating adapters (anthropic, bedrock, …) answer them with 501. Copy-paste examples for 17+ languages live in [client-examples.md](./client-examples.md).
 
 ## 4. Auth and keys
 
@@ -205,7 +211,7 @@ What that enables:
 - **The mail assistant ("Vula")** — the `/api/assistant/*` routes switch their model backend to llmux automatically when `LLMUX_URL` is set (provider `custom`, endpoint = llmux, key = `LLMUX_KEY`; the model name still comes from `AI_MODEL`, default `llama3`). Without `LLMUX_URL` the assistant falls back to direct Ollama (`AI_ENDPOINT`, default `http://localhost:11434`).
 - **Sovereignty end-to-end** — the OS assistant applies the same four-tier dial (local/sovereign/brokered/external) to its own endpoint: run llmux on loopback (recommended: `http://127.0.0.1:4000`) and mail content stays classified "On your device". Pointing the OS at a non-loopback llmux is blocked unless `VULOS_ASSISTANT_ALLOW_EXTERNAL=1`.
 
-Notes: the old in-OS "airouter" is gone — `PUT /api/ai/config` returns 410 (`airouter_removed: configure providers in llmux`); provider configuration now lives entirely in llmux. Speech-to-text does **not** route through llmux (it lacks the multipart `/v1/audio/transcriptions` shape) — the OS uses `VULOS_WHISPER_URL`/`VULOS_WHISPER_KEY` separately.
+Notes: the old in-OS "airouter" is gone — `PUT /api/ai/config` returns 410 (`airouter_removed: configure providers in llmux`); provider configuration now lives entirely in llmux. The OS's own speech-to-text feature does **not** yet route through llmux — it still calls Whisper directly via `VULOS_WHISPER_URL`/`VULOS_WHISPER_KEY` — even though llmux itself serves the multipart `/v1/audio/transcriptions` shape (see [client-examples.md](./client-examples.md) and [API reference](./api.md)); re-pointing that OS feature at llmux is tracked as separate product-side wiring, not a gateway gap.
 
 Any non-Vulos app is even simpler: give it `base_url = http://<llmux-host>:4000/v1` and a virtual key.
 
@@ -247,6 +253,7 @@ Before exposing the gateway beyond your own machine:
 
 ## 8. Where to next
 
+- [client-examples.md](./client-examples.md) — copy-paste requests in curl and 17+ languages, plus embedding llmux locally with no server to run.
 - [ADMIN-GUIDE.md](./ADMIN-GUIDE.md) — budgets, metering, model routing in depth, logging/privacy posture.
 - [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) — 503s from `/api/ai/*`, provider auth failures, budget exhaustion, streaming issues.
 - [LLM-ACCESS.md](./LLM-ACCESS.md) — BYOK vs central metering, the product consumption contract.

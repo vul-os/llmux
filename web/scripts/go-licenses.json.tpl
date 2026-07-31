@@ -1,1 +1,0 @@
-[{{ range $i, $lib := . }}{{ if $i }},{{ end }}{"name":{{ printf "%q" $lib.Name }},"version":{{ printf "%q" $lib.Version }},"license":{{ printf "%q" $lib.LicenseName }},"url":{{ printf "%q" $lib.LicenseURL }},"path":{{ printf "%q" $lib.LicensePath }}}{{ end }}]

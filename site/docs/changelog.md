@@ -73,6 +73,30 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   copyable description of the pattern. The price-catalog sync is on by default
   and is now disclosed as such in the README and `docs/configuration.md`.
 
+### Removed
+- **The React/Vite admin SPA and the entire Node toolchain that built it.**
+  The embedded dashboard at `/ui` is now `web/ui.html` — one hand-written
+  467-line file, inline `<style>`/`<script>`, vanilla JS, no imports, no CDN.
+  Same three tabs as before (usage/keys/models) as plain tables, tab state in
+  the URL fragment, gateway URL + master key in `localStorage`, a 15s live
+  poll — but no footer and no theme toggle (it follows
+  `prefers-color-scheme` instead). Deleted: `web/dist/`, `web/src/`,
+  `web/e2e/`, `web/public/`, `web/scripts/`, `web/index.html`,
+  `package.json`, `package-lock.json`, and every vite/vitest/tailwind/
+  postcss/playwright config file — there is no Node toolchain anywhere in
+  this repo any more; `go build` alone is sufficient, including for UI
+  changes. `web/THIRD-PARTY-NOTICES-GO.txt` (the Go binary's own dependency
+  notices, unrelated to the browser page) is kept and now served at
+  `/ui/licenses.txt`. New Go tests replace the retired JS suites:
+  `web/embed_test.go` and `core/server/ui_test.go`.
+- **`scripts/check-web-dist.sh` and the `web-dist-check` gate.** That gate
+  existed to catch a committed `web/dist` bundle drifting from the
+  `web/src` it was built from. With no build step and no committed bundle,
+  that invariant no longer exists for anything to protect, so the script and
+  the `web` / `web-dist-check` Makefile targets — and the Node/Playwright/
+  dist-staleness steps in `.github/workflows/` — are gone too. `make gates`
+  is now `fmt-check` + `verify-selftest`.
+
 ### Fixed
 - **The brand mark never propagated past `brand/logo.svg`.** The "fill the mux
   body solid" decision only ever touched `brand/logo.svg` itself — every

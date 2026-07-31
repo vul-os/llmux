@@ -3,9 +3,9 @@
 > The LLM multiplexer. One gateway, every provider, **every language**.
 > OSS core (self-host free, forever) + `ee/` for hosted **llmux Cloud**.
 
-For the full day-to-day task/phase breakdown see [`tasks.md`](tasks.md); for the
-provider/feature parity matrix against LiteLLM see [`PARITY.md`](PARITY.md).
-This file tracks direction at a glance.
+For the provider/feature parity matrix against LiteLLM see
+[`docs/parity.md`](docs/parity.md). This file tracks direction at a glance;
+[`CHANGELOG.md`](CHANGELOG.md) records what has actually shipped.
 
 ---
 

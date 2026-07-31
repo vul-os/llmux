@@ -124,6 +124,6 @@ connections llmux can make, gated and ungated, is in
 
 ## Related
 
-- [Routing & reliability](../web/docs/routing.md) — how requests map to providers
-- [Pricing & cost](../web/docs/pricing.md) — the catalog and cost accounting
+- [Model routing and selection](ADMIN-GUIDE.md#model-routing-and-selection) — how requests map to providers
+- [Cost accounting](ADMIN-GUIDE.md#cost-accounting) — the pricing catalog, precedence, and per-request cost
 - [Hardening](../HARDENING.md) — production posture

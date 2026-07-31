@@ -64,54 +64,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Build embedded web UI
-        run: |
-          npm --prefix web ci
-          npm --prefix web run build
-
-      # The bundle we just built is embedded into the gateway binary and served
-      # at /ui. A bundle that BUILDS but does not RUN is a blank screen for every
-      # user — `vite build` cannot see that, only a real browser can. Boot it in
-      # chromium and fail on any uncaught exception / empty root. This also walks
-      # the React.lazy() /docs and /app chunks, whose defects do not exist until
-      # their route is visited.
-      - name: Install chromium
-        working-directory: web
-        run: npx playwright install --with-deps chromium
-
-      # `npm test` → pretest:e2e (vite build) → playwright test
-      - name: Web boot guard + E2E
-        working-directory: web
-        run: npm test
-
-      - name: Upload Playwright report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: llmux-playwright-report
-          path: web/playwright-report/
-          retention-days: 7
-
-      # web/dist is COMMITTED and compiled into the binary by web/embed.go's
-      # go:embed, so the UI a user runs is the bundle in git — NOT the one the
-      # step above just built. Edit web/src (or web/docs, which Docs.jsx imports
-      # with ?raw) and forget to rebuild, and every release ships the previous
-      # UI while every other check stays green. That is not hypothetical: commit
-      # 630177c changed web/src and dist was not rebuilt until 2ec6674, two
-      # commits later.
-      #
-      # The gate rebuilds and compares content hashes; it fails closed (no npm,
-      # no bundle, no repo root => failure) and asserts coverage floors so an
-      # empty dist/ cannot register as "no differences found". See the header of
-      # the script for how it differs from the openrate gate it was adapted from.
-      - name: Committed web/dist matches a fresh build of web/src
-        run: ./scripts/check-web-dist.sh
-
+      # The admin console (web/ui.html) is a single hand-written HTML file
+      # with inline CSS/JS, embedded via go:embed — no npm, no bundler, no
+      # committed build artifact, no Node step needed anywhere in CI. Its
+      # structural properties (present, non-trivial size, references no
+      # external origin) are asserted by web/embed_test.go, which runs as
+      # part of `go test` below like any other package.
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

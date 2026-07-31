@@ -31,7 +31,16 @@ curl -s -X DELETE -H "$AUTH" \
   http://localhost:4000/admin/byok/acct_42/openai        # revert to central (metered)
 ```
 
-The same data is visualised in the embedded dashboard at `/ui` (usage by model, key budgets and spend, the live model catalog). The dashboard's static pages are public; its admin views call the master-key-gated `/admin/*` API. The CLI mirrors it without HTTP:
+The same data is visualised in the embedded dashboard at `/ui` (usage by model, key budgets and spend, the live model catalog). It's a single static HTML page (`web/ui.html`, hand-written, no build step) — reachable without auth — whose three tabs (usage/keys/models) call `GET /admin/usage`, `GET /admin/keys` (master-key-gated) and `GET /v1/models` from the browser once you paste in the master key; it is the *only* thing served at `/ui` — no separate docs viewer, no theme toggle (it follows the OS `prefers-color-scheme`), and no footer.
+
+![llmux dashboard — usage by model with request counts, tokens, and live cost](../screenshots/dashboard-usage.png)
+
+> This screenshot predates the console's rewrite into `web/ui.html` and still
+> shows the retired React build's chrome (top nav, theme toggle, footer) —
+> gone from the current page. The usage view itself is still representative;
+> recapture against the current page is tracked separately.
+
+The CLI mirrors it without HTTP:
 
 ```bash
 ./dist/llmux keys       # virtual keys: budget, spend, rpm
@@ -162,14 +171,31 @@ Points worth internalising:
 
 ### Cost accounting
 
-Per-request cost comes from the pricing catalog:
+Per-request cost comes from the pricing catalog, which merges several sources by precedence (highest wins):
 
-- A built-in seed catalog means cost accounting works fully offline.
-- Live syncs merge prices from OpenRouter and LiteLLM (`pricing.sources`; interval `sync_interval_minutes`, default 360 — or env `LLMUX_SYNC_INTERVAL_MIN`).
-- Individual models can be pinned with `pricing.overrides` (`{provider, input_per_mtok, output_per_mtok, context_window, max_output, capabilities}`).
-- Cost appears in each response's `usage` block; the merged catalog is served at `GET /v1/catalog.json` and via `llmux catalog`.
+```
+override (manual)  >  provider API (Azure)  >  LiteLLM (direct)  >  OpenRouter (margin)  >  built-in seed
+```
+
+- **Built-in seed** — a small offline price list, so cost accounting works before any network sync and if `pricing.sources` is emptied.
+- **Live syncs** merge prices from OpenRouter and LiteLLM's open JSON by default (`pricing.sources`; interval `sync_interval_minutes`, default 360 — or env `LLMUX_SYNC_INTERVAL_MIN`). Set `"azure_pricing": true` to also sync Azure's Retail Prices API for Azure OpenAI models (off by default; opt-in because it's a third outbound feed).
+- **Route-aware** — cost is computed for the route actually used: a call dispatched *through* OpenRouter is costed at OpenRouter's margin-inclusive price, while a **direct** route (or BYOK) to the same model prefers the authoritative direct-source price over the aggregator's, so equivalent calls aren't systematically over- or under-charged depending on path.
+- **Cached tokens** — when both the model's price and the response's `usage.prompt_tokens_details.cached_tokens` are present, cached input tokens are billed at the provider's discounted cache-read rate instead of the full input rate.
+- **Overrides** — pin or correct any model's price, inline or via a JSON file (`pricing.override_path`), always taking precedence over every synced source:
+  ```jsonc
+  {
+    "pricing": {
+      "overrides": {
+        "openai/gpt-4o": { "provider": "openai", "input_per_mtok": 2.5, "output_per_mtok": 10.0, "context_window": 128000 }
+      }
+    }
+  }
+  ```
+- Cost appears in each response's `usage.cost` block; the merged catalog is served at `GET /v1/models` (with capabilities) and `GET /v1/catalog.json` (flat), and via `llmux catalog`.
 
 Streaming responses are metered too: llmux forces a final usage chunk from the upstream (it injects `stream_options.include_usage` itself), and if the upstream still omits usage it falls back to a ~4-characters-per-token estimate — a stream is never billed as zero. For the forwarded modality routes, up to 1 MiB of the response is tapped to parse usage; larger streams are estimated from served bytes.
+
+An **unpriced model** (routable, but the catalog has no price for it) is refused pre-flight with `403 model_not_priced` for a *budgeted* key — before any provider call — because a request that can't be priced would otherwise meter at $0 and never move the needle on a budget that's supposed to bound it. Un-budgeted keys and BYOK requests are unaffected; see [API reference → Errors](api.md#errors).
 
 ## Model routing and selection
 

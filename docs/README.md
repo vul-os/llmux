@@ -6,17 +6,16 @@ Everything you need to run, configure, and operate llmux.
 
 | Guide | What's inside |
 |---|---|
-| [Quickstart](../web/docs/quickstart.md) | Run the gateway and make your first request |
+| [Getting started](GETTING-STARTED.md) | Deploy the gateway, connect providers, auth and keys, point Vulos OS at it |
+| [Client examples](client-examples.md) | Copy-paste requests in curl and 17+ languages, plus embedding llmux locally with no server to run |
 | [API reference](api.md) | Endpoints, auth, errors, and cost |
 | [Configuration](configuration.md) | Config file, environment variables, and overrides |
-| [Routing & reliability](../web/docs/routing.md) | Aliases, prefixes, fallback chains, least-cost selection |
-| [Providers](../web/docs/providers.md) | Native adapters vs. passthrough, and what each supports |
-| [Pricing & cost](../web/docs/pricing.md) | The live catalog, precedence, and per-request cost |
-| [Dashboard & ops](../web/docs/dashboard.md) | The embedded admin UI at `/ui` |
-| [Architecture](architecture.md) | How the gateway is laid out and why |
+| [Architecture](architecture.md) | How the gateway is laid out, and the sovereignty gate |
+| [Admin guide](ADMIN-GUIDE.md) | Budgets, rate limits, cost accounting, model routing in depth, the dashboard, logging/privacy posture |
 | [LLM access: BYOK vs central](LLM-ACCESS.md) | Per-account own-key vs central metered keys, billing, the product consumption contract |
 | [Control-plane seam](control-plane.md) | Optional centralized billing & entitlements |
 | [Operations](operations.md) | Building, testing, and self-hosting |
+| [Troubleshooting](TROUBLESHOOTING.md) | Symptom-by-symptom fixes |
 
 ## Reference
 
@@ -24,12 +23,13 @@ Everything you need to run, configure, and operate llmux.
 |---|---|
 | [`llmux.example.json`](../llmux.example.json) | Fully commented example config |
 | [Hardening](../HARDENING.md) | Production security posture |
-| [Provider parity](../PARITY.md) | Per-provider feature support matrix |
+| [Provider parity](parity.md) | Per-provider feature support matrix |
 | [Testing](../TESTING.md) | Test suites and how to run them |
 | [Security policy](../SECURITY.md) | Reporting vulnerabilities |
 | [Roadmap](../ROADMAP.md) | What's planned |
 | [Changelog](../CHANGELOG.md) | What's shipped |
 | [Support](../SUPPORT.md) | Getting help |
 
-> The same guides ship **inside the binary** and are served at `/ui/docs` in the
-> running gateway.
+> These guides are also published at [vulos.org/projects/llmux/docs.html](https://vulos.org/projects/llmux/docs.html)
+> — the running gateway's own `/ui` is the admin dashboard only, with no
+> separate docs viewer embedded in the binary.

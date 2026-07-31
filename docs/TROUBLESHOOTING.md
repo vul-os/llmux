@@ -76,13 +76,16 @@ Note the split: budget problems are **402**; only sovereignty and model-allow-li
 
 - **Stream cut off / no final usage chunk expected?** llmux always forces a final usage chunk: it sets `stream_options.include_usage` upstream itself, and if the upstream still omits usage it estimates (~4 chars/token) so metering never records zero. Your SSE parser must tolerate the final usage-only chunk (any OpenAI-compatible parser does).
 - **Fallback didn't kick in mid-stream.** Failover happens only *before the first chunk*; once bytes have flowed, a mid-stream upstream failure ends the stream (what was served is still metered). Retry the request.
+- **Client disconnected and llmux kept billing anyway?** It shouldn't: llmux forwards the request context to the provider call, so a client disconnect (or your own cancellation) cancels the in-flight upstream request rather than letting it run to completion unread.
 - **Stream stalls behind a proxy.** llmux's streaming HTTP client deliberately has *no* timeout (long generations are legal) — stalls usually come from an intermediate proxy buffering SSE. The Vulos OS proxy already sets `X-Accel-Buffering: no` and flushes per read; do the same in your own reverse proxy (disable response buffering for `/v1/chat/completions` and `/api/ai/chat`).
 - **Non-streaming requests timing out at exactly 10 minutes**: that's the default 600 s upstream client timeout for unary calls; long jobs should stream. `upstream_timeout_seconds` can tighten (not extend) unary deadlines.
 - **413/400 on big requests**: request bodies are capped at 32 MiB.
 
 ## Modality routes returning 501
 
-`/v1/completions`, `/v1/responses`, `/v1/rerank`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/speech` are *forwarded*, and only `passthrough`-type providers can serve them. Routing one of these to a translating adapter (anthropic, gemini, cohere, bedrock, azure) yields 501. Route modality models to a passthrough provider. Similarly, Gemini tool-calling has a known limitation: JSON-schema `$ref`/`$defs` in tool definitions are not resolved — inline your schemas for Gemini routes. And note there is no `/v1/audio/transcriptions` (which is why Vulos OS wires Whisper separately via `VULOS_WHISPER_URL`).
+`/v1/completions`, `/v1/responses`, `/v1/rerank`, `/v1/moderations`, `/v1/images/generations`, `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/translations` are *forwarded*, and only `passthrough`-type providers can serve them. Routing one of these to a translating adapter (anthropic, gemini, cohere, bedrock, azure) yields 501. Route modality models to a passthrough provider. Similarly, Gemini tool-calling has a known limitation: JSON-schema `$ref`/`$defs` in tool definitions are not resolved — inline your schemas for Gemini routes.
+
+Note the Vulos OS product does not yet route its own voice-caption/transcription feature through llmux — it still talks to Whisper directly via `VULOS_WHISPER_URL`/`VULOS_WHISPER_KEY`, even though llmux itself serves `/v1/audio/transcriptions` (see [API reference](api.md#inference-endpoints)). Re-pointing that OS feature at llmux is tracked as product-side wiring, not a gateway gap.
 
 ## Embedding failures
 
@@ -97,7 +100,7 @@ Embeddings ride `/v1/embeddings` and follow the same routing/sovereignty/budget 
 - **401 on `/admin/*` with a virtual key** — expected: only the master key is accepted on the admin surface, ever.
 - **401 on `/metrics`** — `/metrics` requires the master key when one is set; on a keyless box it is loopback-only.
 - **`/health` doesn't show providers/tiers** — anonymous callers get only `{"status":"ok"}`; the topology block requires the master key (or loopback on a keyless box).
-- **Dashboard at `/ui` loads but admin views are empty** — the SPA is public; its keys/usage views need the master key supplied in the dashboard itself.
+- **Dashboard at `/ui` loads but admin views are empty** — the page (`web/ui.html`) is public; its keys/usage views need the master key supplied in the dashboard itself.
 - **BYOK endpoints return 501** — BYOK is disabled because no `LLMUX_BYOK_KEK` is configured.
 
 ## Cost / metering anomalies
@@ -124,7 +127,7 @@ Knowing what the gateway does on failure saves you from misreading symptoms:
 
 ## Known limitations (as of this writing)
 
-- **No `/v1/audio/transcriptions`** — speech-to-text is out of scope; Vulos OS wires Whisper separately (`VULOS_WHISPER_URL`).
+- **Per-audio-minute metering is a known gap.** `/v1/audio/transcriptions` and `/v1/audio/translations` are served (forwarded, `passthrough` providers only), but Whisper-class responses carry no token-usage object and there's no per-minute price in the catalog yet — a served transcription logs a $0 auditable line and a *budgeted* key is refused pre-flight (`403 model_not_priced`) rather than metered at zero.
 - **Gemini tool schemas:** JSON-schema `$ref`/`$defs` are not resolved by the Gemini adapter — inline schemas for Gemini-routed tool use.
 - **Adapter maturity:** `cohere` and `bedrock` are marked `experimental`, `anthropic`/`gemini`/`azure` `beta` (visible in `/health` per-provider `stability`). Keep a `stable` passthrough or local target in fallback chains.
 - **Bedrock is central-only for BYOK** (SigV4, not a bearer key) — `PUT /admin/byok/{account}/bedrock` is rejected with `400 byok_unsupported_provider`.

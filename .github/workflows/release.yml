@@ -22,16 +22,8 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-
-      - name: Build embedded web UI
-        run: |
-          npm --prefix web ci
-          npm --prefix web run build
-
+      # The admin console (web/ui.html) is a single hand-written file
+      # embedded via go:embed — no npm/Node step is needed to produce it.
       - name: Set up Go
         uses: actions/setup-go@v5
         with:

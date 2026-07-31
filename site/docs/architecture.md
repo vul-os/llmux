@@ -22,7 +22,7 @@ core/                the open gateway (no cp dependency)
   config/            JSON config loader
 cmd/llmux/           the binary (server + CLI subcommands)
 integration/cp/      OPTIONAL control-plane (billing/entitlements) adapter
-web/                 Vite + React admin SPA, embedded at /ui
+web/                 admin console (ui.html, hand-written, no build step), embedded at /ui
 ```
 
 ## The sovereignty gate (where your AI runs)
@@ -143,7 +143,7 @@ its own; the same binary and code path serve both self-host and managed.
 
 ## Related
 
-- [Providers](https://github.com/vul-os/llmux/blob/main/web/docs/providers.md) — native adapters vs. passthrough
-- [Routing & reliability](https://github.com/vul-os/llmux/blob/main/web/docs/routing.md) — how a model name resolves to a provider
+- [Connecting providers](getting-started.md#2-connect-providers) — native adapters vs. passthrough, and adapter stability
+- [Model routing and selection](admin-guide.md#model-routing-and-selection) — how a model name resolves to a provider
 - [Control-plane seam](control-plane.md) — the optional cloud billing adapter
 - [LLM access: BYOK vs central](llm-access.md) — per-account key resolution and metering

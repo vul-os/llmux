@@ -1,19 +1,15 @@
-.PHONY: build web web-dist-check site-docs test vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy
+.PHONY: build site-docs test cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
 
-web: ## Build the embedded web app (landing/docs/dashboard) into web/dist
-	npm --prefix web install --no-audit --no-fund
-	npm --prefix web run build
-
-web-dist-check: ## Fail if the COMMITTED web/dist differs from a fresh build of web/src
-	./scripts/check-web-dist.sh
-
 site-docs: ## Regenerate site/docs from the canonical docs/ tree (CI fails if stale)
 	go run ./site/gen
 
-build: ## Build the gateway binary (embeds web/dist; run `make web` first to refresh)
+# The admin console (web/ui.html) is a single hand-written file embedded via
+# go:embed — no npm, no build step, nothing to regenerate. `go build` alone
+# picks up any edit to it.
+build: ## Build the gateway binary (embeds web/ui.html)
 	@mkdir -p dist
 	go build -o $(BIN) $(PKG)
 
@@ -47,9 +43,9 @@ verify-selftest: ## Prove scripts/verify.sh still REFUSES every broken-release s
 	bash scripts/verify.sh --selftest
 
 # The artifact-level gates, in the order CI runs them. `test` is separate
-# because it needs no Node; these three are the ones that catch a green build
+# because it needs no Node; these are the ones that catch a green build
 # shipping a wrong artifact — or shipping a right artifact nobody can check.
-gates: fmt-check web-dist-check verify-selftest ## Run the artifact gates (gofmt scope + web/dist staleness + release-verifier failure matrix)
+gates: fmt-check verify-selftest ## Run the artifact gates (gofmt scope + release-verifier failure matrix)
 
 run: build ## Build and run on :4000
 	$(BIN)

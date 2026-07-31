@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>llmux — admin</title>
+<style>
+/* ==========================================================================
+   llmux admin console — one hand-written page. No build step: this <style>
+   and the <script> at the bottom are the entire app. Dark-first, teal is the
+   only chromatic accent, light counterpart via prefers-color-scheme. No
+   external stylesheet, font, or script is ever loaded — everything the page
+   needs ships inline, so it works the instant the gateway serves it.
+   ========================================================================== */
+:root {
+  --bg:#0A0F1A; --surface:#111827; --surface-2:#1A2230; --border:#26303F;
+  --text:#F1F5F5; --text-2:#94A3A3; --text-3:#64748B;
+  --accent:#2DD4BF; --accent-hover:#5EEAD4; --accent-tint:rgba(45,212,191,0.12);
+  --success:#22C55E; --error:#EF4444; --on-accent:#0A0F1A;
+  --radius:8px; --radius-sm:6px;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:#F8FAFA; --surface:#FFFFFF; --surface-2:#F1F5F5; --border:#E2E8E8;
+    --text:#1A1A1A; --text-2:#475569; --text-3:#94A3A3;
+    --accent:#0D9488; --accent-hover:#0F766E; --accent-tint:rgba(13,148,136,0.10);
+    --success:#16A34A; --error:#DC2626; --on-accent:#FFFFFF;
+    color-scheme: light;
+  }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-size: 14px; line-height: 1.5;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { color: var(--accent-hover); text-decoration: underline; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+/* ---- topbar: mark + wordmark, docs/licenses links. Nothing else. ---- */
+.topbar { border-bottom: 1px solid var(--border); }
+.topbar-inner { display: flex; align-items: center; justify-content: space-between; height: 56px; gap: 16px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; }
+.brand .mark svg { display: block; width: 26px; height: 26px; border-radius: 6px; }
+/* Wordmark reads as ONE tight word: sans, weight 700, tight tracking. `ll` in
+   the text colour, `mux` in accent teal — a monospace face would pad every
+   glyph and visibly split "ll" from "mux", so this is deliberately not mono. */
+.brand .word { font-weight: 700; font-size: 19px; letter-spacing: -0.04em; }
+.brand .word .mux { color: var(--accent); }
+.nav { display: flex; align-items: center; gap: 18px; font-size: 12.5px; }
+.nav a { color: var(--text-2); }
+.nav a:hover { color: var(--text); }
+
+main.wrap { padding: 32px 24px 64px; }
+h1 { font-size: 21px; font-weight: 600; letter-spacing: -0.01em; margin: 0 0 18px; }
+
+/* ---- settings bar: gateway URL + master key + actions ---- */
+.bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.bar input {
+  flex: 1 1 220px; min-width: 0; background: var(--surface); border: 1px solid var(--border);
+  color: var(--text); padding: 8px 10px; border-radius: var(--radius-sm); font: inherit;
+}
+.btn {
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  padding: 8px 14px; border-radius: var(--radius-sm); font: inherit; cursor: pointer;
+}
+.btn:hover { border-color: var(--text-3); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.on { border-color: var(--accent); color: var(--accent); }
+
+/* ---- tabs: usage / keys / models, reflected in the URL fragment ---- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tabs a {
+  padding: 8px 14px; color: var(--text-2); border-bottom: 2px solid transparent;
+  font-size: 13px; text-transform: capitalize;
+}
+.tabs a:hover { color: var(--text); text-decoration: none; }
+.tabs a.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ---- usage cards ---- */
+.cards { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 20px; min-width: 150px; }
+.card .value { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.card .label { color: var(--text-2); font-size: 12px; margin-top: 4px; }
+
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 0 10px; flex-wrap: wrap; }
+.section-head .count { color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.filter-input {
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: var(--radius-sm); font: inherit; font-size: 12.5px; min-width: 0;
+}
+
+/* ---- tables: plain, tabular-nums, horizontal scroll instead of overflow ---- */
+.table-wrap { border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; background: var(--surface); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); white-space: nowrap; }
+th { color: var(--text-3); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; font-weight: 600; background: var(--surface-2); }
+td { font-variant-numeric: tabular-nums; color: var(--text-2); }
+tbody tr:last-child td { border-bottom: none; }
+.id-cell { color: var(--text); display: inline-block; max-width: 360px; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
+.key-token {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+  color: var(--accent); background: var(--accent-tint); padding: 2px 6px; border-radius: 4px;
+}
+
+/* ---- spend cell: a small static budget bar, no animation ---- */
+.spend { display: inline-flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.spend-bar { width: 60px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.spend-fill { display: block; height: 100%; background: var(--accent); }
+.spend-fill.near { background: var(--error); }
+
+/* ---- loading / empty / error states: text only, no icon set ---- */
+.state { border: 1px dashed var(--border); border-radius: var(--radius); padding: 36px 20px; text-align: center; color: var(--text-2); }
+.state-title { font-weight: 600; color: var(--text); margin-bottom: 4px; font-size: 14.5px; }
+.state-hint { color: var(--text-2); font-size: 12.5px; margin-top: 6px; }
+.state-error { border-style: solid; border-color: var(--error); }
+.state-error .state-detail { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 12px; color: var(--error); word-break: break-word; }
+
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px; }
+  main.wrap { padding: 24px 16px 48px; }
+  .bar input { flex: 1 1 100%; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <span class="brand" aria-label="llmux">
+      <span class="mark">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none" aria-hidden="true">
+          <rect x="2" y="2" width="96" height="96" rx="24" fill="#2DD4BF"/>
+          <g transform="translate(16,18) scale(0.9)">
+            <g stroke="#0A0F1A" stroke-width="4.6" stroke-linecap="round">
+              <line x1="8" y1="14" x2="32" y2="14"/>
+              <line x1="8" y1="34" x2="32" y2="34"/>
+              <line x1="8" y1="54" x2="32" y2="54"/>
+              <line x1="56" y1="34" x2="74" y2="34"/>
+            </g>
+            <path d="M30 6 L56 23 L56 45 L30 62 Z" fill="#0A0F1A"/>
+            <g fill="#0A0F1A">
+              <circle cx="8" cy="14" r="4.2"/>
+              <circle cx="8" cy="34" r="4.2"/>
+              <circle cx="8" cy="54" r="4.2"/>
+              <circle cx="74" cy="34" r="4.2"/>
+            </g>
+          </g>
+        </svg>
+      </span>
+      <span class="word"><span class="ll">ll</span><span class="mux">mux</span></span>
+    </span>
+    <nav class="nav" aria-label="Primary">
+      <a href="https://vulos.org/projects/llmux/" target="_blank" rel="noreferrer">docs</a>
+      <a href="/ui/licenses.txt" target="_blank" rel="noreferrer">licenses</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <h1>Dashboard</h1>
+
+  <div class="bar">
+    <input id="baseInput" placeholder="gateway URL (blank = same origin)" autocomplete="off" spellcheck="false">
+    <input id="keyInput" type="password" placeholder="master key" autocomplete="off">
+    <button id="applyBtn" class="btn" type="button">Apply</button>
+    <button id="liveBtn" class="btn" type="button" aria-pressed="true">Live</button>
+    <button id="refreshBtn" class="btn primary" type="button">Refresh</button>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Views">
+    <a href="#usage" role="tab" data-tab="usage">usage</a>
+    <a href="#keys" role="tab" data-tab="keys">keys</a>
+    <a href="#models" role="tab" data-tab="models">models</a>
+  </nav>
+
+  <div id="view" aria-live="polite"></div>
+</main>
+
+<script>
+(function () {
+  "use strict";
+
+  // Same localStorage slots api.js used to persist — reading either name
+  // preserves an existing operator's saved gateway URL / master key.
+  var BASE_KEY = "llmux_api_base";
+  var MASTER_KEY = "llmux_master_key";
+  var TABS = ["usage", "keys", "models"];
+  var POLL_MS = 15000;
+
+  function base() { return localStorage.getItem(BASE_KEY) || ""; }
+  function key() { return localStorage.getItem(MASTER_KEY) || ""; }
+
+  // ---- tiny safe DOM builder -------------------------------------------
+  // Every dynamic value from the gateway (model ids, key names, provider
+  // names, ...) is untrusted. This never touches innerHTML with it: text
+  // children always become Text nodes, never parsed as markup, so there is
+  // no escaping function to forget and nothing here can execute as HTML.
+  function el(tag, attrs) {
+    var n = document.createElement(tag);
+    if (attrs) {
+      for (var k in attrs) {
+        if (!Object.prototype.hasOwnProperty.call(attrs, k)) continue;
+        var v = attrs[k];
+        if (v == null) continue;
+        if (k === "class") n.className = v;
+        else if (k.indexOf("on") === 0 && typeof v === "function") n.addEventListener(k.slice(2), v);
+        else n.setAttribute(k, v);
+      }
+    }
+    for (var i = 2; i < arguments.length; i++) append(n, arguments[i]);
+    return n;
+  }
+  function append(n, c) {
+    if (c == null) return;
+    if (Array.isArray(c)) { for (var j = 0; j < c.length; j++) append(n, c[j]); return; }
+    n.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
+  // ---- number formatting -------------------------------------------------
+  function money(n) {
+    var v = Number(n) || 0;
+    var d = v !== 0 && Math.abs(v) < 1 ? 4 : 2;
+    return "$" + v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
+  }
+  function fmtInt(n) { return (Number(n) || 0).toLocaleString(); }
+  function fmtTokens(n) {
+    var v = Number(n) || 0;
+    if (v >= 1e9) return (v / 1e9).toFixed(2) + "B";
+    if (v >= 1e6) return (v / 1e6).toFixed(2) + "M";
+    if (v >= 1e4) return (v / 1e3).toFixed(1) + "k";
+    return v.toLocaleString();
+  }
+  // Per-Mtok prices come straight off the pricing catalog as float64 JSON,
+  // which routinely round-trips as e.g. 0.09999999999999999. Round for
+  // display only — this never touches the value used for anything else.
+  function fmtPrice(n) {
+    var v = Number(n);
+    if (!isFinite(v)) return "—";
+    return v.toLocaleString(undefined, { maximumFractionDigits: 4 });
+  }
+
+  // ---- shared table/state builders ---------------------------------------
+  function table(cols, aligns, rows) {
+    var head = el("tr", null, cols.map(function (c, i) { return el("th", { style: aligns ? "text-align:" + aligns[i] : null }, c); }));
+    var body = rows.map(function (r) {
+      return el("tr", null, r.map(function (c, i) { return el("td", { style: aligns ? "text-align:" + aligns[i] : null }, c); }));
+    });
+    return el("div", { class: "table-wrap" }, el("table", null, el("thead", null, head), el("tbody", null, body)));
+  }
+  function emptyState(title, hint) {
+    return el("div", { class: "state" }, el("div", { class: "state-title" }, title), el("div", { class: "state-hint" }, hint));
+  }
+  function errorState(message, hint) {
+    return el("div", { class: "state state-error" },
+      el("div", { class: "state-title" }, "Couldn’t load this view"),
+      el("div", { class: "state-detail" }, message),
+      hint ? el("div", { class: "state-hint" }, hint) : null);
+  }
+  function loadingState() {
+    return el("div", { class: "state", "aria-busy": "true" }, "Loading…");
+  }
+
+  // ---- API client ---------------------------------------------------------
+  // Same-origin by default; the "gateway URL" field can point at a remote
+  // gateway instead. The master key goes ONLY as an Authorization: Bearer
+  // header on this request, never in the URL, never logged.
+  //
+  // On failure this shows a short, honest reason (HTTP status, or the
+  // gateway's own JSON error message) instead of dumping whatever body the
+  // server returned — a reverse proxy's 404 HTML page is not diagnostic
+  // information, and must never be pasted into the page as markup or text.
+  async function get(path) {
+    var headers = {};
+    var k = key();
+    if (k) headers.Authorization = "Bearer " + k;
+    var res;
+    try {
+      res = await fetch(base() + path, { headers: headers });
+    } catch (e) {
+      throw new Error("could not reach the gateway" + (base() ? " at " + base() : ""));
+    }
+    if (!res.ok) {
+      var msg = res.status + " " + res.statusText;
+      var ct = res.headers.get("content-type") || "";
+      if (ct.indexOf("application/json") !== -1) {
+        try {
+          var body = await res.json();
+          if (body && body.error && body.error.message) msg = body.error.message;
+        } catch (e) { /* not JSON after all — keep the plain status */ }
+      }
+      throw new Error(msg);
+    }
+    return res.json();
+  }
+
+  // ---- usage tab ------------------------------------------------------
+  function card(label, value) {
+    return el("div", { class: "card" }, el("div", { class: "value" }, value), el("div", { class: "label" }, label));
+  }
+  function renderUsage(data) {
+    var total = data.total || {};
+    var byModel = data.by_model || {};
+    var rows = Object.entries(byModel);
+    var cards = el("div", { class: "cards" },
+      card("Requests", fmtInt(total.requests)),
+      card("Total tokens", fmtTokens(total.total_tokens)),
+      card("Cost", money(total.cost_usd)));
+    var body = rows.length === 0
+      ? emptyState("No usage yet", "Once requests flow through the gateway, per-model spend and token counts will appear here.")
+      : table(["model", "requests", "tokens", "cost"], ["left", "right", "right", "right"],
+          rows.map(function (r) {
+            return [
+              el("span", { class: "id-cell", title: r[0] }, r[0]),
+              fmtInt(r[1].requests),
+              fmtTokens(r[1].total_tokens),
+              money(r[1].cost_usd),
+            ];
+          }));
+    return el("div", null, cards, body);
+  }
+
+  // ---- keys tab ---------------------------------------------------------
+  function spendCell(spend, budget) {
+    var s = Number(spend) || 0, b = Number(budget) || 0;
+    var pct = b > 0 ? Math.min(100, (s / b) * 100) : 0;
+    var wrap = el("span", { class: "spend" }, money(s));
+    if (b > 0) {
+      wrap.appendChild(el("span", { class: "spend-bar" },
+        el("span", { class: "spend-fill" + (pct >= 90 ? " near" : ""), style: "width:" + pct + "%" })));
+    }
+    return wrap;
+  }
+  function renderKeys(data) {
+    var keys = data.keys || [];
+    if (keys.length === 0) return emptyState("No API keys", "Issued keys, their budgets, and current spend will be listed here.");
+    var head = el("div", { class: "section-head" },
+      el("span", { class: "count" }, keys.length + (keys.length === 1 ? " key" : " keys")));
+    var body = table(["name", "key", "budget", "spend", "rpm"], ["left", "left", "right", "right", "right"],
+      keys.map(function (k) {
+        return [
+          k.name || "—",
+          el("code", { class: "key-token" }, k.key),
+          money(k.budget_usd),
+          spendCell(k.spend_usd, k.budget_usd),
+          k.rpm || "∞",
+        ];
+      }));
+    return el("div", null, head, body);
+  }
+
+  // ---- models tab ---------------------------------------------------------
+  // The filter re-slices the already-fetched catalog client-side (no refetch
+  // per keystroke); the input element itself is never replaced, so it keeps
+  // focus and cursor position while the results below it repaint.
+  var modelsFilter = "";
+  function renderModels(data) {
+    var all = data.data || [];
+    var countSpan = el("span", { class: "count" });
+    var filterInput = el("input", {
+      class: "filter-input", placeholder: "filter models…", value: modelsFilter, "aria-label": "Filter models",
+    });
+    var results = el("div", null);
+    var head = el("div", { class: "section-head" }, countSpan, filterInput);
+    var container = el("div", null, head, results);
+
+    function paint() {
+      countSpan.textContent = all.length + (all.length === 1 ? " model" : " models") + " in catalog";
+      var filtered = modelsFilter
+        ? all.filter(function (m) { return String(m.id).toLowerCase().indexOf(modelsFilter.toLowerCase()) !== -1; })
+        : all;
+      var models = filtered.slice(0, 500);
+      clear(results);
+      results.appendChild(models.length === 0
+        ? emptyState(modelsFilter ? "No matching models" : "No models in catalog",
+            modelsFilter ? "Try a different search term." : "The gateway will populate this list from its configured providers.")
+        : table(["id", "in $/Mtok", "out $/Mtok", "context"], ["left", "right", "right", "right"],
+            models.map(function (m) {
+              return [
+                el("span", { class: "id-cell", title: m.id }, m.id),
+                m.input_price_per_mtok == null ? "—" : fmtPrice(m.input_price_per_mtok),
+                m.output_price_per_mtok == null ? "—" : fmtPrice(m.output_price_per_mtok),
+                m.context_window ? Number(m.context_window).toLocaleString() : "—",
+              ];
+            })));
+    }
+    filterInput.addEventListener("input", function (e) { modelsFilter = e.target.value; paint(); });
+    paint();
+    return container;
+  }
+
+  // ---- tab plumbing: the URL fragment IS the tab state ---------------------
+  function currentTab() {
+    var h = location.hash.replace("#", "");
+    return TABS.indexOf(h) !== -1 ? h : "usage";
+  }
+  function paintTabs() {
+    var t = currentTab();
+    var links = document.querySelectorAll(".tabs a");
+    for (var i = 0; i < links.length; i++) {
+      var a = links[i];
+      var active = a.getAttribute("data-tab") === t;
+      a.classList.toggle("active", active);
+      a.setAttribute("aria-selected", active ? "true" : "false");
+    }
+    return t;
+  }
+
+  var ENDPOINT = { usage: "/admin/usage", keys: "/admin/keys", models: "/v1/models" };
+  var RENDER = { usage: renderUsage, keys: renderKeys, models: renderModels };
+
+  async function load(tab, background) {
+    var view = document.getElementById("view");
+    if (!background) { clear(view); view.appendChild(loadingState()); }
+    try {
+      var data = await get(ENDPOINT[tab]);
+      if (currentTab() !== tab) return; // user moved to another tab meanwhile
+      clear(view);
+      view.appendChild(RENDER[tab](data));
+    } catch (err) {
+      if (currentTab() !== tab) return;
+      if (background) return; // keep the last good view rather than flashing an error
+      clear(view);
+      var hint = tab === "keys" ? "This view needs a master key — enter one above and click Apply." : null;
+      view.appendChild(errorState(err && err.message ? err.message : String(err), hint));
+    }
+  }
+
+  window.addEventListener("hashchange", function () { load(paintTabs()); });
+
+  // ---- settings bar: gateway URL + master key, persisted exactly as before
+  var baseInput = document.getElementById("baseInput");
+  var keyInput = document.getElementById("keyInput");
+  baseInput.value = base();
+  keyInput.value = key();
+
+  document.getElementById("applyBtn").addEventListener("click", function () {
+    localStorage.setItem(BASE_KEY, baseInput.value || "");
+    localStorage.setItem(MASTER_KEY, keyInput.value || "");
+    load(currentTab());
+  });
+  document.getElementById("refreshBtn").addEventListener("click", function () { load(currentTab()); });
+
+  var auto = true;
+  var timer = null;
+  var liveBtn = document.getElementById("liveBtn");
+  function setAuto(v) {
+    auto = v;
+    liveBtn.textContent = auto ? "Live" : "Paused";
+    liveBtn.setAttribute("aria-pressed", String(auto));
+    liveBtn.classList.toggle("on", auto);
+    if (timer) clearInterval(timer);
+    timer = auto ? setInterval(function () { load(currentTab(), true); }, POLL_MS) : null;
+  }
+  liveBtn.addEventListener("click", function () { setAuto(!auto); });
+
+  setAuto(true);
+  load(paintTabs());
+})();
+</script>
+</body>
+</html>

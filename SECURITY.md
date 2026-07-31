@@ -77,9 +77,10 @@ Fixed:
   model). Test: `TestEmbeddingsAllowListEnforced`.
 
 ## Dependency & toolchain scanning
-- `govulncheck` runs in CI. The H5 pass found 9 advisories, **all in the Go
+- `govulncheck` was run manually as part of the H5 review (it is not yet wired
+  into CI as an automated gate). That pass found 9 advisories, **all in the Go
   standard library** (DoS in net/http HTTP/2, crypto/tls, crypto/x509, net/url) —
-  cleared by pinning the build toolchain to **go1.25.11** (`toolchain` in go.mod).
+  cleared by pinning the build toolchain to **go1.25.12** (`toolchain` in go.mod).
   No third-party dependency had a called vulnerability.
 - A dedicated security test suite (`core/server/security_hardening_test.go`)
   covers: auth matrix, budget/rate-limit enforcement, allow-list bypass on chat +

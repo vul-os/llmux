@@ -44,9 +44,17 @@ MIN_GO_FILES=120
 MIN_GO_DIRS=20
 
 # --- discover the scope ------------------------------------------------------
-# Every .go file in the repo, minus vendored JS and git internals. Nothing else
-# is excluded: `integration/`, `ee/`, and any directory added tomorrow are in
-# scope automatically.
+# Every .go file in the repo, minus git internals and the build output
+# directory. Nothing else is excluded: `integration/`, `ee/`, and any
+# directory added tomorrow are in scope automatically.
+#
+# There is no Node toolchain in this repo any more (the admin console,
+# web/ui.html, is one hand-written file with no build step), so there is no
+# web/dist to prune — that path was retired along with the React/Vite SPA it
+# used to hold. web/node_modules stays pruned defensively: nothing in this
+# repo can produce one, but a stray local `npm install` from before that
+# removal could still be sitting on a contributor's disk, and it holds no Go
+# source worth scanning either way.
 # (Portable read loop rather than `mapfile`, so this runs on the stock macOS
 # bash 3.2 as well as CI's bash 5.)
 go_files=()
@@ -54,7 +62,7 @@ while IFS= read -r f; do
   go_files+=("$f")
 done < <(
   find . \
-    \( -path ./.git -o -path ./web/node_modules -o -path ./web/dist -o -path ./dist \) -prune -o \
+    \( -path ./.git -o -path ./web/node_modules -o -path ./dist \) -prune -o \
     -type f -name '*.go' -print | sort
 )
 

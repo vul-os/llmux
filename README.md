@@ -5,17 +5,13 @@
 ### The sovereign OpenAI-compatible endpoint — your AI runs on your box.
 
 Point your existing OpenAI SDK at llmux and get routing, fallbacks, per-key
-budgets, caching, and live cost — across every provider, with zero per-language
-code. Inference runs **on your box by default**, and a request is **never
-silently sent off the box** unless you explicitly, loggably opt in.
+budgets, caching, and live cost — across every provider, with zero
+per-language code. Inference runs **on your box by default**, and a request is
+**never silently sent off the box** unless you explicitly, loggably opt in.
 
-**[MIT OR Apache-2.0](LICENSE-MIT) · Go 1.25 · React 18 · [Tests](TESTING.md)**
+**[MIT OR Apache-2.0](LICENSE-MIT) · Go 1.25 · [Tests](TESTING.md)**
 
-[**Quickstart**](web/docs/quickstart.md) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Architecture**](docs/architecture.md)
-
-<br/>
-
-<img src="docs/screenshots/landing.png" alt="llmux landing page — every model, every language, one channel" width="860" />
+[**Quickstart**](#quick-start) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Sovereignty gate**](#the-sovereignty-gate) · [**Status**](#status)
 
 </div>
 
@@ -23,9 +19,11 @@ silently sent off the box** unless you explicitly, loggably opt in.
 
 ## What is llmux?
 
-llmux is a **single Go binary** that speaks the OpenAI HTTP API and routes every
-request to the provider behind it — OpenAI, Anthropic, Azure, Bedrock, Cohere,
-Gemini, or any OpenAI-shaped upstream via passthrough.
+llmux is a **single Go binary** that speaks the OpenAI HTTP API and routes
+every request to the provider behind it — native adapters for Anthropic,
+Gemini, Cohere, Bedrock, and Azure, passthrough for any OpenAI-shaped upstream
+(OpenAI, DeepSeek, Groq, Mistral, Together, OpenRouter, and 100+ more), and a
+`local` provider for an on-box Ollama/llama.cpp/vLLM server.
 
 Every language already ships a mature OpenAI client that accepts a custom
 `base_url`. Point it at llmux and the routing, budgets, caching, and cost
@@ -33,20 +31,20 @@ accounting happen underneath — no new SDK to learn.
 
 It's **self-hosted, open source, has no telemetry, and has no accounts** — no
 login, no email, no sign-up; you authenticate with an operator-issued bearer
-token and configure it by endpoint. It ships its admin dashboard *inside* the
-binary. An optional control-plane seam adds centralized billing when you want
-it, and is invisible when you don't.
+token and configure it by editing a JSON file. It ships an admin dashboard
+*inside* the binary — usage, keys, and the live model catalog, nothing more.
+An optional control-plane seam adds centralized billing when you want it, and
+is invisible when you don't.
 
 It also enforces a default-deny *sovereignty gate* before every dispatch, so
-inference stays on your box unless you explicitly opt a remote provider in. See
-**[the sovereignty gate](docs/architecture.md#the-sovereignty-gate-where-your-ai-runs)**
-— including [what it does not cover](docs/architecture.md#what-the-gate-does-not-cover),
-which is stated plainly rather than left to be discovered.
+inference stays on your box unless you explicitly opt a provider in. This is
+the reason the project exists — see **[the sovereignty gate](#the-sovereignty-gate)** below.
 
 > ### ⚠️ One outbound call IS on by default: the price-catalog sync
 >
-> llmux is this suite's reference implementation of default-deny egress, so the
-> single exception is stated up front rather than buried in a feature table.
+> llmux is the reference implementation of default-deny egress elsewhere in
+> this suite, so the single exception is stated up front rather than buried in
+> a feature table.
 >
 > `config.Default()` ships two public price feeds — `openrouter.ai` and
 > `raw.githubusercontent.com` — so **a stock gateway makes an outbound GET at
@@ -69,32 +67,31 @@ which is stated plainly rather than left to be discovered.
 
 ```mermaid
 flowchart LR
-    client["any OpenAI client"] -->|"base_url = llmux"| mux["llmux mux"]
-    mux --> p1["OpenAI · Azure"]
-    mux --> p2["Anthropic"]
-    mux --> p3["Gemini · Cohere · Bedrock"]
-    mux --> p4["DeepSeek · Groq · OpenRouter …"]
-    mux --> p5["100+ via passthrough"]
+    client["any OpenAI client"] -->|"base_url = llmux"| mux["llmux"]
+    mux --> local["local — Ollama · llama.cpp · vLLM<br/>(on-box, always allowed)"]
+    mux --> native["Anthropic · Gemini · Cohere · Bedrock · Azure<br/>(native adapters)"]
+    mux --> pass["OpenAI · DeepSeek · Groq · OpenRouter · 100+ more<br/>(passthrough)"]
 ```
 
 ## Quick start
 
-> **Prerequisites:** Go 1.25+, and at least one provider API key. Node is only
-> needed to *rebuild* the web UI (the built bundle is committed and embedded) —
-> and when you do, it must be **Node 20.19+ or 22.12+**, which is what `web/`'s
-> vite 8 toolchain requires and what CI uses.
+> **Prerequisites:** Go 1.25+, and at least one provider API key. There is no
+> Node toolchain anywhere in this repo — the embedded admin console
+> (`web/ui.html`) is one hand-written HTML file with inline CSS/JS, so
+> `go build` alone is enough, including for UI changes.
 
 ```bash
-# 1. Build the binary (embeds the prebuilt web UI)
-make build
+git clone https://github.com/vul-os/llmux
+cd llmux
+make build      # builds ./dist/llmux with the web UI embedded
+```
 
-# 2. Configure providers
+```bash
 export OPENAI_API_KEY=...
 export ANTHROPIC_API_KEY=...
 
-# 3. Run — gateway on :4000, dashboard at /ui
 cp llmux.example.json llmux.json
-./dist/llmux -config llmux.json
+./dist/llmux -config llmux.json    # gateway on :4000, dashboard at /ui
 ```
 
 Then point any OpenAI client at it — the model string selects the route:
@@ -108,12 +105,27 @@ resp = client.chat.completions.create(
     model="cheapest",                       # least-cost route from your config
     messages=[{"role": "user", "content": "hi"}],
 )
-print(resp.usage)                           # includes per-request cost
+print(resp.usage)                           # carries a "cost" object alongside
+                                             # the standard token counts
+```
+
+The `usage` block on every response is the standard OpenAI shape plus one
+additive extension — a `cost` object computed from the live pricing catalog,
+which any OpenAI client ignores harmlessly if it doesn't look for it:
+
+```jsonc
+{
+  "usage": {
+    "prompt_tokens": 9, "completion_tokens": 12, "total_tokens": 21,
+    "cost": { "input_cost": 0.0000014, "output_cost": 0.0000072, "total_cost": 0.0000086, "currency": "USD" }
+  }
+}
 ```
 
 > **17+ languages** — copy-paste examples for Python, Node, TypeScript, Go, Ruby,
-> PHP, Java, C#, Rust, C++, C, Swift, Kotlin, Elixir, R, and Dart live in the
-> [Quickstart](web/docs/quickstart.md) (and at `/ui/docs` in the running gateway).
+> PHP, Java, C#, Rust, C++, C, Swift, Kotlin, Elixir, R, and Dart, plus how to
+> embed llmux as a local dependency with no separate server to run, live in
+> [Client examples](docs/client-examples.md).
 
 ### Verify a release before you run it
 
@@ -141,62 +153,145 @@ never implies more than it checked.
 `make verify-selftest` runs 24 synthetic-origin cases asserting that each
 refusal still fires; CI runs the same matrix on every push.
 
+## The sovereignty gate
+
+This is the part other OpenAI-compatible gateways don't have. `core/sovereign`
+classifies every configured provider by *where its traffic goes*, and the
+server calls the gate **before any network call, on every dispatch path** —
+chat, streaming chat, embeddings, the semantic-cache embedder, and every
+model-bearing modality route. Providers resolve to a 4-tier dial, most→least
+private:
+
+| Tier | What it is | Default |
+|---|---|---|
+| **local** | inference on THIS box (loopback / unix socket) | always allowed |
+| **sovereign** | an operator-declared endpoint the operator vouches for (unverified by Vulos) | allowed on the operator's declaration |
+| **brokered** | a named third party under a claimed no-train agreement | blocked until `allow_brokered` |
+| **external** | any other off-box endpoint (may mine/train) | **blocked** until `allow_egress` |
+
+You opt a provider in **per-provider, never globally**, with fields on that
+provider's config entry: `"tier": "sovereign"`, `"tier": "brokered"` +
+`"allow_brokered": true`, or `"allow_egress": true`. The gate **fails closed**:
+an empty/unparseable `base_url`, an off-box endpoint marked `local`, or any
+unrecognized tier value is treated as **external and blocked** — nothing
+silently upgrades. A blocked provider never opens a socket; the denial is
+logged and counted (`egress_blocked` metric), and every *permitted* off-box
+call is logged with its tier so egress is always observable, never silent.
+
+That's enforced structurally, not by convention: a source-parsing test asserts
+every dispatch function that can reach a provider also calls the gate, so
+adding a new dispatch path without wiring it in is a CI failure that names the
+file and line. See [Architecture → the sovereignty gate](docs/architecture.md#the-sovereignty-gate-where-your-ai-runs)
+for the full mechanism, and
+[what the gate does not cover](docs/architecture.md#what-the-gate-does-not-cover)
+— stated plainly rather than left to be discovered.
+
 ## Features
 
 | | |
 |---|---|
-| 🛡️ **Sovereignty gate** | Inference runs **on your box by default**. A default-deny gate runs before *every* dispatch path — no request leaves the box for a remote provider unless you set `allow_egress` (or declare a `sovereign`/`brokered` tier) on that provider. Fails closed; every permitted off-box call is logged with its tier. |
-| 🔌 **OpenAI-compatible API** | `chat/completions`, `completions`, `embeddings`, `models`, plus `responses`, `rerank`, `moderations`, `images/generations`, `audio/speech`, and `audio/transcriptions`+`audio/translations` (multipart speech-to-text — e.g. voice captions / transcription). Works with any OpenAI SDK unchanged. (The extra modality routes — `responses`/`rerank`/`moderations`/`images`/`audio` — are proxied only to **passthrough** providers; a translating native adapter such as Anthropic/Gemini/Cohere/Bedrock returns 501 for them.) |
+| 🛡️ **Sovereignty gate** | A default-deny, 4-tier (`local`/`sovereign`/`brokered`/`external`) egress policy runs before *every* dispatch path. Fails closed; every permitted off-box call is logged with its tier. See [above](#the-sovereignty-gate). |
+| 🔌 **OpenAI-compatible API** | `chat/completions`, `completions`, `embeddings`, `models`, plus `responses`, `rerank`, `moderations`, `images/generations`, `audio/speech`, and `audio/transcriptions`+`audio/translations` (multipart speech-to-text). Works with any OpenAI SDK unchanged. `chat/completions` and `embeddings` are natively translated per provider; the other modality routes are forwarded and served only by **passthrough** providers — a translating native adapter (Anthropic/Gemini/Cohere/Bedrock/Azure) returns 501 for them. |
 | 🌐 **Multi-provider routing** | Native adapters for Anthropic, Gemini, Cohere, Bedrock, and Azure — plus passthrough for any OpenAI-shaped upstream. Tool-calling, vision, and streaming translated per provider. |
 | 🧭 **Flexible routes** | Model aliases, `provider/model` prefixes, wildcards (`claude-*`), catch-all routes, fallback chains with retries/backoff, and least-cost selection. |
 | 📡 **Byte-identical SSE** | Streamed responses match OpenAI's wire format exactly, so every language's stream parser just works. |
 | ⚡ **Caching** | Exact-match (LRU + TTL) and semantic (embedding-similarity), in-memory or shared via Redis. Scoped per virtual key. |
-| 🔑 **Virtual keys & budgets** | Per-key USD budgets, RPM limits, and model allow-lists. Spend in Postgres, rate limits in Redis. |
-| 💲 **Live pricing** | A built-in seed (cost works offline) auto-syncs from OpenRouter + LiteLLM. Cost appears in each response's `usage`; merged catalog at `GET /v1/catalog.json`. **This sync is the one outbound call a stock gateway makes on its own** — a plain GET of a public price list, carrying no prompt, key, or usage, and *not* covered by the sovereignty gate (which governs inference). Turn it off with `"pricing": {"sources": []}`, or point it at your own mirror. |
-| 📊 **Embedded dashboard** | Usage by model, key budgets, and the live catalog — served from the binary at `/ui` via `go:embed`. No separate service. |
+| 🔑 **Virtual keys & budgets** | Per-key USD budgets, RPM limits, and model allow-lists. Spend in Postgres, rate limits in Redis, when configured — otherwise fully in-memory on one replica. |
+| 💲 **Live pricing** | A built-in seed (cost works offline) auto-syncs from OpenRouter + LiteLLM. Cost appears in each response's `usage.cost`; merged catalog at `GET /v1/catalog.json`. This sync is the one outbound call a stock gateway makes on its own — see the [callout above](#what-is-llmux). Turn it off with `"pricing": {"sources": []}`, or point it at your own mirror. |
+| 📊 **Embedded dashboard** | Usage by model, key budgets, and the live catalog — served from the binary at `/ui` via `go:embed`. No separate service, and nothing else — it's an admin console, not a product page. |
 | 🛡️ **Hardened by default** | Constant-time auth, size/body limits, upstream timeouts, error normalization, `drop_params`, Prometheus `/metrics`, structured logs, `/health`. |
+
+## Status
+
+llmux is pre-1.0 (`v0.2.0`) and under active development. Two things are
+honestly not "everything works, fully hardened":
+
+**Provider adapters are on a stability ladder**, promoted only once verified
+against the *real* API (golden fixtures + `make smoke`), not on code maturity
+alone:
+
+| Provider | Type | Stability |
+|---|---|---|
+| OpenAI / DeepSeek / Groq / Mistral / Together / Fireworks / xAI / OpenRouter / Ollama / vLLM | `passthrough` | **stable** |
+| Anthropic | `anthropic` | **beta** — translated + unit-tested, not yet live-verified |
+| Google Gemini | `gemini` | **beta** — translated + unit-tested, not yet live-verified |
+| Azure OpenAI | `azure` | **beta** — translated + unit-tested, not yet live-verified |
+| Cohere | `cohere` | **experimental** — written to spec, unverified |
+| AWS Bedrock (Anthropic) | `bedrock` | **experimental** — written to spec, unverified; streaming is synthesized, not native |
+
+`GET /health` (master key) reports each configured provider's live stability.
+Full table and the promotion criteria: [SUPPORT.md](SUPPORT.md).
+
+**Feature parity against LiteLLM is a tracked, ongoing program**, not a
+finished checklist. Shipped: the endpoints above, fallback/least-cost routing,
+virtual keys with Postgres/Redis-backed cross-replica state, caching,
+observability basics. Not yet: multiple deployments per model / weighted load
+balancing, teams/orgs/end-users, TPM limits, guardrails, most of the long tail
+of provider integrations. Full breakdown, tier by tier: [docs/parity.md](docs/parity.md).
 
 ## Documentation
 
-Full documentation lives in **[`docs/`](docs/)** (and inside the binary at `/ui/docs`).
+Full documentation lives in **[`docs/`](docs/)**, and is also published at
+**[vulos.org/projects/llmux](https://vulos.org/projects/llmux/)**.
 
 | | |
 |---|---|
-| [Quickstart](web/docs/quickstart.md) | Run it and make your first request |
+| [Getting started](docs/GETTING-STARTED.md) | Deploy the gateway, connect providers, auth and keys |
+| [Client examples](docs/client-examples.md) | Copy-paste requests in curl and 17+ languages, plus embedding llmux locally |
 | [API reference](docs/api.md) | Endpoints, auth, errors, and cost |
-| [Configuration](docs/configuration.md) | Config file + environment variables |
-| [Routing & reliability](web/docs/routing.md) | Aliases, fallbacks, least-cost |
-| [Providers](web/docs/providers.md) | Native adapters vs. passthrough |
-| [Pricing & cost](web/docs/pricing.md) | The live catalog and cost accounting |
-| [Architecture](docs/architecture.md) | How the gateway is laid out |
-| [Control-plane seam](docs/control-plane.md) | Optional centralized billing |
-| [Operations](docs/operations.md) | Build, test, and self-host |
+| [Configuration](docs/configuration.md) | Config file, environment variables, and the sovereignty fields |
+| [Architecture](docs/architecture.md) | How the gateway is laid out, and the sovereignty gate in full |
+| [Admin guide](docs/ADMIN-GUIDE.md) | Budgets, rate limits, cost accounting, model routing, the dashboard |
+| [LLM access: BYOK vs central](docs/LLM-ACCESS.md) | Per-account own-key vs central metered keys, billing |
+| [Control-plane seam](docs/control-plane.md) | Optional centralized billing & entitlements |
+| [Operations](docs/operations.md) | Building, testing, and self-hosting |
+| [Troubleshooting](docs/TROUBLESHOOTING.md) | Symptom-by-symptom fixes |
+
+## Virtual keys & budgets
+
+Clients authenticate with a single header, `Authorization: Bearer <token>` —
+no accounts, no OAuth, no sessions. Virtual keys are issued by the operator in
+the config file (or resolved via the optional control plane), each with a USD
+budget, an RPM limit, and a model allow-list:
+
+```jsonc
+{ "key": "sk-team-a", "name": "team-a", "budget_usd": 100, "rpm": 600, "allowed_models": ["gpt-4o", "cheapest"] }
+```
+
+Requests the gateway refuses before ever calling a provider: `401
+invalid_api_key`, `403 model_not_allowed`, `404 model_not_found`, `402
+budget_exceeded` (fails closed if spend can't be read), `429
+rate_limit_exceeded`, `403 model_not_priced` (a budgeted key requested a model
+the catalog can't price — refused pre-flight rather than metered at $0), and
+`403 egress_not_allowed` (the sovereignty gate). Full list: [API reference → Errors](docs/api.md#errors).
 
 ## Dashboard
 
-The admin dashboard ships *inside* the binary at `/ui` — no separate service, no extra deploy.
+The admin dashboard ships *inside* the binary at `/ui` — no separate service,
+no extra deploy. It's an admin console, not a product page: usage, keys, and
+the live model catalog, and nothing else.
 
 <details>
-<summary><b>Screenshots</b> — usage, keys, catalog, docs</summary>
+<summary><b>Screenshots</b> — usage, keys, catalog</summary>
 
 <br/>
 
+> These predate the admin console's rewrite into `web/ui.html` and still show
+> the retired React build's chrome (top nav with Home/Docs, a theme toggle,
+> a marketing-style footer) — none of which the current page has. The three
+> views themselves (usage/keys/models) are still accurate in substance;
+> recapture against the current page is tracked separately.
+
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/dashboard-usage.png" alt="Dashboard — usage by model with request counts, tokens, and live cost" /></td>
-    <td width="50%"><img src="docs/screenshots/dashboard-keys.png" alt="Dashboard — virtual keys with budgets, spend, and rate limits" /></td>
+    <td width="33%"><img src="docs/screenshots/dashboard-usage.png" alt="Dashboard — usage by model with request counts, tokens, and live cost" /></td>
+    <td width="33%"><img src="docs/screenshots/dashboard-keys.png" alt="Dashboard — virtual keys with budgets, spend, and rate limits" /></td>
+    <td width="33%"><img src="docs/screenshots/dashboard-models.png" alt="Dashboard — the live model price catalog with input/output cost and context window" /></td>
   </tr>
   <tr>
     <td align="center"><sub><b>Usage</b> — requests, tokens, and cost, per model</sub></td>
     <td align="center"><sub><b>Keys</b> — per-key budgets, spend, and RPM</sub></td>
-  </tr>
-  <tr>
-    <td width="50%"><img src="docs/screenshots/dashboard-models.png" alt="Dashboard — the live model price catalog with input/output cost and context window" /></td>
-    <td width="50%"><img src="docs/screenshots/docs.png" alt="Built-in documentation served from the binary" /></td>
-  </tr>
-  <tr>
     <td align="center"><sub><b>Models</b> — the live, merged price catalog</sub></td>
-    <td align="center"><sub><b>Docs</b> — quickstart, served from the binary</sub></td>
   </tr>
 </table>
 
@@ -213,20 +308,58 @@ llmux is one self-hosted binary; its shape is defined by whether the optional
 | **Control-plane-linked** | Set `LLMUX_CP_URL` / `LLMUX_CP_SECRET` | Virtual-key spend + usage metered through a central control plane; the seam is invisible when unset |
 
 Both shapes are the **same binary**; the CP seam only *adds* central billing on
-top. See [control-plane.md](docs/control-plane.md).
+top, and `core` never imports it — delete `integration/cp` entirely and the
+standalone build still compiles and runs. See [control-plane.md](docs/control-plane.md).
 
-## Self-hosting
+## Operations
 
-A single binary with no required runtime dependencies — drop it on a host (or use
-the [`Dockerfile`](Dockerfile)), point it at a config, and set your provider keys.
-Add Postgres and Redis when you scale to multiple replicas. See
-[Operations](docs/operations.md) and [HARDENING.md](HARDENING.md).
+A single binary with no required runtime dependencies — drop it on a host (or
+use the [`Dockerfile`](Dockerfile)), point it at a config, and set your
+provider keys. Add Postgres and Redis when you scale to multiple replicas, so
+keys, spend, rate limits, and cache stay consistent across them.
+
+```bash
+make build      # go build -o dist/llmux ./cmd/llmux
+make run        # build and run on :4000
+make docker     # build the Docker image
+```
+
+Beyond serving, the binary exposes inspection subcommands against a running
+gateway:
+
+```bash
+./dist/llmux models       # models with pricing + context window
+./dist/llmux catalog      # price catalog count and last sync time
+./dist/llmux keys         # virtual keys: budget, spend, rpm
+```
+
+Prometheus metrics and structured logs are served at `GET /metrics` (master
+key), and `GET /health` gives an unauthenticated liveness probe plus, to the
+master key, the full provider/sovereignty topology. See
+[Operations](docs/operations.md) and [HARDENING.md](HARDENING.md) for the
+production security posture.
+
+## Testing
+
+```bash
+make test       # go test -race ./...
+make vet        # go vet ./...
+make cover      # coverage summary
+```
+
+Integration tests against Postgres/Redis activate when `LLMUX_TEST_POSTGRES` /
+`LLMUX_TEST_REDIS` are set; provider conformance fixtures and the live smoke
+suite (`make record`, `make smoke`) need real provider keys. Full layer
+breakdown — unit, contract, gated integration, conformance, live smoke, fuzz,
+and the structural guards that read source instead of running it — in
+[TESTING.md](TESTING.md).
 
 ## Contributing & support
 
-Issues and PRs welcome. See [SUPPORT.md](SUPPORT.md) for help, the
-[roadmap](ROADMAP.md) for what's planned, and the [changelog](CHANGELOG.md)
-for what's shipped.
+Issues and PRs welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup,
+branch conventions, and the pre-PR gates. [SUPPORT.md](SUPPORT.md) has the
+provider stability ladder and where to get help, the [roadmap](ROADMAP.md)
+says what's planned, and the [changelog](CHANGELOG.md) says what's shipped.
 
 ## Security
 

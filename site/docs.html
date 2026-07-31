@@ -26,10 +26,57 @@
 :root{
   --bg:#09090B; --bg-soft:#0E0E10; --panel:#131316; --panel-2:#18181B;
   --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.13);
+  --overlay-1:rgba(255,255,255,.03); --overlay-2:rgba(255,255,255,.04); --overlay-3:rgba(255,255,255,.07);
   --text:#FAFAFA; --muted:#A1A1AA; --faint:#71717A;
+  /* Body copy (markdown p/li/code) is deliberately a touch dimmer than
+     --text — same trick as --muted, just closer to full contrast. It needs
+     its own light/dark pair: the dark-mode value is unreadable on a light
+     background (see the light overrides below). */
+  --body-text:#D4D4D8;
+  --accent:#14b8a6; --accent-2:#2dd4bf;
   --radius:16px; --max:1120px;
   --mono:ui-monospace,SFMono-Regular,"SF Mono","Geist Mono",Menlo,Consolas,monospace;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  /* Syntax highlighting — the code surface is deliberately a fixed dark
+     "carbon" panel in both page themes (a common, high-legibility doc-site
+     pattern). Because the surface never changes, none of these token colors
+     need a light/dark pair either — they're chosen once against #0C1116 and
+     stay put. Every value below clears 4.5:1 against --hl-bg (see docs.html
+     PR notes / agent report for measured ratios).
+     --hl-comment is #6C7D94, one LSB brighter per channel than the spec's
+     #6B7C93 (which measures 4.45:1, just under AA) — imperceptible visually,
+     clears 4.51:1. */
+  --hl-bg:#0C1116; --hl-fg:#C8D4E3; --hl-comment:#6C7D94;
+  --hl-keyword:#C4B5FD; --hl-string:#5EEAD4; --hl-number:#FBBF24;
+  --hl-function:#7DD3FC; --hl-property:#93C5FD; --hl-variable:#FDA4AF;
+  --hl-meta:#FDBA74; --hl-punct:#8195AC;
+  --hl-deletion:#FCA5A5; --hl-addition:#86EFAC;
+}
+@media (prefers-color-scheme:light){
+  :root{
+    --bg:#FAFAFA; --bg-soft:#F4F4F5; --panel:#FFFFFF; --panel-2:#F4F4F5;
+    --border:rgba(0,0,0,.09); --border-2:rgba(0,0,0,.15);
+    --overlay-1:rgba(0,0,0,.03); --overlay-2:rgba(0,0,0,.045); --overlay-3:rgba(0,0,0,.06);
+    --text:#18181B; --muted:#52525B; --faint:#6B7280;
+    /* #14b8a6 only clears 2.4:1 on a near-white page background — well under
+       WCAG AA's 4.5:1 for text. Darken it for light mode; dark mode's link
+       color already passes at ~8:1 so it stays as-is. */
+    --body-text:#3F3F46; --accent:#0F766E; --accent-2:#0D9488;
+  }
+}
+:root[data-theme="light"]{
+  --bg:#FAFAFA; --bg-soft:#F4F4F5; --panel:#FFFFFF; --panel-2:#F4F4F5;
+  --border:rgba(0,0,0,.09); --border-2:rgba(0,0,0,.15);
+  --overlay-1:rgba(0,0,0,.03); --overlay-2:rgba(0,0,0,.045); --overlay-3:rgba(0,0,0,.06);
+  --text:#18181B; --muted:#52525B; --faint:#6B7280;
+  --body-text:#3F3F46; --accent:#0F766E; --accent-2:#0D9488;
+}
+:root[data-theme="dark"]{
+  --bg:#09090B; --bg-soft:#0E0E10; --panel:#131316; --panel-2:#18181B;
+  --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.13);
+  --overlay-1:rgba(255,255,255,.03); --overlay-2:rgba(255,255,255,.04); --overlay-3:rgba(255,255,255,.07);
+  --text:#FAFAFA; --muted:#A1A1AA; --faint:#71717A;
+  --body-text:#D4D4D8; --accent:#14b8a6; --accent-2:#2dd4bf;
 }
 html{scroll-behavior:smooth}
 body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;font-size:16px}
@@ -73,35 +120,121 @@ img{max-width:100%;display:block}
 .docs-nav{position:sticky;top:84px;border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);padding:14px}
 .docs-nav .label{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);padding:6px 10px}
 .docs-nav a{display:block;padding:8px 11px;border-radius:9px;color:var(--muted);font-size:14.5px;font-weight:500;transition:.15s}
-.docs-nav a:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.docs-nav a:hover{background:var(--overlay-2);color:var(--text)}
 .docs-nav a.active{background:color-mix(in srgb,var(--accent) 14%, transparent);color:var(--text)}
 @media(max-width:860px){.docs-nav{position:static}}
 .docs-main{min-width:0}
-.markdown{font-size:16px}
+.markdown{font-size:16px;overflow-wrap:anywhere}
 .markdown>*:first-child{margin-top:0}
+.markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{scroll-margin-top:84px}
 .markdown h1{font-size:34px;letter-spacing:-.03em;margin:.2em 0 .5em;border-bottom:1px solid var(--border);padding-bottom:.3em}
 .markdown h2{font-size:25px;letter-spacing:-.02em;margin:1.6em 0 .6em;border-bottom:1px solid var(--border);padding-bottom:.25em}
 .markdown h3{font-size:19px;margin:1.4em 0 .5em}
 .markdown h4{font-size:16px;margin:1.3em 0 .4em;color:var(--text)}
-.markdown p,.markdown li{color:#D4D4D8}
+.markdown p,.markdown li{color:var(--body-text)}
 .markdown a{color:var(--accent);text-decoration:none}
 .markdown a:hover{text-decoration:underline}
-.markdown code{font-family:var(--mono);font-size:.88em;background:rgba(255,255,255,.07);padding:2px 6px;border-radius:6px}
-.markdown pre{background:#0C0C0E;border:1px solid var(--border-2);border-radius:12px;padding:16px 18px;overflow:auto}
-.markdown pre code{background:none;padding:0;font-size:13.5px;line-height:1.7;color:#D4D4D8}
-.markdown blockquote{margin:1em 0;padding:.4em 1em;border-left:3px solid var(--accent);background:rgba(255,255,255,.03);color:var(--muted);border-radius:0 8px 8px 0}
+.markdown code{font-family:var(--mono);font-size:.88em;background:var(--overlay-3);padding:2px 6px;border-radius:6px}
+.markdown pre{background:var(--hl-bg);border:1px solid var(--border-2);border-radius:12px;padding:16px 18px;overflow:auto}
+.markdown pre code{background:none;padding:0;font-size:13.5px;line-height:1.7;color:var(--hl-fg)}
+.markdown pre code.hljs{display:block}
+/* highlight.js token colors — see --hl-* in :root; code surface is fixed-dark
+   in both page themes so one set of values covers both (see comment above).
+   Bucket inventory (every hljs-* class the vendored build emits for the
+   languages these docs use — go, bash, json/jsonc, python, javascript,
+   typescript, http, yaml, rust, ruby, php, java, kotlin, csharp, cpp, c,
+   swift, elixir, dart, r — verified by rendering real doc pages plus
+   synthetic snippets per language and diffing the DOM):
+     comment    -> comment, quote
+     keyword    -> keyword, type (storage/type names — go `string`/`int`,
+                   rust/java/ts generics, python `Optional`), selector-tag,
+                   variable.language_ (this/self/$this/console — reads like
+                   a reserved word, not a user variable)
+     string     -> string, doctag, regexp
+     number     -> number, literal (true/false/null/True/None/nil/NULL),
+                   variable.constant_ (JS `static X =`, PHP class consts —
+                   these are specifically called out as "constants" in the
+                   number/amber bucket, not the variable/rose one)
+     function   -> title (covers the bare class plus every compound variant —
+                   title.function_, title.class_, title.class_.inherited__,
+                   title.function_.invoke__ — since class/struct/interface
+                   names share this bucket with function/method names; the
+                   modifier suffix never appears without the base class),
+                   section
+     property   -> attr (JSON/YAML keys, JS/TS object keys), attribute
+                   (HTTP header names — the http grammar uses hljs-attribute,
+                   not hljs-attr, for these; both land in the same bucket),
+                   params, property (JS/TS member-access chains)
+     variable   -> variable, template-variable, name, symbol (ruby/elixir
+                   :atoms), selector-class/attr/pseudo, link
+     meta       -> meta (bash shebang, PHP `<?php`, C/C++ preprocessor),
+                   built_in (go len/panic, python str/print, bash
+                   export/local/echo — deliberately NOT the same bucket as
+                   plain variables), tag
+     punctuation-> punctuation, operator (java/swift/r casts and comparisons
+                   — punctuation's row explicitly covers "operators"),
+                   bullet (yaml `-` list markers), selector-id
+   hljs-subst (the `${...}` / `#{...}` interpolation markers inside template
+   strings) is deliberately set to plain default text rather than the string
+   color, so interpolated code reads as code, not as string content — this
+   is what stops an f-string/template literal from visually "swallowing"
+   the variable inside it.
+   hljs-class and hljs-function (the *wrapper* spans some grammars use
+   around `class Foo` / `func bar()`) are left uncolored on purpose: their
+   own inner tokens (keyword, title, params) already carry color, and the
+   wrapper's unwrapped text (whitespace, unscoped punctuation) correctly
+   falls through to the default --hl-fg rather than needing its own rule.
+   Go's struct-field access (`res.Choices[0].Message`) and bare function
+   calls (`fmt.Println`) are verified NOT to be scoped by this hljs build's
+   go grammar at all — they render as default text by design, not as a
+   fallthrough bug. */
+.hljs-comment,.hljs-quote{color:var(--hl-comment);font-style:italic}
+.hljs-keyword,.hljs-type,.hljs-selector-tag,.hljs-variable.language_{color:var(--hl-keyword)}
+.hljs-string,.hljs-doctag,.hljs-regexp{color:var(--hl-string)}
+.hljs-number,.hljs-literal,.hljs-variable.constant_{color:var(--hl-number)}
+.hljs-title,.hljs-section{color:var(--hl-function)}
+.hljs-attr,.hljs-attribute,.hljs-params,.hljs-property{color:var(--hl-property)}
+.hljs-variable,.hljs-template-variable,.hljs-name,.hljs-symbol,.hljs-selector-class,.hljs-selector-attr,.hljs-selector-pseudo,.hljs-link{color:var(--hl-variable)}
+.hljs-meta,.hljs-built_in,.hljs-tag{color:var(--hl-meta)}
+.hljs-punctuation,.hljs-operator,.hljs-bullet,.hljs-selector-id{color:var(--hl-punct)}
+.hljs-subst{color:var(--hl-fg)}
+.hljs-deletion{color:var(--hl-deletion)}
+.hljs-addition{color:var(--hl-addition)}
+.hljs-emphasis{font-style:italic}
+.hljs-strong{font-weight:700}
+.markdown blockquote{margin:1em 0;padding:.4em 1em;border-left:3px solid var(--accent);background:var(--overlay-1);color:var(--muted);border-radius:0 8px 8px 0}
 .markdown table{border-collapse:collapse;width:100%;margin:1.2em 0;font-size:14.5px;display:block;overflow:auto}
 .markdown th,.markdown td{border:1px solid var(--border-2);padding:9px 12px;text-align:left}
 .markdown th{background:var(--panel);font-weight:600}
 .markdown img{border-radius:10px;margin:1em 0;border:1px solid var(--border)}
 .markdown hr{border:none;border-top:1px solid var(--border);margin:2em 0}
 .markdown .mermaid{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:18px;margin:1.2em 0;text-align:center;overflow:auto}
+/* Language picker — replaces a run of N>=3 consecutive per-language code
+   blocks (see buildLangPickers() below) with a tab strip + one visible
+   panel. The tab strip scrolls horizontally on its own; it never widens
+   the page. */
+.lang-picker{margin:1.4em 0}
+.lang-tabs{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding:4px;background:var(--overlay-1);border:1px solid var(--border);border-radius:12px;scrollbar-width:thin}
+.lang-tabs::-webkit-scrollbar{height:6px}
+.lang-tabs::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:4px}
+.lang-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:7px 12px;margin:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:13.5px;font-weight:500;line-height:1;cursor:pointer;transition:background .15s,color .15s,border-color .15s;white-space:nowrap}
+.lang-tab:hover{color:var(--text);background:var(--overlay-3)}
+.lang-tab[aria-selected="true"]{color:var(--text);background:var(--panel);border-color:var(--border-2);box-shadow:0 1px 3px rgba(0,0,0,.18)}
+.lang-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lang-tab-icon{width:17px;height:17px;flex:0 0 auto;color:inherit}
+.lang-tab-icon text{font-family:var(--mono);font-weight:700;text-anchor:middle}
+.lang-panels{margin-top:10px}
+.lang-panel{display:none}
+.lang-panel.active{display:block}
+.lang-panel>p{margin:0 0 10px;color:var(--body-text)}
+.lang-panel>p:first-child strong{color:var(--text)}
+.lang-panel>pre{margin:0}
 .docs-title{font-size:13px;color:var(--faint);margin-bottom:6px}
 .docs-error{color:#FCA5A5;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);padding:14px 16px;border-radius:10px}
 </style>
-<style>:root{--accent:#14b8a6;--accent-2:#2dd4bf}</style>
 <script src="./assets/vendor/marked.umd.js"></script>
 <script src="./assets/vendor/mermaid.min.js"></script>
+<script src="./assets/vendor/highlight.min.js"></script>
 </head>
 <body>
 <header class="site-header"><div class="wrap nav">
@@ -121,6 +254,7 @@ img{max-width:100%;display:block}
   <aside class="docs-nav">
     <div class="label">llmux docs</div>
         <a data-slug="getting-started" href="#getting-started">Getting started</a>
+        <a data-slug="client-examples" href="#client-examples">Client examples</a>
         <a data-slug="architecture" href="#architecture">Architecture</a>
         <a data-slug="configuration" href="#configuration">Configuration</a>
         <a data-slug="api" href="#api">API reference</a>
@@ -130,6 +264,7 @@ img{max-width:100%;display:block}
         <a data-slug="operations" href="#operations">Operations</a>
         <a data-slug="troubleshooting" href="#troubleshooting">Troubleshooting</a>
         <a data-slug="roadmap" href="#roadmap">Roadmap</a>
+        <a data-slug="parity" href="#parity">Provider parity</a>
         <a data-slug="changelog" href="#changelog">Changelog</a>
   </aside>
   <main class="docs-main">
@@ -150,6 +285,7 @@ img{max-width:100%;display:block}
 // The site is served from the repo root; docs render straight from the repo's own markdown.
 const DOCS = [
   {"slug":"getting-started","title":"Getting started","path":"./docs/getting-started.md"},
+  {"slug":"client-examples","title":"Client examples","path":"./docs/client-examples.md"},
   {"slug":"architecture","title":"Architecture","path":"./docs/architecture.md"},
   {"slug":"configuration","title":"Configuration","path":"./docs/configuration.md"},
   {"slug":"api","title":"API reference","path":"./docs/api.md"},
@@ -159,6 +295,7 @@ const DOCS = [
   {"slug":"operations","title":"Operations","path":"./docs/operations.md"},
   {"slug":"troubleshooting","title":"Troubleshooting","path":"./docs/troubleshooting.md"},
   {"slug":"roadmap","title":"Roadmap","path":"./docs/roadmap.md"},
+  {"slug":"parity","title":"Provider parity","path":"./docs/parity.md"},
   {"slug":"changelog","title":"Changelog","path":"./docs/changelog.md"}
 ];
 const bySlug = Object.fromEntries(DOCS.map(d=>[d.slug,d]));
@@ -174,6 +311,41 @@ function setActive(slug){
   document.querySelectorAll('.docs-nav a').forEach(a=>a.classList.toggle('active', a.dataset.slug===slug));
 }
 
+// slugify mirrors GitHub's heading-anchor algorithm closely enough that the
+// anchors already written throughout docs/ (e.g. "#the-sovereignty-gate-
+// where-your-ai-runs") match: lowercase, drop punctuation, spaces to hyphens.
+function slugify(text){
+  return text.toLowerCase()
+    .replace(/[^\wÀ-ɏ\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
+}
+
+// assignHeadingIds gives every heading marked.js renders an id, so in-page and
+// cross-doc "#anchor" links (which marked does not id by itself) have
+// somewhere to land.
+function assignHeadingIds(){
+  const seen = {};
+  content.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(h=>{
+    let id = slugify(h.textContent);
+    if(seen[id]){ seen[id]++; id = id+'-'+seen[id]; } else { seen[id] = 0; }
+    h.id = id;
+  });
+}
+
+function highlightCode(){
+  if(!window.hljs) return;
+  // Only tokenize fences with an explicit ```lang — auto-detecting on bare
+  // ``` blocks (plain output, ASCII trees, etc.) risks mis-tokenizing text
+  // that isn't code at all, which is worse than leaving it unhighlighted.
+  content.querySelectorAll('pre code[class*="language-"]').forEach(code=>{
+    // Mermaid diagrams are swapped out for a rendered <div> by renderMermaid();
+    // never tokenize their source as code.
+    if(code.classList.contains('language-mermaid')) return;
+    try { hljs.highlightElement(code); } catch(e){ console.warn('highlight', e); }
+  });
+}
+
 async function renderMermaid(){
   if(!mermaidReady) return;
   const blocks = [...content.querySelectorAll('code.language-mermaid')];
@@ -187,7 +359,250 @@ async function renderMermaid(){
   if(nodes.length){ try { await mermaid.run({ nodes }); } catch(e){ console.warn('mermaid', e); } }
 }
 
-async function load(slug){
+// ---- Language picker -------------------------------------------------
+// Turns a run of N>=3 consecutive same-shape "one code example per
+// language" blocks into a tab strip with one visible panel. Generic by
+// design: it looks at DOM shape (a run of <pre><code class="language-*">
+// blocks, each optionally preceded by a "**Label**" paragraph that marked
+// renders immediately before its own code fence), not at any filename or
+// heading text. If the shape isn't there, nothing changes and the reader
+// sees the original stacked blocks — the untouched, always-safe fallback.
+const LANG_META = {
+  bash:       { name:'Bash',       badge:'sh'   },
+  shell:      { name:'Shell',      badge:'sh'   },
+  sh:         { name:'Shell',      badge:'sh'   },
+  python:     { name:'Python',     badge:'py'   },
+  javascript: { name:'JavaScript', badge:'js'   },
+  typescript: { name:'TypeScript', badge:'ts'   },
+  go:         { name:'Go',         badge:'go'   },
+  ruby:       { name:'Ruby',       badge:'rb'   },
+  php:        { name:'PHP',        badge:'php'  },
+  java:       { name:'Java',       badge:'java' },
+  csharp:     { name:'C#',         badge:'c#'   },
+  rust:       { name:'Rust',       badge:'rs'   },
+  cpp:        { name:'C++',        badge:'c++'  },
+  c:          { name:'C',          badge:'c'    },
+  swift:      { name:'Swift',      badge:'sw'   },
+  kotlin:     { name:'Kotlin',     badge:'kt'   },
+  elixir:     { name:'Elixir',     badge:'ex'   },
+  r:          { name:'R',          badge:'r'    },
+  dart:       { name:'Dart',       badge:'dart' },
+  json:       { name:'JSON',       badge:'{}'   },
+  jsonc:      { name:'JSON',       badge:'{}'   },
+  http:       { name:'HTTP',       badge:'http' },
+  yaml:       { name:'YAML',       badge:'yml'  },
+};
+function langName(lang){
+  const m = LANG_META[lang];
+  return m ? m.name : (lang.charAt(0).toUpperCase()+lang.slice(1));
+}
+function langBadge(lang){
+  const m = LANG_META[lang];
+  return m ? m.badge : lang.slice(0,2);
+}
+// Every tab icon is the same monoline badge template (rounded square,
+// currentColor stroke, monospace lettermark) — a deliberate lettermark
+// system rather than pictographic per-language logos: several of these
+// languages' real marks (Java's cup, Rust's gear, PHP's elephant, Swift's
+// bird) are registered trademarks, and redrawing them close enough to be
+// recognisable would be reproducing someone else's logo. A single
+// consistent badge family avoids that entirely while staying legible at
+// tab size, and reads as one deliberate system rather than clip art.
+function makeLangIcon(lang){
+  const label = langBadge(lang);
+  const size = label.length >= 4 ? 6 : label.length === 3 ? 7 : 8.5;
+  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+  svg.setAttribute('viewBox','0 0 16 16');
+  svg.setAttribute('class','lang-tab-icon');
+  svg.setAttribute('aria-hidden','true');
+  svg.setAttribute('focusable','false');
+  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
+  rect.setAttribute('x','1'); rect.setAttribute('y','1');
+  rect.setAttribute('width','14'); rect.setAttribute('height','14');
+  rect.setAttribute('rx','4'); rect.setAttribute('fill','none');
+  rect.setAttribute('stroke','currentColor'); rect.setAttribute('stroke-width','1.3');
+  const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+  text.setAttribute('x','8'); text.setAttribute('y','8.7');
+  text.setAttribute('dominant-baseline','middle');
+  text.setAttribute('font-size',String(size));
+  text.setAttribute('fill','currentColor');
+  text.textContent = label;
+  svg.appendChild(rect); svg.appendChild(text);
+  return svg;
+}
+
+// Walks content's direct children and groups them into "code items": a
+// <pre><code class="language-X"> block, optionally paired with the
+// immediately preceding <p><strong>…</strong>…</p> label marked.js
+// renders above it. Any other element breaks the run. Only runs of
+// length >= 3 are returned — shorter runs are left as plain stacked
+// blocks, same as a single lone code fence.
+function collectLangRuns(root){
+  const kids = Array.from(root.children);
+  const items = [];
+  let i = 0;
+  while (i < kids.length) {
+    const node = kids[i];
+    let labelEl = null, pre = null, codeEl = null;
+    if (node.tagName === 'P' && node.firstElementChild && node.firstElementChild.tagName === 'STRONG' &&
+        kids[i+1] && kids[i+1].tagName === 'PRE') {
+      const nextCode = kids[i+1].querySelector(':scope > code[class*="language-"]');
+      if (nextCode && !nextCode.classList.contains('language-mermaid')) {
+        labelEl = node; pre = kids[i+1]; codeEl = nextCode;
+      }
+    }
+    if (!pre && node.tagName === 'PRE') {
+      const c = node.querySelector(':scope > code[class*="language-"]');
+      if (c && !c.classList.contains('language-mermaid')) { pre = node; codeEl = c; }
+    }
+    if (pre) {
+      const langClass = [...codeEl.classList].find(c => c.startsWith('language-'));
+      const lang = langClass ? langClass.slice('language-'.length) : '';
+      if (lang) {
+        items.push({ lang, pre, codeEl, labelEl });
+        i += labelEl ? 2 : 1;
+        continue;
+      }
+    }
+    items.push(null);
+    i += 1;
+  }
+  const runs = [];
+  let cur = [];
+  for (const it of items) {
+    if (it) cur.push(it);
+    else { if (cur.length >= 3) runs.push(cur); cur = []; }
+  }
+  if (cur.length >= 3) runs.push(cur);
+  // A run only makes sense as a picker if every block is a distinct
+  // language — if the same language repeats, this isn't a "same call,
+  // many languages" run, so leave it alone.
+  return runs.filter(run => new Set(run.map(it=>it.lang)).size === run.length);
+}
+
+const LANG_PREF_KEY = 'llmux-docs-lang';
+function getLangPref(){ try { return localStorage.getItem(LANG_PREF_KEY) || ''; } catch(e){ return ''; } }
+function setLangPref(lang){ try { localStorage.setItem(LANG_PREF_KEY, lang); } catch(e){} }
+
+// Not every run offers every language — this page has a 17-language run and a
+// 3-language one — so the shared preference has to be checked BEFORE anything
+// is deselected. Clearing first and bailing out afterwards left the smaller
+// run with aria-selected="false" on every tab and tabIndex -1 on every tab: no
+// tab highlighted, the strip unreachable by keyboard, and a stale panel still
+// showing. A run that cannot honour the preference simply keeps its own.
+function activateLangTab(picker, lang){
+  const tabs = picker.querySelectorAll('.lang-tab');
+  let matched = false;
+  tabs.forEach(tab=>{ if (tab.dataset.lang === lang) matched = true; });
+  if (!matched) return false;
+  tabs.forEach(tab=>{
+    const on = tab.dataset.lang === lang;
+    tab.setAttribute('aria-selected', on ? 'true' : 'false');
+    tab.tabIndex = on ? 0 : -1;
+  });
+  picker.querySelectorAll('.lang-panel').forEach(p=>{
+    p.classList.toggle('active', p.dataset.lang === lang);
+  });
+  return true;
+}
+
+function selectLangEverywhere(lang){
+  setLangPref(lang);
+  document.querySelectorAll('.lang-picker').forEach(p=>activateLangTab(p, lang));
+}
+
+let langPickerSeq = 0;
+function buildLangPickers(){
+  let runs;
+  try { runs = collectLangRuns(content); } catch(e){ console.warn('lang-picker detect', e); return; }
+  const preferred = getLangPref();
+  runs.forEach(run=>{
+    try {
+      const runId = 'langrun-' + (langPickerSeq++);
+      const picker = document.createElement('div');
+      picker.className = 'lang-picker';
+
+      const tablist = document.createElement('div');
+      tablist.className = 'lang-tabs';
+      tablist.setAttribute('role','tablist');
+      tablist.setAttribute('aria-label','Language');
+
+      const panels = document.createElement('div');
+      panels.className = 'lang-panels';
+
+      const initial = run.find(it=>it.lang===preferred) ? preferred : run[0].lang;
+
+      // Mark the run's original position *before* anything is moved — once
+      // the loop below starts re-parenting label/pre nodes into panels,
+      // run[0]'s node no longer has its original parent/siblings to anchor
+      // on.
+      const firstNode = run[0].labelEl || run[0].pre;
+      const anchor = document.createComment('lang-picker-anchor');
+      firstNode.parentNode.insertBefore(anchor, firstNode);
+
+      run.forEach(it=>{
+        const tabId = runId + '-tab-' + it.lang;
+        const panelId = runId + '-panel-' + it.lang;
+        const selected = it.lang === initial;
+
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.className = 'lang-tab';
+        tab.id = tabId;
+        tab.setAttribute('role','tab');
+        tab.setAttribute('aria-selected', selected ? 'true':'false');
+        tab.setAttribute('aria-controls', panelId);
+        tab.tabIndex = selected ? 0 : -1;
+        tab.dataset.lang = it.lang;
+        tab.appendChild(makeLangIcon(it.lang));
+        const label = document.createElement('span');
+        label.textContent = langName(it.lang);
+        tab.appendChild(label);
+        tab.addEventListener('click', ()=>{ selectLangEverywhere(it.lang); tab.focus(); });
+        tab.addEventListener('keydown', (e)=>{
+          const tabs = Array.from(tablist.querySelectorAll('.lang-tab'));
+          const idx = tabs.indexOf(tab);
+          let next = -1;
+          if (e.key === 'ArrowRight') next = (idx+1) % tabs.length;
+          else if (e.key === 'ArrowLeft') next = (idx-1+tabs.length) % tabs.length;
+          else if (e.key === 'Home') next = 0;
+          else if (e.key === 'End') next = tabs.length - 1;
+          if (next !== -1) {
+            e.preventDefault();
+            const t = tabs[next];
+            selectLangEverywhere(t.dataset.lang);
+            t.focus();
+          }
+        });
+        tablist.appendChild(tab);
+
+        const panel = document.createElement('div');
+        panel.className = 'lang-panel' + (selected ? ' active' : '');
+        panel.id = panelId;
+        panel.dataset.lang = it.lang;
+        panel.setAttribute('role','tabpanel');
+        panel.setAttribute('aria-labelledby', tabId);
+        panel.tabIndex = 0;
+        if (it.labelEl) panel.appendChild(it.labelEl);
+        panel.appendChild(it.pre);
+        panels.appendChild(panel);
+      });
+
+      picker.appendChild(tablist);
+      picker.appendChild(panels);
+      anchor.parentNode.insertBefore(picker, anchor);
+      anchor.remove();
+    } catch(e){ console.warn('lang-picker build', e); }
+  });
+}
+
+async function load(raw){
+  // The hash is "<page-slug>" or "<page-slug>~<heading-anchor>" — '~' is the
+  // separator (see the cross-doc link rewrite below) so a page slug and an
+  // in-page heading anchor can share one URL fragment unambiguously.
+  const sep = raw.indexOf('~');
+  const slug = sep === -1 ? raw : raw.slice(0, sep);
+  const subAnchor = sep === -1 ? '' : raw.slice(sep + 1);
   const doc = bySlug[slug] || DOCS[0];
   setActive(doc.slug);
   crumb.textContent = doc.title;
@@ -197,23 +612,37 @@ async function load(slug){
     if(!res.ok) throw new Error('HTTP '+res.status);
     const md = await res.text();
     content.innerHTML = marked.parse(md);
+    assignHeadingIds();
     content.querySelectorAll('img').forEach(img=>{
       const s=img.getAttribute('src')||'';
       if(/^https?:/i.test(s)) return;
       const m=s.match(/(?:\.\.\/)*(?:docs\/)?screenshots\/(.+)$/);
       if(m) img.setAttribute('src','./screenshots/'+m[1]);
     });
-    // Cross-doc links (e.g. ADMIN-GUIDE.md, ../ROADMAP.md#phase-4) become sidebar navigation.
+    // Cross-doc links (e.g. ADMIN-GUIDE.md#cost-accounting, ../ROADMAP.md)
+    // become sidebar navigation; a heading fragment on the target survives as
+    // "#slug~anchor" so load() can scroll to it once the target page renders.
     content.querySelectorAll('a[href]').forEach(a=>{
       const h=a.getAttribute('href')||'';
       if(/^(https?:|#|mailto:)/i.test(h)) return;
       const m=h.match(/([^\/]+\.md)(#.*)?$/i);
       const target = m && byFile[m[1].toLowerCase()];
-      if(target) a.setAttribute('href','#'+target.slug);
+      if(target) a.setAttribute('href','#'+target.slug+(m[2]?'~'+m[2].slice(1):''));
     });
     content.querySelectorAll('a[href^="http"]').forEach(a=>{a.target='_blank';a.rel='noopener';});
+    highlightCode();
     await renderMermaid();
-    window.scrollTo({top:0});
+    buildLangPickers();
+    const anchorEl = subAnchor && document.getElementById(subAnchor);
+    // html{scroll-behavior:smooth} would otherwise animate this jump — often a
+    // multi-thousand-pixel leap on a freshly-loaded page — over a
+    // multi-second crawl. Land instantly, exactly like a same-page fragment
+    // navigation would.
+    const prevBehavior = document.documentElement.style.scrollBehavior;
+    document.documentElement.style.scrollBehavior = 'auto';
+    if(anchorEl) anchorEl.scrollIntoView({block:'start'});
+    else window.scrollTo({top:0});
+    document.documentElement.style.scrollBehavior = prevBehavior;
   } catch(err){
     content.innerHTML = '<div class="docs-error">Could not load <code>'+doc.path.split('/').pop()+'</code> — '+err.message+'</div>';
   }
