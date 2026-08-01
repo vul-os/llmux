@@ -35,10 +35,43 @@ document.documentElement.setAttribute('data-theme',s==='light'||s==='dark'?s:(ma
 </script>
 
 <style>
-/* Self-hosted faces, byte-identical to the ones the landing page uses (same
-   files in ./assets/fonts) — the docs used to run on system fonts only, which
-   made the two halves of the site read as two different products. Nothing new
-   was added to assets/: these five files were already here. */
+/* ═══════════════════════════════════════════════════════════════════════════
+   llmux — DOCUMENTATION.  Design thesis: THE PATCH BAY, WIRED FOR READING.
+
+   The landing next door is the front panel of a multiplexer: numbered
+   channels, a continuous signal bus down the left, hairline rules, zero
+   rounded corners, mono for every label, and exactly one accent — the brand
+   teal — meaning "this signal was permitted". The docs used to be a generic
+   grey card-and-pill sidebar next to a column of prose, so the two halves of
+   the site read as two different products.
+
+   So this page is the SAME instrument, patched for reading:
+
+     · The document index is a rack directory, not a list of thirteen equal
+       links. Five numbered groups follow the reader's actual journey —
+       START, SYSTEM, REFERENCE, OPERATE, PROJECT — and every document carries
+       its ordinal (01…13) so "where am I in the body of documentation" is a
+       figure, not a highlight.
+     · The landing's signal bus runs down the index, and the document you are
+       reading is the channel that is patched through: a teal tap node on the
+       bus, a spur into the row, a teal edge on the row itself.
+     · "Which document" and "where inside it" are two different questions and
+       never share one list. The index answers the first; a ruled CONTENTS
+       ledger inside the document, and a hairline ON THIS PAGE rail at
+       ≥1240px, answer the second.
+     · Long documents are ruled like a ledger: every h2 crosses the column on
+       a hairline with a teal tick, every code fence wears a titled bar with
+       its language and a permanently visible COPY, tables are mono-headed
+       hairline grids, notes are teal-edged panels. Nothing is a rounded card.
+
+   Type: ARCHIVO (variable width) for display, INSTRUMENT SANS for text, IBM
+   PLEX MONO for every label, ordinal and route — the same width-contrast axis
+   the landing uses.
+
+   Everything is vendored: no CDN, no external font, no remote image, no
+   analytics. Same sovereignty rule the product keeps.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 @font-face{font-family:'Archivo Variable';font-style:normal;font-display:swap;
   font-weight:100 900;font-stretch:62% 125%;
   src:url(./assets/fonts/archivo-latin-standard.woff2) format('woff2-variations')}
@@ -53,283 +86,522 @@ document.documentElement.setAttribute('data-theme',s==='light'||s==='dark'?s:(ma
   src:url(./assets/fonts/ibm-plex-mono-latin-600.woff2) format('woff2')}
 
 *,*::before,*::after{box-sizing:border-box}
+*{min-width:0}
+
 :root{
-  --bg:#09090B; --bg-soft:#0E0E10; --panel:#131316; --panel-2:#18181B;
-  --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.13);
-  --overlay-1:rgba(255,255,255,.03); --overlay-2:rgba(255,255,255,.045); --overlay-3:rgba(255,255,255,.07);
-  --text:#FAFAFA; --muted:#A1A1AA;
-  /* --faint is the smallest type on the page (eyebrows, rail labels, the
-     prev/next direction line). The old #71717A measured 4.03:1 on the dark
-     canvas and #6B7280 measured 4.38:1 on the light one — both under the
-     4.5:1 floor at these sizes. Both values are re-picked below to clear it. */
-  --faint:#8E8E97;
-  /* Body copy (markdown p/li/code) is deliberately a touch dimmer than
-     --text — same trick as --muted, just closer to full contrast. It needs
-     its own light/dark pair: the dark-mode value is unreadable on a light
-     background (see the light overrides below). */
-  --body-text:#D4D4D8;
-  --accent:#14b8a6; --accent-2:#2dd4bf;
-  --radius:16px; --max:1120px;
-  /* Reading measure. Long-form prose is capped at --measure; code fences,
-     tables, diagrams and images deliberately are NOT, so a wide snippet still
-     gets the whole column while the paragraphs above it stay readable.
-     Deliberately px, not ch: `ch` is the width of "0", and Instrument Sans
-     draws a wide figure (1ch = .666em), so 70ch measured 886px — wider than
-     the column, i.e. no cap at all. 640px is ~78 characters at the 17px body
-     size and ~70 at the 19px lede, and it makes every prose block and every
-     h2 rule line up on the same right edge. */
-  --measure:640px;
-  --header-h:64px;
-  --mobile-bar-h:52px;
-  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
-  --sans:'Instrument Sans Variable',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  --display:'Archivo Variable',system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  /* Syntax highlighting — the code surface is deliberately a fixed dark
-     "carbon" panel in both page themes (a common, high-legibility doc-site
-     pattern). Because the surface never changes, none of these token colors
-     need a light/dark pair either — they're chosen once against #0C1116 and
-     stay put. Every value below clears 4.5:1 against --hl-bg (see docs.html
-     PR notes / agent report for measured ratios).
-     --hl-comment is #6C7D94, one LSB brighter per channel than the spec's
-     #6B7C93 (which measures 4.45:1, just under AA) — imperceptible visually,
-     clears 4.51:1. */
-  --hl-bg:#0C1116; --hl-fg:#C8D4E3; --hl-comment:#6C7D94;
-  --hl-keyword:#C4B5FD; --hl-string:#5EEAD4; --hl-number:#FBBF24;
-  --hl-function:#7DD3FC; --hl-property:#93C5FD; --hl-variable:#FDA4AF;
-  --hl-meta:#FDBA74; --hl-punct:#8195AC;
+  --display:'Archivo Variable',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --sans:'Instrument Sans Variable',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,'SF Mono',Menlo,Consolas,monospace;
+
+  --max:1300px;
+  --pad:28px;
+  --header-h:60px;
+  --tab-h:54px;                /* the mobile document-index tab */
+  --ease:cubic-bezier(.16,1,.3,1);
+
+  /* Reading measure. Deliberately px, not ch: `ch` is the width of "0", and
+     Instrument Sans draws a wide figure (1ch ≈ .666em), so 70ch measures well
+     over 800px — i.e. no cap at all. 660px is ~78 characters at the 16.5px
+     body size. Code fences, tables, diagrams and images deliberately are NOT
+     capped: a wide snippet gets the whole column while the paragraphs stay
+     readable. */
+  --measure:660px;
+
+  /* ── Syntax highlighting ─────────────────────────────────────────────────
+     The shared Vulos code palette, byte-identical to index.html's, and
+     deliberately NOT themed. The code surface is a fixed dark carbon panel in
+     BOTH page themes — the same decision the landing and the sibling projects
+     make — so every token colour is chosen once against --hl-bg and never
+     needs a light/dark pair. Because the surface is constant, so is the
+     measured contrast:
+
+       fg  #C8D4E3 12.63:1   keyword #C4B5FD 10.27:1   string  #5EEAD4 12.82:1
+       num #FBBF24 11.36:1   fn      #7DD3FC 11.37:1   prop    #93C5FD 10.52:1
+       var #FDA4AF 10.03:1   meta    #FDBA74 11.24:1   punct   #8195AC  6.17:1
+       del #FCA5A5  9.99:1   add     #86EFAC 13.51:1   comment #6C7D94  4.51:1
+
+     Comment is #6C7D94 rather than the palette's nominal #6B7C93: that value
+     measures 4.45:1, a hair under AA. One LSB per channel is invisible and
+     clears 4.5:1. --hl-bar carries the fence's title strip; on it --hl-punct
+     measures 5.81:1 and --hl-fg 11.90:1. */
+  --hl-bg:#0C1116; --hl-bar:#111820; --hl-line:#22303C; --hl-line-2:#2C3D4C;
+  --hl-fg:#C8D4E3; --hl-comment:#6C7D94; --hl-keyword:#C4B5FD; --hl-string:#5EEAD4;
+  --hl-number:#FBBF24; --hl-function:#7DD3FC; --hl-property:#93C5FD;
+  --hl-variable:#FDA4AF; --hl-meta:#FDBA74; --hl-punct:#8195AC;
   --hl-deletion:#FCA5A5; --hl-addition:#86EFAC;
 }
+
+/* ── DARK: the rack in a dim room. This is the DEFAULT set, written onto
+      :root rather than onto [data-theme="dark"], because the theme attribute
+      is only ever written by script — with JavaScript off no attribute is set
+      at all, and a page whose entire palette hangs off that selector renders
+      with no palette whatsoever. The attribute selectors below still win when
+      the script does run, so the toggle keeps working.
+      Contrast on --canvas #0A0F12 (dark):
+        ink   #E9EFED 16.31:1   body  #D3DCDA 12.99:1   muted #9AA9A8  7.15:1
+        faint #8A9B9A  5.90:1   teal  #3EDBC7 11.02:1   rust  #EE8768  8.14:1
+      and on --panel #101A1E:
+        ink 15.06:1  body 11.99:1  muted 6.60:1  faint 5.44:1  teal 10.17:1 */
+:root{
+  color-scheme:dark;
+  --canvas:#0A0F12;
+  --panel:#101A1E;
+  --sunk:#070C0E;
+  --tint:rgba(255,255,255,.028);
+  --ink:#E9EFED;
+  --body:#D3DCDA;
+  --muted:#9AA9A8;
+  --faint:#8A9B9A;
+  --line:#1C2A2E;
+  --line-2:#25373C;
+  --line-3:#33494F;
+  --teal:#2DD4BF;
+  --teal-ink:#3EDBC7;
+  --teal-wash:#0C2B29;
+  --teal-edge:#1E5B55;
+  --rust:#EE8768;
+  --rust-wash:#2B140E;
+  --rust-edge:#5C2C1D;
+  --sheet-shadow:0 -22px 48px -20px rgba(0,0,0,.85);
+}
+
+/* ── LIGHT: the same rack under drafting-room light.
+      Contrast on --canvas #EBEFED (light):
+        ink   #0B1416 16.61:1   body  #2A3739 10.06:1   muted #485658  6.62:1
+        faint #505E60  5.87:1   teal  #08655B  6.31:1   rust  #9C3E27  6.35:1
+      and on --panel #F8FAF9:
+        ink 17.96:1  body 10.88:1  muted 7.16:1  faint 6.35:1  teal 6.82:1 */
 @media (prefers-color-scheme:light){
   :root{
-    --bg:#FAFAFA; --bg-soft:#F4F4F5; --panel:#FFFFFF; --panel-2:#F4F4F5;
-    --border:rgba(0,0,0,.09); --border-2:rgba(0,0,0,.15);
-    --overlay-1:rgba(0,0,0,.03); --overlay-2:rgba(0,0,0,.045); --overlay-3:rgba(0,0,0,.06);
-    --text:#18181B; --muted:#52525B; --faint:#5C5C66;
-    /* #14b8a6 only clears 2.4:1 on a near-white page background — well under
-       WCAG AA's 4.5:1 for text. Darken it for light mode; dark mode's link
-       color already passes at ~8:1 so it stays as-is. */
-    --body-text:#3F3F46; --accent:#0F766E; --accent-2:#0D9488;
+    color-scheme:light;
+    --canvas:#EBEFED;
+    --panel:#F8FAF9;
+    --sunk:#DDE4E1;
+    --tint:rgba(11,20,22,.032);
+    --ink:#0B1416;
+    --body:#2A3739;
+    --muted:#485658;
+    --faint:#505E60;
+    --line:#D2DAD8;
+    --line-2:#BFC9C7;
+    --line-3:#A6B3B1;
+    --teal:#0A6E63;
+    --teal-ink:#08655B;
+    --teal-wash:#DCE9E6;
+    --teal-edge:#8FBAB3;
+    --rust:#9C3E27;
+    --rust-wash:#F3E2DC;
+    --rust-edge:#D2A695;
+    --sheet-shadow:0 -18px 40px -22px rgba(11,20,22,.4);
   }
 }
-:root[data-theme="light"]{
-  --bg:#FAFAFA; --bg-soft:#F4F4F5; --panel:#FFFFFF; --panel-2:#F4F4F5;
-  --border:rgba(0,0,0,.09); --border-2:rgba(0,0,0,.15);
-  --overlay-1:rgba(0,0,0,.03); --overlay-2:rgba(0,0,0,.045); --overlay-3:rgba(0,0,0,.06);
-  --text:#18181B; --muted:#52525B; --faint:#5C5C66;
-  --body-text:#3F3F46; --accent:#0F766E; --accent-2:#0D9488;
+
+/* The script's explicit choice outranks the system preference, both ways. */
+[data-theme="dark"]{
+  color-scheme:dark;
+  --canvas:#0A0F12; --panel:#101A1E; --sunk:#070C0E; --tint:rgba(255,255,255,.028);
+  --ink:#E9EFED; --body:#D3DCDA; --muted:#9AA9A8; --faint:#8A9B9A;
+  --line:#1C2A2E; --line-2:#25373C; --line-3:#33494F;
+  --teal:#2DD4BF; --teal-ink:#3EDBC7; --teal-wash:#0C2B29; --teal-edge:#1E5B55;
+  --rust:#EE8768; --rust-wash:#2B140E; --rust-edge:#5C2C1D;
+  --sheet-shadow:0 -22px 48px -20px rgba(0,0,0,.85);
 }
-:root[data-theme="dark"]{
-  --bg:#09090B; --bg-soft:#0E0E10; --panel:#131316; --panel-2:#18181B;
-  --border:rgba(255,255,255,.08); --border-2:rgba(255,255,255,.13);
-  --overlay-1:rgba(255,255,255,.03); --overlay-2:rgba(255,255,255,.045); --overlay-3:rgba(255,255,255,.07);
-  --text:#FAFAFA; --muted:#A1A1AA; --faint:#8E8E97;
-  --body-text:#D4D4D8; --accent:#14b8a6; --accent-2:#2dd4bf;
+[data-theme="light"]{
+  color-scheme:light;
+  --canvas:#EBEFED; --panel:#F8FAF9; --sunk:#DDE4E1; --tint:rgba(11,20,22,.032);
+  --ink:#0B1416; --body:#2A3739; --muted:#485658; --faint:#505E60;
+  --line:#D2DAD8; --line-2:#BFC9C7; --line-3:#A6B3B1;
+  --teal:#0A6E63; --teal-ink:#08655B; --teal-wash:#DCE9E6; --teal-edge:#8FBAB3;
+  --rust:#9C3E27; --rust-wash:#F3E2DC; --rust-edge:#D2A695;
+  --sheet-shadow:0 -18px 40px -22px rgba(11,20,22,.4);
 }
-html{scroll-behavior:smooth}
-@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
-body{margin:0;font-family:var(--sans);background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;font-size:16px}
-body::before{content:"";position:fixed;inset:0;z-index:-1;background:
-  radial-gradient(1100px 600px at 80% -10%, color-mix(in srgb,var(--accent) 10%, transparent), transparent 60%),
-  radial-gradient(900px 500px at -10% 10%, color-mix(in srgb,var(--accent-2) 8%, transparent), transparent 55%),
-  var(--bg);}
+
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *{transition-duration:.01ms!important;animation-duration:.01ms!important}
+}
+body{
+  margin:0;background:var(--canvas);color:var(--ink);
+  font-family:var(--sans);font-size:16.5px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  overflow-x:hidden;
+}
 a{color:inherit;text-decoration:none}
-/* Same focus ring as index.html's global rule — without this, every control
-   here except .lang-tab (which already had its own) fell back to the
-   browser's default blue outline instead of the site's teal accent. */
-:where(a,button,input,summary,pre,[tabindex]):focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:6px}
 img{max-width:100%;display:block}
-.wrap{max-width:var(--max);margin:0 auto;padding:0 24px}
-.accent{color:var(--accent)}
+::selection{background:var(--teal);color:var(--canvas)}
+:where(a,button,input,summary,[tabindex]):focus-visible{outline:2px solid var(--teal);outline-offset:2px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-.skip-link{position:absolute;left:16px;top:-60px;z-index:100;background:var(--panel);border:1px solid var(--border-2);color:var(--text);padding:10px 14px;border-radius:10px;font-size:14px;transition:top .15s}
-.skip-link:focus{top:12px}
+.skip{position:absolute;left:-9999px;top:0;z-index:200;background:var(--teal);color:#04100E;
+  font-family:var(--mono);font-size:13px;padding:12px 18px}
+[data-theme="light"] .skip{color:#FFFFFF}
+.skip:focus{left:12px;top:12px}
+.wrap{max-width:var(--max);margin:0 auto;padding:0 var(--pad)}
 
-/* Header */
-.site-header{position:sticky;top:0;z-index:60;backdrop-filter:blur(12px);background:color-mix(in srgb,var(--bg) 82%, transparent);border-bottom:1px solid var(--border)}
-.nav{display:flex;align-items:center;gap:18px;height:var(--header-h)}
-.brand{display:flex;align-items:center;gap:10px}
-.brand .tile{width:32px;height:32px;border-radius:9px;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.12) inset, 0 4px 14px rgba(0,0,0,.35);flex:0 0 auto}
-.brand .tile img{width:100%;height:100%;object-fit:contain}
-/* Wordmark reads as ONE tight word: sans, weight 700, tight negative tracking,
-   `ll` in the text colour and `mux` in the accent, with zero whitespace
-   between them in the markup. It is deliberately NOT monospace: a mono face
-   pads every glyph (visibly splitting "ll" from "mux") and draws lowercase `l`
-   as a bare serifed stem that reads as the digit 1 — "11mux". Same treatment
-   as web/ui.html's .brand .word, which got this right. */
-.brand .word{font-family:var(--sans);font-weight:700;font-size:19px;letter-spacing:-.04em;line-height:1}
-.brand .word i{font-style:normal;color:var(--accent)}
+/* ═══ Header — the landing's, verbatim in feel: hairline, mono, square ════ */
+.site-header{position:sticky;top:0;z-index:80;background:var(--canvas);border-bottom:1px solid var(--line)}
+.nav{display:flex;align-items:center;gap:14px;height:var(--header-h)}
+.brand{display:flex;align-items:center;gap:10px;flex:none;height:44px}
+.brand img{width:26px;height:26px;border-radius:7px}
+/* The wordmark has to read as ONE word, "llmux".
+   It must NOT be set in the mono face. IBM Plex Mono draws lowercase `l` as a
+   bare vertical stem with a top serif and a foot — glyph-identical to its `1` —
+   and a monospace advance pads every glyph, so `ll` separates from `mux` and
+   the pair reads as the digits "11". Set in mono at 600 the header literally
+   spelled "11mux".
+   The fix, the same one index.html and web/ui.html carry: the SANS/display
+   skeleton (no serifed stem, and `1` keeps a diagonal flag so it can never be
+   confused for `l`), weight 700, tight NEGATIVE tracking to close the pair up,
+   `ll` in the text colour and `mux` in the accent, and no whitespace
+   whatsoever between the two spans in the markup. */
+.brand .word{
+  font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 100;
+  font-size:19.5px;line-height:1;letter-spacing:-.045em;color:var(--ink);
+}
+.brand .word .mux{color:var(--teal-ink)}
 .nav-spacer{flex:1}
-.nav-links{display:flex;align-items:center;gap:22px}
-.nav-links a{color:var(--muted);font-size:14.5px;font-weight:500;transition:color .15s}
-.nav-links a:hover{color:var(--text)}
-.nav-links a.here{color:var(--text)}
-.vulos-badge{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border:1px solid var(--border-2);border-radius:999px;font-size:13px;color:var(--muted);transition:border-color .15s,color .15s}
-.vulos-badge:hover{border-color:var(--accent);color:var(--text)}
-.vulos-badge img{width:16px;height:16px;border-radius:4px}
-@media(max-width:860px){.nav-links{display:none}}
-@media(max-width:520px){.vulos-badge span{display:none}.vulos-badge{padding:6px 8px}}
-/* Theme toggle — same iconbtn/sun-moon pattern as index.html, same
-   localStorage key, so the two pages read as one system. */
-.iconbtn{width:36px;height:36px;border-radius:9px;border:1px solid var(--border-2);background:var(--panel);display:grid;place-items:center;color:var(--muted);transition:color .15s,border-color .15s;flex:0 0 auto;cursor:pointer}
-.iconbtn:hover{color:var(--text);border-color:var(--accent)}
-.iconbtn svg{width:17px;height:17px}
-:root[data-theme=light] .moon{display:none}
-:root[data-theme=dark] .sun{display:none}
+.secnav{display:flex;gap:2px}
+.secnav a{
+  font-family:var(--mono);font-size:12.2px;letter-spacing:.04em;color:var(--muted);
+  padding:0 11px;height:44px;display:inline-flex;align-items:center;
+  border-bottom:2px solid transparent;transition:color .18s,border-color .18s;
+}
+.secnav a:hover{color:var(--ink);border-bottom-color:var(--teal)}
+.secnav a.here{color:var(--ink);border-bottom-color:var(--teal)}
+.hdr-act{display:flex;align-items:center;gap:6px;flex:none}
+.hbtn{
+  height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:0 12px;border:1px solid var(--line-2);background:transparent;color:var(--muted);
+  font-family:var(--mono);font-size:12.2px;cursor:pointer;transition:color .18s,border-color .18s;
+}
+.hbtn:hover{color:var(--ink);border-color:var(--line-3)}
+.hbtn svg{width:15px;height:15px;flex:none}
+.hbtn.sq{padding:0;width:44px}
+.hbtn img{width:17px;height:17px;border-radius:4px}
+#themeBtn .sun{display:none}
+[data-theme="light"] #themeBtn .sun{display:block}
+[data-theme="light"] #themeBtn .moon{display:none}
+@media (max-width:860px){.secnav{display:none}}
 
-/* Footer */
-.site-footer{border-top:1px solid var(--border);margin-top:40px;padding:40px 0}
-.foot{display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between}
-.foot .left{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:14px}
-.foot .left img{width:20px;height:20px;border-radius:5px}
-.foot .links{display:flex;gap:20px;flex-wrap:wrap}
-.foot .links a{color:var(--muted);font-size:14px}
-.foot .links a:hover{color:var(--text)}
-
-/* ── Docs shell ───────────────────────────────────────────────────────────
-   NOTE the padding shorthand this used to carry (`padding:34px 0 70px`) also
-   reset .wrap's `padding:0 24px` — on a phone the whole document sat flush
-   against both screen edges. Only the block padding is set here now. */
-.docs-shell{display:grid;grid-template-columns:264px minmax(0,1fr);gap:44px;align-items:start;padding-top:34px;padding-bottom:72px}
+/* ═══ Shell ══════════════════════════════════════════════════════════════
+   Single column by default (phone / tablet). Two columns from 1024, three
+   from 1240 where an ON THIS PAGE rail fits without stealing from the
+   measure. */
+/* padding-BLOCK, never the `padding` shorthand. This element is `wrap
+   docs-shell`, and .wrap supplies the horizontal gutter — a shorthand here
+   resets that to 0 and every heading, paragraph and table sits flush against
+   both screen edges below 1024px, where no grid column is left to fake an
+   inset. That has now shipped twice; the shorthand is the whole bug. */
+.docs-shell{padding-block:0 40px}
 .docs-main{min-width:0}
+@media (min-width:1024px){
+  .docs-shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:46px;
+    align-items:start;padding-block:34px 90px}
+}
+@media (min-width:1240px){
+  .docs-shell{grid-template-columns:246px minmax(0,1fr) 214px;gap:44px}
+}
 
-/* ── Sidebar: desktop ─────────────────────────────────────────────────────
-   Sticky AND its own scroll region. Sticky alone was the bug: the rail is
-   pinned 80px down the viewport, so anything past `100vh - 80px` of nav
-   simply had no way to be reached — the page scroll moves the sticky box,
-   not its contents. With the on-this-page list nested under the current
-   page the rail is now routinely taller than the viewport, so this is
-   load-bearing, not theoretical. */
-.docs-nav{position:sticky;top:80px;max-height:calc(100vh - 100px);overflow-y:auto;overscroll-behavior:contain;
-  border:1px solid var(--border);border-radius:var(--radius);background:var(--panel);padding:12px;
-  scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
-.docs-nav::-webkit-scrollbar{width:9px}
-.docs-nav::-webkit-scrollbar-track{background:transparent}
-.docs-nav::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:9px;border:2px solid transparent;background-clip:content-box}
-.docs-nav::-webkit-scrollbar-thumb:hover{background:var(--faint);background-clip:content-box}
+/* ═══ The document index ═════════════════════════════════════════════════
+   A rack directory: five numbered groups, thirteen ordinals, and the
+   landing's signal bus running down the left — the document you are reading
+   is the channel patched through, marked by a tap node on the bus, a spur
+   into the row, and a teal edge. All thirteen entries are visible at once;
+   nothing is ever nested underneath the one you happen to be on. */
+.rail-eyebrow{
+  display:flex;align-items:center;gap:10px;margin:0 0 14px;
+  font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
+}
+.rail-eyebrow .re-r{flex:1;height:1px;background:var(--line)}
+.rail-head{display:none}
 
-.nav-toggle{display:none}
-.nav-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600;padding:10px 10px 6px}
+.rail-nav{position:relative;padding-left:26px}
+.rail-nav::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:var(--line-2)}
+.nav-grp{margin:0 0 6px}
+.nav-grp+.nav-grp{margin-top:16px}
+.nav-grp-h{
+  display:flex;align-items:center;gap:9px;margin:0 0 4px;
+  font-family:var(--mono);font-size:10.6px;letter-spacing:.16em;text-transform:uppercase;
+}
+.nav-grp-h .gn{color:var(--teal-ink);font-weight:600;flex:none}
+.nav-grp-h .gl{color:var(--ink);font-weight:500;flex:none}
+.nav-grp-h .gr{flex:1;height:1px;background:var(--line);min-width:10px}
 .nav-list{list-style:none;margin:0;padding:0}
-.nav-list>li{margin:1px 0}
-.nav-list>li>a{display:flex;align-items:center;gap:9px;padding:8px 11px;border-radius:9px;color:var(--muted);font-size:14.5px;font-weight:500;line-height:1.3;transition:background .15s,color .15s}
-.nav-list>li>a:hover{background:var(--overlay-2);color:var(--text)}
-.nav-list>li>a .n-dot{width:5px;height:5px;border-radius:50%;background:transparent;flex:0 0 auto;transition:background .15s}
-.nav-list>li>a[aria-current="page"]{background:color-mix(in srgb,var(--accent) 15%, transparent);color:var(--text);font-weight:600}
-.nav-list>li>a[aria-current="page"] .n-dot{background:var(--accent)}
-/* On-this-page, nested under the page you are actually on. Keeping it in the
-   rail (rather than a third column) leaves the reading column intact and
-   gives the same markup to the mobile disclosure for free. */
-.nav-toc{list-style:none;margin:3px 0 10px;padding:0 0 0 10px;border-left:1px solid var(--border-2);margin-left:16px}
-.nav-toc a{display:block;padding:5px 9px;border-radius:7px;color:var(--muted);font-size:13.5px;line-height:1.35;transition:background .15s,color .15s}
-.nav-toc a:hover{background:var(--overlay-2);color:var(--text)}
-.nav-toc a.lv3{padding-left:20px;font-size:13px}
-.nav-toc a.here{color:var(--accent);font-weight:600;background:color-mix(in srgb,var(--accent) 9%, transparent)}
+.nav-item{
+  position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);gap:7px;align-items:baseline;
+  padding:7px 9px;border-left:1px solid transparent;color:var(--muted);
+  font-size:14.2px;line-height:1.35;transition:color .16s,background .16s,border-color .16s;
+}
+.nav-item .ix{font-family:var(--mono);font-size:10.8px;letter-spacing:.03em;color:var(--faint);transition:color .16s}
+.nav-item:hover{color:var(--ink);background:var(--panel);border-left-color:var(--line-3)}
+.nav-item:hover .ix{color:var(--teal-ink)}
+.nav-item[aria-current="page"]{color:var(--ink);font-weight:600;background:var(--panel);border-left-color:var(--teal)}
+.nav-item[aria-current="page"] .ix{color:var(--teal-ink);font-weight:600}
+/* The tap: this channel joins the bus. */
+.nav-item[aria-current="page"]::before{
+  content:"";position:absolute;left:-29.5px;top:50%;margin-top:-4px;width:7px;height:7px;
+  background:var(--canvas);border:1px solid var(--teal);
+}
+/* The spur: the run from the bus into this row. */
+.nav-item[aria-current="page"]::after{
+  content:"";position:absolute;left:-22px;top:50%;width:22px;height:1px;background:var(--teal-edge);
+}
 
-/* Rail search — index is built lazily from the same markdown the pages
-   render, so it stays self-contained (no service, no prebuilt blob). */
-.rail-search{position:relative;margin:2px 2px 8px}
-.rail-search .rs-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--faint);pointer-events:none}
-.rail-search input{width:100%;height:38px;border-radius:10px;border:1px solid var(--border-2);background:var(--bg-soft);color:var(--text);font:inherit;font-size:14px;padding:0 34px 0 32px;-webkit-appearance:none;appearance:none}
-.rail-search input::placeholder{color:var(--faint)}
+/* ── Index search — the index is built lazily from the same markdown the
+      pages render, so it stays self-contained (no service, no prebuilt
+      blob, no off-origin request). */
+.rail-search{position:relative;margin:0 0 16px}
+.rail-search .rs-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--faint);pointer-events:none}
+.rail-search input{
+  width:100%;height:40px;border:1px solid var(--line-2);background:var(--sunk);color:var(--ink);
+  font-family:var(--mono);font-size:12.5px;padding:0 34px 0 33px;-webkit-appearance:none;appearance:none;border-radius:0;
+}
+.rail-search input::placeholder{color:var(--faint);letter-spacing:.04em}
 .rail-search input::-webkit-search-cancel-button{-webkit-appearance:none}
-.rail-search input:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 22%, transparent)}
-.rail-search kbd{position:absolute;right:9px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:11px;color:var(--faint);border:1px solid var(--border-2);border-radius:5px;padding:1px 5px;pointer-events:none;background:var(--panel-2)}
+.rail-search input:focus{border-color:var(--teal);outline:none}
+.rail-search kbd{
+  position:absolute;right:10px;top:50%;transform:translateY(-50%);font-family:var(--mono);font-size:11px;
+  color:var(--faint);border:1px solid var(--line-2);padding:1px 5px;pointer-events:none;
+}
 .rail-search input:focus~kbd,.rail-search input:not(:placeholder-shown)~kbd{display:none}
 .search-results{margin:0 0 6px}
-.sr-item{display:block;padding:8px 10px;border-radius:9px;border:1px solid transparent}
-.sr-item:hover,.sr-item:focus-visible{background:var(--overlay-2);border-color:var(--border)}
-.sr-page{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--faint);font-weight:600}
-.sr-head{display:block;color:var(--text);font-weight:600;font-size:14px;line-height:1.3;margin:1px 0 2px}
-.sr-snip{display:block;color:var(--muted);font-size:12.5px;line-height:1.45;max-height:2.9em;overflow:hidden}
-.sr-item mark{background:color-mix(in srgb,var(--accent) 30%, transparent);color:inherit;border-radius:3px;padding:0 1px}
+.sr-item{display:block;padding:9px 10px;border-left:1px solid var(--line);transition:background .16s,border-color .16s}
+.sr-item:hover,.sr-item:focus-visible{background:var(--panel);border-left-color:var(--teal)}
+.sr-page{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.sr-head{display:block;color:var(--ink);font-weight:600;font-size:13.8px;line-height:1.3;margin:3px 0 2px}
+.sr-snip{display:block;color:var(--muted);font-size:12.4px;line-height:1.45;max-height:2.95em;overflow:hidden}
+.sr-item mark{background:var(--teal-wash);color:var(--teal-ink);padding:0 1px}
 .sr-empty{padding:10px;color:var(--muted);font-size:13.5px}
 
-/* ── Sidebar: ≤980px ──────────────────────────────────────────────────────
-   The rail used to become a full-width 569px static block: every reader on a
-   phone scrolled past thirteen links before reaching a single word of the
-   document. It collapses instead to one 52px disclosure bar, sticky under the
-   header, whose label IS the current page — so where you are stays visible
-   and the whole list stays one tap away at any scroll depth. */
-@media(max-width:980px){
-  .docs-shell{grid-template-columns:minmax(0,1fr);gap:0;padding-top:0}
-  .docs-nav{position:sticky;top:var(--header-h);z-index:45;margin:0 -24px;padding:0;
-    max-height:none;overflow:visible;border-width:0 0 1px;border-radius:0;
-    background:color-mix(in srgb,var(--bg) 88%, transparent);backdrop-filter:blur(12px)}
-  .nav-toggle{display:flex;align-items:center;gap:11px;width:100%;min-height:var(--mobile-bar-h);
-    padding:0 24px;background:none;border:0;color:var(--text);font:inherit;text-align:left;cursor:pointer}
-  .nav-toggle .nt-icon{width:17px;height:17px;color:var(--accent);flex:0 0 auto}
-  .nav-toggle .nt-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600}
-  .nav-toggle .nt-current{display:block;font-size:15px;font-weight:600;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .nav-toggle .nt-text{min-width:0;flex:1}
-  .nav-toggle .nt-chev{width:16px;height:16px;color:var(--muted);flex:0 0 auto;transition:transform .18s}
-  .nav-toggle[aria-expanded="true"] .nt-chev{transform:rotate(180deg)}
-  .nav-panel{display:none;position:absolute;left:0;right:0;top:100%;
-    max-height:calc(100vh - var(--header-h) - var(--mobile-bar-h) - 12px);overflow-y:auto;overscroll-behavior:contain;
-    background:var(--panel);border-bottom:1px solid var(--border);padding:10px 18px 18px;
-    box-shadow:0 26px 44px -22px rgba(0,0,0,.55)}
-  .nav-panel.open{display:block}
-  /* ≥44px tap targets throughout the collapsed menu. */
-  .nav-list>li>a{min-height:44px;padding:11px 12px;font-size:15px}
-  .nav-toc a{min-height:44px;padding:11px 12px;display:flex;align-items:center;font-size:14px}
-  .nav-toc a.lv3{padding-left:24px}
-  .sr-item{padding:11px 12px}
-  .rail-search input{height:44px}
-  .docs-main{padding-top:26px}
+/* ── Index: desktop column ── */
+@media (min-width:1024px){
+  .rail{position:sticky;top:calc(var(--header-h) + 24px);max-height:calc(100vh - var(--header-h) - 48px);
+    overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:var(--line-3) transparent}
+  .rail::-webkit-scrollbar{width:8px}
+  .rail::-webkit-scrollbar-track{background:transparent}
+  .rail::-webkit-scrollbar-thumb{background:var(--line-3)}
 }
 
-/* ── Article ─────────────────────────────────────────────────────────────── */
-.doc-head{margin-bottom:26px}
-.crumb{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--faint);letter-spacing:.02em;margin-bottom:10px}
-.crumb .sep{opacity:.65}
-.crumb b{color:var(--muted);font-weight:600}
-.markdown{font-size:17px;line-height:1.72;overflow-wrap:anywhere}
+/* ── Index: phone & tablet ────────────────────────────────────────────────
+   NOT a disclosure bar pinned under the header. A reader on a phone wants the
+   document first; the index is a place they go, not a thing that sits on top
+   of every page permanently eating vertical space at the least reachable end
+   of the screen. So the index lives in a bottom sheet, summoned by a fixed
+   thumb-height tab at the bottom edge — one-handed, always available at any
+   scroll depth, and it shows where you are (name + ordinal) without costing
+   the document a single pixel of the top of the viewport. */
+@media (max-width:1023px){
+  .rail{
+    position:fixed;left:0;right:0;bottom:0;z-index:95;
+    display:flex;flex-direction:column;max-height:min(82vh,660px);
+    background:var(--panel);border-top:1px solid var(--line-3);box-shadow:var(--sheet-shadow);
+    transform:translateY(101%);visibility:hidden;
+    transition:transform .28s var(--ease),visibility .28s;
+    padding:0 20px 20px;
+  }
+  .rail.open{transform:none;visibility:visible}
+  .rail-head{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    position:sticky;top:0;z-index:2;background:var(--panel);
+    margin:0 -20px 14px;padding:0 20px;border-bottom:1px solid var(--line);
+  }
+  .rail-head .rh-t{font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint)}
+  .rail-head .rh-x{
+    height:48px;min-width:48px;display:inline-flex;align-items:center;gap:8px;padding:0 6px;
+    background:none;border:0;color:var(--muted);font-family:var(--mono);font-size:11.5px;
+    letter-spacing:.1em;text-transform:uppercase;cursor:pointer;
+  }
+  .rail-head .rh-x svg{width:16px;height:16px}
+  .rail-eyebrow{display:none}
+  .rail-body{overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;margin:0 -20px;padding:0 20px}
+  .rail-search{margin:0 0 14px}
+  .rail-search input{height:48px;font-size:15px}
+  .nav-item{min-height:48px;align-items:center;padding:10px 10px;font-size:15.5px}
+  .nav-grp+.nav-grp{margin-top:20px}
+  .sr-item{padding:12px 10px}
+  .docs-main{padding-top:22px}
+}
+
+/* The tab: fixed to the bottom edge, thumb-reachable, and a status line in
+   its own right — it always names the document you are in and its ordinal. */
+.index-tab{
+  position:fixed;left:0;right:0;bottom:0;z-index:90;
+  display:flex;align-items:center;gap:13px;width:100%;min-height:var(--tab-h);
+  padding:0 var(--pad) env(safe-area-inset-bottom);
+  background:var(--canvas);border:0;border-top:1px solid var(--line-3);
+  color:var(--ink);font:inherit;text-align:left;cursor:pointer;
+}
+.index-tab .it-icon{width:17px;height:17px;color:var(--teal-ink);flex:none}
+.index-tab .it-txt{flex:1;min-width:0}
+.index-tab .it-lbl{display:block;font-family:var(--mono);font-size:9.6px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.index-tab .it-cur{display:block;font-size:14.5px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.index-tab .it-ix{flex:none;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--teal-ink)}
+@media (min-width:1024px){.index-tab{display:none}}
+@media (max-width:1023px){body{padding-bottom:var(--tab-h)}}
+
+.scrim{position:fixed;inset:0;z-index:93;background:rgba(0,0,0,.55);opacity:0;pointer-events:none;transition:opacity .24s}
+.scrim.open{opacity:1;pointer-events:auto}
+@media (min-width:1024px){.scrim{display:none}}
+
+/* ═══ ON THIS PAGE — the second question, answered in its own place ═══════ */
+.toc{display:none}
+@media (min-width:1240px){
+  .toc{
+    display:block;position:sticky;top:calc(var(--header-h) + 24px);
+    max-height:calc(100vh - var(--header-h) - 48px);overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;scrollbar-color:var(--line-3) transparent;
+  }
+  .toc::-webkit-scrollbar{width:8px}
+  .toc::-webkit-scrollbar-thumb{background:var(--line-3)}
+}
+.toc-h{
+  display:flex;align-items:center;gap:9px;margin:0 0 10px;
+  font-family:var(--mono);font-size:10.6px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+}
+.toc-h .th-r{flex:1;height:1px;background:var(--line)}
+.toc-list{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
+.toc-list a{
+  display:block;padding:6px 0 6px 13px;margin-left:-1px;border-left:1px solid transparent;
+  color:var(--muted);font-size:12.7px;line-height:1.4;transition:color .16s,border-color .16s;
+}
+.toc-list a:hover{color:var(--ink);border-left-color:var(--line-3)}
+.toc-list a.lv3{padding-left:24px;font-size:12.2px}
+.toc-list a.here{color:var(--teal-ink);border-left-color:var(--teal);font-weight:600}
+
+/* ═══ Document head — the landing's toprail, one document wide ════════════ */
+.doc-rail{
+  display:flex;flex-wrap:wrap;align-items:center;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
+}
+.doc-rail span,.doc-rail a{padding:10px 16px;border-right:1px solid var(--line)}
+.doc-rail :first-child{padding-left:0}
+.doc-rail a{color:var(--muted);transition:color .16s}
+.doc-rail a:hover{color:var(--teal-ink)}
+.doc-rail .dr-grp{color:var(--ink)}
+.doc-rail .dr-ix{border-right:0;margin-left:auto;color:var(--teal-ink)}
+@media (max-width:520px){
+  .doc-rail span,.doc-rail a{padding:9px 11px;font-size:10.2px}
+  .doc-rail .dr-ix{margin-left:0}
+}
+
+/* ═══ Article ════════════════════════════════════════════════════════════ */
+.markdown{font-size:16.5px;line-height:1.72;overflow-wrap:anywhere;color:var(--body)}
 .markdown>*:first-child{margin-top:0}
-/* Prose is capped to a comfortable measure; code, tables, diagrams and images
-   deliberately keep the full column width. */
 .markdown p,.markdown ul,.markdown ol,.markdown blockquote,
-.markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{max-width:var(--measure)}
-.markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{scroll-margin-top:84px;font-family:var(--display);font-weight:700;color:var(--text)}
-.markdown h1{font-size:clamp(30px,2.6vw,38px);letter-spacing:-.032em;line-height:1.12;margin:.1em 0 .5em}
-.markdown h2{font-size:26px;letter-spacing:-.022em;line-height:1.22;margin:2.3em 0 .7em;padding-top:1.1em;border-top:1px solid var(--border)}
-.markdown h3{font-size:20px;letter-spacing:-.012em;margin:1.9em 0 .5em}
-.markdown h4{font-size:16.5px;letter-spacing:0;margin:1.6em 0 .4em}
-.markdown h5,.markdown h6{font-size:15px;margin:1.4em 0 .4em;color:var(--muted)}
+.markdown h3,.markdown h4,.markdown h5,.markdown h6{max-width:var(--measure)}
+.markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{
+  font-family:var(--display);color:var(--ink);scroll-margin-top:calc(var(--header-h) + 22px);
+}
+.markdown h1{
+  font-weight:700;font-variation-settings:'wdth' 112;
+  font-size:clamp(31px,3.6vw,46px);letter-spacing:-.03em;line-height:1.04;margin:26px 0 .5em;max-width:20ch;
+}
+/* Every h2 crosses the whole column on a hairline with a teal tick hung on
+   its left edge — the ledger rule that gives a long document its rhythm.
+   Deliberately not capped to the measure: the rule reads as a section break
+   across the column, the heading text itself is never near that long. */
+.markdown h2{
+  position:relative;font-weight:700;font-variation-settings:'wdth' 108;
+  font-size:clamp(21px,2.1vw,27px);letter-spacing:-.022em;line-height:1.22;
+  margin:2.7em 0 .8em;padding-top:1.15em;border-top:1px solid var(--line-2);max-width:none;
+}
+.markdown h2::before{content:"";position:absolute;left:0;top:-1px;width:26px;height:3px;background:var(--teal)}
+.markdown h3{font-weight:700;font-variation-settings:'wdth' 104;font-size:19px;letter-spacing:-.014em;margin:2em 0 .5em}
+.markdown h4{font-weight:600;font-size:16px;letter-spacing:0;margin:1.7em 0 .4em}
+.markdown h5,.markdown h6{font-weight:600;font-size:14.5px;margin:1.5em 0 .4em;color:var(--muted)}
 .markdown p{margin:0 0 1.05em}
-.markdown p,.markdown li,.markdown td{color:var(--body-text)}
 /* The paragraph directly under the page title is the document's lede. */
-.markdown>h1+p{font-size:19px;line-height:1.62;color:var(--muted);margin-bottom:1.5em}
+.markdown>h1+p{font-size:18.5px;line-height:1.6;color:var(--muted);margin-bottom:1.4em;max-width:64ch}
 .markdown ul,.markdown ol{padding-left:1.35em;margin:0 0 1.15em}
-.markdown li{margin:.3em 0}
+.markdown li{margin:.32em 0}
+.markdown li::marker{color:var(--line-3)}
 .markdown li>ul,.markdown li>ol{margin:.35em 0 .1em}
-.markdown a{color:var(--accent);text-decoration:underline;text-decoration-color:color-mix(in srgb,var(--accent) 38%, transparent);text-underline-offset:2px;transition:text-decoration-color .15s}
+.markdown a{color:var(--teal-ink);text-decoration:underline;text-decoration-color:var(--teal-edge);text-underline-offset:2px;transition:text-decoration-color .16s}
 .markdown a:hover{text-decoration-color:currentColor}
-.markdown strong{color:var(--text);font-weight:650}
+.markdown strong{color:var(--ink);font-weight:650}
 /* No white-space:nowrap here on purpose — .markdown's overflow-wrap:anywhere
    has to stay able to break a long inline literal, or a 390px screen gets
    body-level horizontal scroll from a single env-var name. */
-.markdown code{font-family:var(--mono);font-size:.855em;background:var(--overlay-3);border:1px solid var(--border);padding:1px 5px;border-radius:6px}
-.markdown pre{background:var(--hl-bg);border:1px solid var(--border-2);border-radius:12px;padding:16px 18px;overflow:auto;margin:0}
-.markdown pre code{background:none;border:0;padding:0;font-size:13.5px;line-height:1.7;color:var(--hl-fg);white-space:pre}
-.markdown pre code.hljs{display:block}
-/* Copy control lives on a wrapper, never inside <pre> — inside the scroll
-   container it would slide away with the code on a horizontal scroll. */
-.code-block{position:relative;margin:1.25em 0}
-.copy-btn{position:absolute;top:9px;right:9px;height:30px;padding:0 10px;border-radius:8px;
-  border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:#D7E1EC;
-  font:inherit;font-size:12px;font-weight:600;line-height:1;cursor:pointer;opacity:0;transition:opacity .15s,background .15s;display:inline-flex;align-items:center;gap:6px}
-.code-block:hover .copy-btn,.copy-btn:focus-visible,.copy-btn.done{opacity:1}
-.copy-btn:hover{background:rgba(255,255,255,.14)}
-.copy-btn.done{color:#86EFAC;border-color:rgba(134,239,172,.4)}
-.copy-btn svg{width:13px;height:13px}
-@media(hover:none){.copy-btn{opacity:.75}}
+.markdown code{font-family:var(--mono);font-size:.86em;background:var(--sunk);border:1px solid var(--line);padding:1px 5px;color:var(--ink)}
+.markdown hr{border:none;border-top:1px solid var(--line);margin:2.6em 0}
+.markdown img{border:1px solid var(--line);margin:1.5em 0}
+
 /* Heading anchor — surfaces the deep link that already works (#slug~anchor)
    without changing how it works. */
-.h-anchor{margin-left:.35em;color:var(--faint);font-weight:400;font-size:.72em;opacity:0;text-decoration:none;transition:opacity .15s;font-family:var(--mono)}
-.markdown h1:hover .h-anchor,.markdown h2:hover .h-anchor,.markdown h3:hover .h-anchor,
-.markdown h4:hover .h-anchor,.h-anchor:focus-visible{opacity:1}
-.h-anchor:hover{color:var(--accent)}
-/* highlight.js token colors — see --hl-* in :root; code surface is fixed-dark
-   in both page themes so one set of values covers both (see comment above).
+.h-anchor{margin-left:.4em;color:var(--line-3);font-weight:400;font-size:.62em;opacity:0;text-decoration:none;transition:opacity .15s,color .15s;font-family:var(--mono)}
+.markdown h2:hover .h-anchor,.markdown h3:hover .h-anchor,.markdown h4:hover .h-anchor,.h-anchor:focus-visible{opacity:1}
+.h-anchor:hover{color:var(--teal-ink)}
+
+/* ── CONTENTS ledger — in-document section index. Shown below 1240px, where
+      the ON THIS PAGE rail has no column to live in. A <details> so a phone
+      reader is never made to scroll a nineteen-item list to reach §1; it
+      opens by default from 760px up, where the two-column ledger costs a
+      few lines and pays for itself. */
+.contents{
+  border-top:1px solid var(--line-2);border-bottom:1px solid var(--line-2);
+  margin:1.9em 0 2.4em;max-width:none;
+}
+@media (min-width:1240px){.contents{display:none}}
+.contents>summary{
+  display:flex;align-items:center;gap:10px;min-height:46px;padding:0 2px;cursor:pointer;
+  font-family:var(--mono);font-size:10.8px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  list-style:none;
+}
+.contents>summary::-webkit-details-marker{display:none}
+.contents>summary .cs-n{color:var(--teal-ink)}
+.contents>summary .cs-r{flex:1;height:1px;background:var(--line)}
+.contents>summary .cs-chev{width:14px;height:14px;flex:none;transition:transform .2s}
+.contents[open]>summary .cs-chev{transform:rotate(180deg)}
+.contents-list{list-style:none;margin:0;padding:0 0 12px;column-gap:34px}
+@media (min-width:760px){.contents-list{columns:2}}
+.contents-list li{break-inside:avoid}
+.contents-list a{
+  display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:baseline;
+  min-height:34px;padding:5px 0;color:var(--muted);font-size:14.2px;line-height:1.35;transition:color .16s;
+}
+.contents-list a:hover{color:var(--ink)}
+.contents-list a:hover .cl-n{color:var(--teal-ink)}
+.contents-list .cl-n{font-family:var(--mono);font-size:10.8px;color:var(--faint);transition:color .16s}
+@media (max-width:1023px){.contents-list a{min-height:44px;align-items:center}}
+
+/* ── Code fences: a titled instrument panel, not a rounded card ───────────
+   The bar names the language and carries a permanently visible COPY (the old
+   hover-only button was invisible on every touch device and easy to miss on
+   a desktop). The control lives on the WRAPPER, never inside <pre> — inside
+   the scroll container it would slide away with the code on a horizontal
+   scroll. */
+.cb{margin:1.5em 0}
+.cb-bar{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px;
+  padding:0 6px 0 12px;background:var(--hl-bar);border:1px solid var(--hl-line);border-bottom:0;
+}
+.cb-lang{font-family:var(--mono);font-size:10.4px;letter-spacing:.16em;text-transform:uppercase;color:var(--hl-punct)}
+.cb-lang::before{content:"";display:inline-block;width:5px;height:5px;background:var(--hl-punct);margin-right:8px;vertical-align:1.5px}
+.cb-copy{
+  display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 9px;
+  background:transparent;border:1px solid transparent;color:var(--hl-fg);
+  font-family:var(--mono);font-size:10.4px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  transition:border-color .16s,color .16s;
+}
+.cb-copy:hover{border-color:var(--hl-line-2)}
+.cb-copy svg{width:12px;height:12px}
+.cb-copy.done{color:var(--hl-addition);border-color:var(--hl-addition)}
+.cb-copy:focus-visible{outline:2px solid var(--hl-addition);outline-offset:1px}
+.markdown pre{background:var(--hl-bg);border:1px solid var(--hl-line);padding:15px 16px;overflow:auto;margin:0;
+  scrollbar-width:thin;scrollbar-color:var(--hl-line-2) transparent}
+.markdown pre::-webkit-scrollbar{height:8px}
+.markdown pre::-webkit-scrollbar-thumb{background:var(--hl-line-2)}
+.markdown pre code{background:none;border:0;padding:0;font-size:13.2px;line-height:1.7;color:var(--hl-fg);white-space:pre}
+.markdown pre code.hljs{display:block}
+@media (max-width:1023px){
+  .cb-bar{min-height:44px}
+  .cb-copy{min-height:38px;padding:0 12px}
+}
+
+/* highlight.js token colors — see --hl-* in :root; the code surface is
+   fixed-dark in both page themes so one set of values covers both.
    Bucket inventory (every hljs-* class the vendored build emits for the
    languages these docs use — go, bash, json/jsonc, python, javascript,
    typescript, http, yaml, rust, ruby, php, java, kotlin, csharp, cpp, c,
@@ -392,190 +664,222 @@ img{max-width:100%;display:block}
 .hljs-addition{color:var(--hl-addition)}
 .hljs-emphasis{font-style:italic}
 .hljs-strong{font-weight:700}
-.markdown blockquote{margin:1.3em 0;padding:.85em 1.1em;border-left:3px solid var(--accent);background:var(--overlay-1);color:var(--body-text);border-radius:0 10px 10px 0;font-size:16px}
+
+/* ── Notes: a teal-edged panel, the landing's "permitted" edge ── */
+.markdown blockquote{
+  margin:1.6em 0;padding:14px 18px;background:var(--panel);
+  border:1px solid var(--line);border-left:2px solid var(--teal);color:var(--body);font-size:15.6px;
+}
 .markdown blockquote p:last-child{margin-bottom:0}
-/* Tables scroll inside their own wrapper (added by wrapTables() below), not by
-   being display:block themselves — a block-level table with a min-width is the
-   box that overflows, and that is body-level horizontal scroll. The wrapper is
-   the scroll container; the table inside it can be as wide as it needs. */
-.table-wrap{overflow-x:auto;max-width:100%;margin:1.3em 0;scrollbar-width:thin;scrollbar-color:var(--border-2) transparent}
+
+/* ── Tables: a hairline grid with a mono head ─────────────────────────────
+   Tables scroll inside their own wrapper (added by wrapTables() below), not
+   by being display:block themselves — a block-level table with a min-width is
+   the box that overflows, and that is body-level horizontal scroll. The
+   wrapper is the scroll container; the table inside it can be as wide as it
+   needs. */
+.table-wrap{overflow-x:auto;max-width:100%;margin:1.6em 0;scrollbar-width:thin;scrollbar-color:var(--line-3) transparent}
 .table-wrap::-webkit-scrollbar{height:8px}
-.table-wrap::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:8px}
-.markdown table{border-collapse:collapse;width:100%;max-width:100%;margin:1.3em 0;font-size:14.5px;display:block;overflow:auto}
+.table-wrap::-webkit-scrollbar-thumb{background:var(--line-3)}
+.markdown table{border-collapse:collapse;width:100%;max-width:100%;margin:1.6em 0;font-size:14.2px;display:block;overflow:auto}
 .table-wrap>table{display:table;margin:0;overflow:visible}
 /* Cells opt out of .markdown's overflow-wrap:anywhere: inside a table that
    rule shrank the column to a single character and split `/v1/chat/completions`
    across two lines mid-token. break-word keeps the token whole and lets the
-   table's own overflow:auto handle the width. */
-.markdown th,.markdown td{border:1px solid var(--border-2);padding:10px 13px;text-align:left;vertical-align:top;overflow-wrap:break-word}
-.markdown th{background:var(--panel);font-weight:650;color:var(--text);font-size:13.5px;letter-spacing:.01em;white-space:nowrap}
-.markdown tbody tr:nth-child(even){background:var(--overlay-1)}
-.markdown img{border-radius:10px;margin:1.3em 0;border:1px solid var(--border)}
-.markdown hr{border:none;border-top:1px solid var(--border);margin:2.4em 0}
+   wrapper's overflow:auto handle the width. */
+.markdown th,.markdown td{border:1px solid var(--line);padding:10px 13px;text-align:left;vertical-align:top;overflow-wrap:break-word}
+.markdown th{
+  background:var(--panel);border-color:var(--line-2);color:var(--faint);
+  font-family:var(--mono);font-size:10.6px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;white-space:nowrap;
+}
+.markdown td{color:var(--body)}
+.markdown tbody tr:nth-child(even){background:var(--tint)}
+
 /* mermaid.initialize() below always renders with theme:'dark' (its node
    fills/edge-label chips assume a dark surface under them) — so, exactly like
-   the fixed-dark code/hljs surface above, the container has to stay dark in
-   BOTH page themes too. Leaving this on var(--panel) (white in light mode)
-   was a real bug: dark-on-dark edge labels ("yes"/"no") and the subgraph
-   title read as barely-there grey-on-grey against a white box. */
-.markdown .mermaid{background:var(--hl-bg);border:1px solid var(--border-2);border-radius:12px;padding:18px;margin:1.4em 0;text-align:center;overflow:auto}
-/* Language picker — replaces a run of N>=3 consecutive per-language code
-   blocks (see buildLangPickers() below) with a tab strip + one visible
-   panel. The tab strip scrolls horizontally on its own; it never widens
-   the page. */
-.lang-picker{margin:1.5em 0}
-.lang-tabs{display:flex;gap:4px;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;padding:4px;background:var(--overlay-1);border:1px solid var(--border);border-radius:12px;scrollbar-width:thin}
+   the fixed-dark code surface above, the container has to stay dark in BOTH
+   page themes. Leaving this on a themed panel (white in light mode) was a real
+   bug: dark-on-dark edge labels ("yes"/"no") and the subgraph title read as
+   barely-there grey-on-grey against a white box. */
+.markdown .mermaid{background:var(--hl-bg);border:1px solid var(--hl-line);border-top:0;padding:20px;margin:0;text-align:center;overflow:auto}
+.cb.is-diagram{margin:1.6em 0}
+
+/* ── Language picker ──────────────────────────────────────────────────────
+   Replaces a run of N>=3 consecutive per-language code blocks (see
+   buildLangPickers() below) with a tab strip + one visible panel. The strip
+   scrolls horizontally on its own; it never widens the page. Inside a picker
+   the tab strip IS the fence's title bar, so the per-fence language label is
+   suppressed and only COPY remains. */
+.lang-picker{margin:1.6em 0}
+.lang-tabs{
+  display:flex;gap:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+  border:1px solid var(--line-2);background:var(--panel);scrollbar-width:thin;scrollbar-color:var(--line-3) transparent;
+}
 .lang-tabs::-webkit-scrollbar{height:6px}
-.lang-tabs::-webkit-scrollbar-thumb{background:var(--border-2);border-radius:4px}
-.lang-tab{flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;padding:8px 12px;margin:0;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--muted);font:inherit;font-size:13.5px;font-weight:500;line-height:1;cursor:pointer;transition:background .15s,color .15s,border-color .15s;white-space:nowrap}
-.lang-tab:hover{color:var(--text);background:var(--overlay-3)}
-.lang-tab[aria-selected="true"]{color:var(--text);background:var(--panel);border-color:var(--border-2);box-shadow:0 1px 3px rgba(0,0,0,.18)}
-.lang-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.lang-tab-icon{width:17px;height:17px;flex:0 0 auto;color:inherit}
+.lang-tabs::-webkit-scrollbar-thumb{background:var(--line-3)}
+.lang-tab{
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 13px;margin:0;
+  border:0;border-right:1px solid var(--line);border-bottom:2px solid transparent;background:transparent;
+  color:var(--muted);font-family:var(--mono);font-size:11.6px;letter-spacing:.05em;line-height:1;cursor:pointer;
+  transition:color .16s,background .16s,border-color .16s;white-space:nowrap;
+}
+.lang-tab:hover{color:var(--ink);background:var(--tint)}
+.lang-tab[aria-selected="true"]{color:var(--ink);background:var(--canvas);border-bottom-color:var(--teal)}
+.lang-tab:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+.lang-tab-icon{width:16px;height:16px;flex:0 0 auto;color:inherit}
 .lang-tab-icon text{font-family:var(--mono);font-weight:700;text-anchor:middle}
-.lang-panels{margin-top:10px}
+.lang-panels{margin-top:0}
 .lang-panel{display:none}
 .lang-panel.active{display:block}
-.lang-panel>p{margin:0 0 10px;color:var(--body-text);max-width:var(--measure)}
-.lang-panel>p:first-child strong{color:var(--text)}
-.lang-panel>.code-block{margin:0}
-@media(max-width:980px){.lang-tab{min-height:44px}}
+.lang-panel>p{margin:14px 0 8px;color:var(--body);max-width:var(--measure)}
+.lang-panel>p:first-child strong{color:var(--ink)}
+.lang-panel>.cb{margin:0}
+.lang-panel .cb-lang{display:none}
+@media (max-width:1023px){.lang-tab{min-height:46px}}
 
-/* Deep-linked headings must clear BOTH sticky bars on a phone (header +
-   nav bar). This has to sit after the .markdown heading rules above, not up
-   in the sidebar's own media query, or the 84px desktop value wins on
-   source order and the target lands behind the bar. */
-@media(max-width:980px){
-  .markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{scroll-margin-top:128px}
-}
-@media(max-width:600px){
-  /* A 19px lede is a luxury of a wide column; on a phone it just costs lines. */
-  .markdown>h1+p{font-size:17.5px}
-  /* Squeezed into 342px, a three-column table gives its last column ~60px and
-     a one-line note becomes a fifteen-line tower. Hold a minimum width and let
-     the table's own overflow:auto scroll it instead — the rows stay rows.
-     (Mermaid is deliberately left alone here: its SVG scales down to fit, and
-     a scaled-but-whole diagram beats a full-size one cropped at the edge.)
-     680px measured best across all five tabled pages — it cuts the worst row
-     on Provider parity from 370px to 270px, where 520px changed nothing.
-     Scoped to wrapped tables so that if wrapTables() ever fails to run, the
-     table falls back to squeezing rather than to overflowing the page. */
-  .table-wrap>table{min-width:680px}
+/* ═══ Prev / next — a linear path through thirteen documents ══════════════ */
+.doc-foot{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line-2);margin:70px 0 0}
+.doc-foot a{display:block;padding:20px 0;transition:background .16s}
+.doc-foot a:hover{background:var(--tint)}
+.doc-foot .prev{padding-right:20px}
+.doc-foot .next{grid-column:2;text-align:right;border-left:1px solid var(--line);padding-left:20px}
+.doc-foot .dir{display:block;font-family:var(--mono);font-size:10.4px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.doc-foot .t{display:block;margin-top:7px;font-family:var(--display);font-variation-settings:'wdth' 104;font-weight:600;font-size:17px;line-height:1.25;color:var(--ink)}
+.doc-foot a:hover .t{color:var(--teal-ink)}
+@media (max-width:600px){
+  .doc-foot{grid-template-columns:1fr}
+  .doc-foot .next{grid-column:1;text-align:left;border-left:0;border-top:1px solid var(--line);padding-left:0}
+  .doc-foot .prev{padding-right:0}
 }
 
-/* Prev / next — a linear path through thirteen documents. */
-.doc-foot{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:60px 0 0;padding-top:26px;border-top:1px solid var(--border)}
-.doc-foot a{display:block;padding:13px 16px;border:1px solid var(--border);border-radius:12px;background:var(--panel);transition:border-color .15s,background .15s}
-.doc-foot a:hover{border-color:var(--accent);background:var(--panel-2)}
-.doc-foot .dir{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.09em;color:var(--faint);font-weight:600;margin-bottom:3px}
-.doc-foot .t{display:block;color:var(--text);font-weight:600;font-size:15.5px;line-height:1.3}
-.doc-foot .next{grid-column:2;text-align:right}
-@media(max-width:600px){.doc-foot{grid-template-columns:1fr}.doc-foot .next{grid-column:1;text-align:left}}
+.docs-error{color:var(--rust);background:var(--rust-wash);border:1px solid var(--rust-edge);padding:14px 16px}
+.doc-loading{color:var(--muted);font-family:var(--mono);font-size:13px;letter-spacing:.08em}
 
-.docs-error{color:#FCA5A5;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.25);padding:14px 16px;border-radius:10px}
-.doc-loading{color:var(--muted)}
+/* ═══ Footer ═════════════════════════════════════════════════════════════ */
+.site-footer{border-top:1px solid var(--line);padding:26px 0 34px;margin-top:20px}
+@media (max-width:1023px){.site-footer{margin-top:0}}
 
-  /* ── Vulos suite chrome — identical on every product landing ───────────────
-     Two elements, and only two: a logo-only home button in the top bar, and
-     one line in the footer. Deliberately free of repo variables so the block
-     is byte-identical across the suite and can be diffed as one thing. */
-  .vulos-home { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto; opacity: .72; transition: opacity .15s ease, transform .15s ease; }
-  .vulos-home:hover, .vulos-home:focus-visible { opacity: 1; transform: translateY(-1px); }
-  .vulos-home img { display: block; width: 22px; height: 22px; border-radius: 6px; }
-  .vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
-  .vulos-foot:hover { opacity: 1; text-decoration: none; }
-  .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+/* ── Vulos suite chrome — identical on every product landing ───────────────
+   Two elements, and only two: a logo-only home button in the top bar, and
+   one line in the footer. Deliberately free of repo variables so the block
+   is byte-identical across the suite and can be diffed as one thing. */
+.vulos-home { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto; opacity: .72; transition: opacity .15s ease, transform .15s ease; }
+.vulos-home:hover, .vulos-home:focus-visible { opacity: 1; transform: translateY(-1px); }
+.vulos-home img { display: block; width: 22px; height: 22px; border-radius: 6px; }
+.vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
+.vulos-foot:hover { opacity: 1; text-decoration: none; }
+.vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
 </style>
 <script src="./assets/vendor/marked.umd.js"></script>
 <script src="./assets/vendor/mermaid.min.js"></script>
 <script src="./assets/vendor/highlight.min.js"></script>
 </head>
 <body>
-<a class="skip-link" href="#content">Skip to content</a>
+<a class="skip" href="#content">Skip to content</a>
+
 <header class="site-header"><div class="wrap nav">
-    <a class="brand" href="./index.html" aria-label="llmux — home"><span class="tile"><img src="./assets/llmux-mark.svg" alt=""></span><span class="word">ll<i>mux</i></span></a>
+    <a class="brand" href="./index.html" aria-label="llmux — home"><img src="./assets/llmux-mark.svg" alt="" width="26" height="26"><span class="word">ll<span class="mux">mux</span></span></a>
     <div class="nav-spacer"></div>
-    <nav class="nav-links" aria-label="Site">
-      <a href="./index.html#features">Features</a>
-      <a href="./index.html#sovereignty">Sovereignty</a>
+    <nav class="secnav" aria-label="Site">
+      <a href="./index.html#wire">Wire</a>
+      <a href="./index.html#gate">Gate</a>
+      <a href="./index.html#routes">Routes</a>
       <a class="here" href="./docs.html" aria-current="page">Docs</a>
-      <a href="https://github.com/vul-os/llmux" target="_blank" rel="noopener">GitHub</a>
     </nav>
-    <button class="iconbtn" id="themeBtn" type="button" aria-label="Switch theme" title="Switch theme">
-      <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-      <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
-    </button>
-    <a class="vulos-home" href="https://vulos.org" target="_blank" rel="noopener" title="Vulos — open, self-hostable software" aria-label="Vulos — open, self-hostable software"><img src="./assets/vulos-logo.png" alt="" width="22" height="22"></a>
+    <div class="hdr-act">
+      <a class="hbtn" href="https://github.com/vul-os/llmux" target="_blank" rel="noopener" aria-label="llmux on GitHub">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.56v-2c-3.2.7-3.88-1.37-3.88-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.78 2.7 1.27 3.36.97.1-.75.4-1.27.73-1.56-2.56-.29-5.25-1.28-5.25-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.18 1.18a11 11 0 0 1 5.8 0c2.2-1.5 3.17-1.18 3.17-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.26 5.69.41.36.78 1.06.78 2.14v3.17c0 .31.2.67.8.56A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5z"/></svg>
+      </a>
+      <button class="hbtn sq" id="themeBtn" type="button" aria-label="Switch theme" title="Switch theme">
+        <svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>
+      </button>
+      <a class="vulos-home" href="https://vulos.org" target="_blank" rel="noopener" title="Vulos — open, self-hostable software" aria-label="Vulos — open, self-hostable software"><img src="./assets/vulos-logo.png" alt="" width="22" height="22"></a>
+    </div>
   </div></header>
+
 <div class="wrap docs-shell">
-  <aside class="docs-nav" id="docsNav" aria-label="Documentation">
-    <button class="nav-toggle" id="navToggle" type="button" aria-expanded="false" aria-controls="navPanel">
-      <svg class="nt-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
-      <span class="nt-text"><span class="nt-label">llmux docs</span><span class="nt-current" id="navCurrent">Getting started</span></span>
-      <svg class="nt-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-    </button>
-    <div class="nav-panel" id="navPanel">
+  <aside class="rail" id="docsNav" aria-label="Document index">
+    <div class="rail-head">
+      <span class="rh-t">Document index</span>
+      <button class="rh-x" type="button" id="navClose">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        <span>Close</span>
+      </button>
+    </div>
+    <div class="rail-body" id="railBody">
+      <div class="rail-eyebrow"><span>llmux docs</span><span class="re-r"></span><span>13 files</span></div>
       <div class="rail-search">
         <svg class="rs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
-        <input id="docSearch" type="search" placeholder="Search docs" aria-label="Search documentation" autocomplete="off" spellcheck="false">
+        <input id="docSearch" type="search" placeholder="Search" aria-label="Search documentation" autocomplete="off" spellcheck="false">
         <kbd aria-hidden="true">/</kbd>
       </div>
       <div id="searchStatus" class="sr-only" role="status" aria-live="polite"></div>
       <div class="search-results" id="searchResults" hidden></div>
-      <div id="navBody">
-        <div class="nav-label">Documentation</div>
-        <ul class="nav-list" id="navList">
-          <li><a data-slug="getting-started" href="#getting-started"><span class="n-dot"></span>Getting started</a></li>
-          <li><a data-slug="client-examples" href="#client-examples"><span class="n-dot"></span>Client examples</a></li>
-          <li><a data-slug="architecture" href="#architecture"><span class="n-dot"></span>Architecture</a></li>
-          <li><a data-slug="configuration" href="#configuration"><span class="n-dot"></span>Configuration</a></li>
-          <li><a data-slug="api" href="#api"><span class="n-dot"></span>API reference</a></li>
-          <li><a data-slug="llm-access" href="#llm-access"><span class="n-dot"></span>LLM access &amp; BYOK</a></li>
-          <li><a data-slug="control-plane" href="#control-plane"><span class="n-dot"></span>Control-plane seam</a></li>
-          <li><a data-slug="admin-guide" href="#admin-guide"><span class="n-dot"></span>Admin guide</a></li>
-          <li><a data-slug="operations" href="#operations"><span class="n-dot"></span>Operations</a></li>
-          <li><a data-slug="troubleshooting" href="#troubleshooting"><span class="n-dot"></span>Troubleshooting</a></li>
-          <li><a data-slug="roadmap" href="#roadmap"><span class="n-dot"></span>Roadmap</a></li>
-          <li><a data-slug="parity" href="#parity"><span class="n-dot"></span>Provider parity</a></li>
-          <li><a data-slug="changelog" href="#changelog"><span class="n-dot"></span>Changelog</a></li>
-        </ul>
-      </div>
+      <nav class="rail-nav" id="navBody" aria-label="Documentation"></nav>
     </div>
   </aside>
+
   <main class="docs-main">
-    <div class="doc-head">
-      <nav class="crumb" id="crumb" aria-label="Breadcrumb"></nav>
-    </div>
+    <nav class="doc-rail" id="docRail" aria-label="Breadcrumb"></nav>
     <article class="markdown" id="content"><p class="doc-loading">Loading…</p></article>
     <nav class="doc-foot" id="docFoot" aria-label="Document navigation" hidden></nav>
   </main>
+
+  <aside class="toc" id="tocRail" aria-label="On this page" hidden>
+    <div class="toc-h"><span>On this page</span><span class="th-r"></span></div>
+    <ul class="toc-list" id="tocList"></ul>
+  </aside>
 </div>
-<footer class="site-footer"><a class="vulos-foot" href="https://vulos.org" target="_blank" rel="noopener"><img src="./assets/vulos-logo.png" alt="" width="18" height="18"><span>Part of <strong>Vulos</strong> — open, self-hostable software</span></a></footer>
+
+<footer class="site-footer"><div class="wrap"><a class="vulos-foot" href="https://vulos.org" target="_blank" rel="noopener"><img src="./assets/vulos-logo.png" alt="" width="18" height="18"><span>Part of <strong>Vulos</strong> — open, self-hostable software</span></a></div></footer>
+
+<div class="scrim" id="navScrim" hidden></div>
+<button class="index-tab" id="navToggle" type="button" aria-expanded="false" aria-controls="docsNav">
+  <svg class="it-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M4 5h4M4 12h4M4 19h4" stroke-width="3"/></svg>
+  <span class="it-txt"><span class="it-lbl">Document index</span><span class="it-cur" id="navCurrent">Getting started</span></span>
+  <span class="it-ix" id="navIndex">01/13</span>
+</button>
+
 <script>
-// The site is served from the repo root; docs render straight from the repo's own markdown.
+// The site is served from the repo root; docs render straight from the repo's
+// own markdown. `group` orders the thirteen files into the reader's journey —
+// start, understand the system, look things up, run it, follow the project —
+// and that order is also the prev/next path through the set.
+const GROUPS = [
+  { n:'01', label:'Start'     },
+  { n:'02', label:'System'    },
+  { n:'03', label:'Reference' },
+  { n:'04', label:'Operate'   },
+  { n:'05', label:'Project'   }
+];
 const DOCS = [
-  {"slug":"getting-started","title":"Getting started","path":"./docs/getting-started.md"},
-  {"slug":"client-examples","title":"Client examples","path":"./docs/client-examples.md"},
-  {"slug":"architecture","title":"Architecture","path":"./docs/architecture.md"},
-  {"slug":"configuration","title":"Configuration","path":"./docs/configuration.md"},
-  {"slug":"api","title":"API reference","path":"./docs/api.md"},
-  {"slug":"llm-access","title":"LLM access & BYOK","path":"./docs/llm-access.md"},
-  {"slug":"control-plane","title":"Control-plane seam","path":"./docs/control-plane.md"},
-  {"slug":"admin-guide","title":"Admin guide","path":"./docs/admin-guide.md"},
-  {"slug":"operations","title":"Operations","path":"./docs/operations.md"},
-  {"slug":"troubleshooting","title":"Troubleshooting","path":"./docs/troubleshooting.md"},
-  {"slug":"roadmap","title":"Roadmap","path":"./docs/roadmap.md"},
-  {"slug":"parity","title":"Provider parity","path":"./docs/parity.md"},
-  {"slug":"changelog","title":"Changelog","path":"./docs/changelog.md"}
+  {"slug":"getting-started","title":"Getting started","path":"./docs/getting-started.md","group":0},
+  {"slug":"client-examples","title":"Client examples","path":"./docs/client-examples.md","group":0},
+  {"slug":"architecture","title":"Architecture","path":"./docs/architecture.md","group":1},
+  {"slug":"configuration","title":"Configuration","path":"./docs/configuration.md","group":1},
+  {"slug":"control-plane","title":"Control-plane seam","path":"./docs/control-plane.md","group":1},
+  {"slug":"api","title":"API reference","path":"./docs/api.md","group":2},
+  {"slug":"llm-access","title":"LLM access & BYOK","path":"./docs/llm-access.md","group":2},
+  {"slug":"parity","title":"Provider parity","path":"./docs/parity.md","group":2},
+  {"slug":"admin-guide","title":"Admin guide","path":"./docs/admin-guide.md","group":3},
+  {"slug":"operations","title":"Operations","path":"./docs/operations.md","group":3},
+  {"slug":"troubleshooting","title":"Troubleshooting","path":"./docs/troubleshooting.md","group":3},
+  {"slug":"roadmap","title":"Roadmap","path":"./docs/roadmap.md","group":4},
+  {"slug":"changelog","title":"Changelog","path":"./docs/changelog.md","group":4}
 ];
 const bySlug = Object.fromEntries(DOCS.map(d=>[d.slug,d]));
 const byFile = Object.fromEntries(DOCS.map(d=>[d.path.split('/').pop().toLowerCase(),d]));
 const idxOf  = Object.fromEntries(DOCS.map((d,i)=>[d.slug,i]));
-const content = document.getElementById('content');
-const crumb = document.getElementById('crumb');
-const navList = document.getElementById('navList');
-const docFoot = document.getElementById('docFoot');
+const content   = document.getElementById('content');
+const docRail   = document.getElementById('docRail');
+const navBody   = document.getElementById('navBody');
+const docFoot   = document.getElementById('docFoot');
+const tocRail   = document.getElementById('tocRail');
+const tocListEl = document.getElementById('tocList');
+const pad2 = n => String(n).padStart(2,'0');
 let mermaidReady = false;
+
 // edgeLabelBackground: mermaid's own dark-theme default (a mid-grey chip
 // behind e.g. "yes"/"no" edge labels) measured 4.43:1 against its #ccc label
 // text — under the 4.5:1 AA floor by a hair. #505050 clears ~5.0:1 without
@@ -586,14 +890,37 @@ if (window.marked && marked.setOptions) marked.setOptions({ gfm:true, breaks:fal
 
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
+// ---- The document index ----------------------------------------------
+// Built once from DOCS. Five numbered groups, thirteen ordinals, no nesting
+// ever: "which document" is one question and it always gets the whole list.
+function buildIndexNav(){
+  let html = '';
+  GROUPS.forEach((g, gi)=>{
+    const members = DOCS.map((d,i)=>({d,i})).filter(x=>x.d.group===gi);
+    if(!members.length) return;
+    html += '<div class="nav-grp"><div class="nav-grp-h"><span class="gn">'+g.n+'</span>'+
+            '<span class="gl">'+esc(g.label)+'</span><span class="gr"></span></div><ul class="nav-list">';
+    members.forEach(({d,i})=>{
+      html += '<li><a class="nav-item" data-slug="'+d.slug+'" href="#'+d.slug+'">'+
+              '<span class="ix">'+pad2(i+1)+'</span><span class="nm">'+esc(d.title)+'</span></a></li>';
+    });
+    html += '</ul></div>';
+  });
+  navBody.innerHTML = html;
+}
+buildIndexNav();
+
 function setActive(slug){
-  navList.querySelectorAll('a[data-slug]').forEach(a=>{
+  navBody.querySelectorAll('a[data-slug]').forEach(a=>{
     if (a.dataset.slug === slug) a.setAttribute('aria-current','page');
     else a.removeAttribute('aria-current');
   });
-  const cur = bySlug[slug];
-  const label = document.getElementById('navCurrent');
-  if (cur && label) label.textContent = cur.title;
+  const doc = bySlug[slug];
+  const i = idxOf[slug];
+  const cur = document.getElementById('navCurrent');
+  const ix  = document.getElementById('navIndex');
+  if (doc && cur) cur.textContent = doc.title;
+  if (doc && ix)  ix.textContent = pad2(i+1)+'/'+pad2(DOCS.length);
 }
 
 // slugify mirrors GitHub's heading-anchor algorithm closely enough that the
@@ -634,11 +961,20 @@ function highlightCode(){
 async function renderMermaid(){
   if(!mermaidReady) return;
   const blocks = [...content.querySelectorAll('code.language-mermaid')];
-  blocks.forEach((code,i)=>{
+  blocks.forEach(code=>{
+    const wrap = document.createElement('div');
+    wrap.className = 'cb is-diagram';
+    const bar = document.createElement('div');
+    bar.className = 'cb-bar';
+    const lang = document.createElement('span');
+    lang.className = 'cb-lang';
+    lang.textContent = 'Diagram';
+    bar.appendChild(lang);
     const div = document.createElement('div');
-    div.className='mermaid';
+    div.className = 'mermaid';
     div.textContent = code.textContent;
-    code.closest('pre').replaceWith(div);
+    wrap.appendChild(bar); wrap.appendChild(div);
+    code.closest('pre').replaceWith(wrap);
   });
   const nodes = content.querySelectorAll('.mermaid');
   if(nodes.length){ try { await mermaid.run({ nodes }); } catch(e){ console.warn('mermaid', e); } }
@@ -676,6 +1012,7 @@ const LANG_META = {
   jsonc:      { name:'JSON',       badge:'{}'   },
   http:       { name:'HTTP',       badge:'http' },
   yaml:       { name:'YAML',       badge:'yml'  },
+  text:       { name:'Text',       badge:'txt'  },
 };
 function langName(lang){
   const m = LANG_META[lang];
@@ -685,14 +1022,14 @@ function langBadge(lang){
   const m = LANG_META[lang];
   return m ? m.badge : lang.slice(0,2);
 }
-// Every tab icon is the same monoline badge template (rounded square,
-// currentColor stroke, monospace lettermark) — a deliberate lettermark
-// system rather than pictographic per-language logos: several of these
-// languages' real marks (Java's cup, Rust's gear, PHP's elephant, Swift's
-// bird) are registered trademarks, and redrawing them close enough to be
-// recognisable would be reproducing someone else's logo. A single
-// consistent badge family avoids that entirely while staying legible at
-// tab size, and reads as one deliberate system rather than clip art.
+// Every tab icon is the same monoline badge template (square, currentColor
+// stroke, monospace lettermark) — a deliberate lettermark system rather than
+// pictographic per-language logos: several of these languages' real marks
+// (Java's cup, Rust's gear, PHP's elephant, Swift's bird) are registered
+// trademarks, and redrawing them close enough to be recognisable would be
+// reproducing someone else's logo. A single consistent badge family avoids
+// that entirely while staying legible at tab size, and reads as one
+// deliberate system rather than clip art.
 function makeLangIcon(lang){
   const label = langBadge(lang);
   const size = label.length >= 4 ? 6 : label.length === 3 ? 7 : 8.5;
@@ -704,8 +1041,8 @@ function makeLangIcon(lang){
   const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
   rect.setAttribute('x','1'); rect.setAttribute('y','1');
   rect.setAttribute('width','14'); rect.setAttribute('height','14');
-  rect.setAttribute('rx','4'); rect.setAttribute('fill','none');
-  rect.setAttribute('stroke','currentColor'); rect.setAttribute('stroke-width','1.3');
+  rect.setAttribute('fill','none');
+  rect.setAttribute('stroke','currentColor'); rect.setAttribute('stroke-width','1.2');
   const text = document.createElementNS('http://www.w3.org/2000/svg','text');
   text.setAttribute('x','8'); text.setAttribute('y','8.7');
   text.setAttribute('dominant-baseline','middle');
@@ -769,12 +1106,12 @@ const LANG_PREF_KEY = 'llmux-docs-lang';
 function getLangPref(){ try { return localStorage.getItem(LANG_PREF_KEY) || ''; } catch(e){ return ''; } }
 function setLangPref(lang){ try { localStorage.setItem(LANG_PREF_KEY, lang); } catch(e){} }
 
-// Not every run offers every language — this page has a 17-language run and a
-// 3-language one — so the shared preference has to be checked BEFORE anything
-// is deselected. Clearing first and bailing out afterwards left the smaller
-// run with aria-selected="false" on every tab and tabIndex -1 on every tab: no
-// tab highlighted, the strip unreachable by keyboard, and a stale panel still
-// showing. A run that cannot honour the preference simply keeps its own.
+// Not every run offers every language — client-examples has a 17-language run
+// and a 3-language one — so the shared preference has to be checked BEFORE
+// anything is deselected. Clearing first and bailing out afterwards left the
+// smaller run with aria-selected="false" on every tab and tabIndex -1 on every
+// tab: no tab highlighted, the strip unreachable by keyboard, and a stale panel
+// still showing. A run that cannot honour the preference simply keeps its own.
 function activateLangTab(picker, lang){
   const tabs = picker.querySelectorAll('.lang-tab');
   let matched = false;
@@ -819,8 +1156,7 @@ function buildLangPickers(){
 
       // Mark the run's original position *before* anything is moved — once
       // the loop below starts re-parenting label/pre nodes into panels,
-      // run[0]'s node no longer has its original parent/siblings to anchor
-      // on.
+      // run[0]'s node no longer has its original parent/siblings to anchor on.
       const firstNode = run[0].labelEl || run[0].pre;
       const anchor = document.createComment('lang-picker-anchor');
       firstNode.parentNode.insertBefore(anchor, firstNode);
@@ -881,21 +1217,33 @@ function buildLangPickers(){
   });
 }
 
-// ---- Copy buttons ----------------------------------------------------
-// Runs AFTER buildLangPickers() on purpose: the picker re-parents <pre>
-// nodes by walking content's direct children, and wrapping them first
-// would hide every fence from that walk.
-const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
-function addCopyButtons(){
+// ---- Code fence chrome -----------------------------------------------
+// Every fence gets a titled bar: the language on the left, a permanently
+// visible COPY on the right. Runs AFTER buildLangPickers() on purpose — the
+// picker re-parents <pre> nodes by walking content's direct children, and
+// wrapping them first would hide every fence from that walk.
+const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+function decorateCode(){
   content.querySelectorAll('pre').forEach(pre=>{
-    if (pre.parentElement && pre.parentElement.classList.contains('code-block')) return;
+    if (pre.parentElement && pre.parentElement.classList.contains('cb')) return;
+    const code = pre.querySelector('code');
+    const cls = code ? [...code.classList].find(c=>c.startsWith('language-')) : null;
+    const lang = cls ? cls.slice('language-'.length) : '';
+
     const wrap = document.createElement('div');
-    wrap.className = 'code-block';
+    wrap.className = 'cb';
     pre.parentNode.insertBefore(wrap, pre);
-    wrap.appendChild(pre);
+
+    const bar = document.createElement('div');
+    bar.className = 'cb-bar';
+    const label = document.createElement('span');
+    label.className = 'cb-lang';
+    label.textContent = lang ? langName(lang) : '';
+    bar.appendChild(label);
+
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'copy-btn';
+    btn.className = 'cb-copy';
     btn.innerHTML = COPY_ICON + '<span>Copy</span>';
     btn.setAttribute('aria-label','Copy code to clipboard');
     btn.addEventListener('click', async ()=>{
@@ -915,7 +1263,10 @@ function addCopyButtons(){
       btn.querySelector('span').textContent = ok ? 'Copied' : 'Press ⌘C';
       setTimeout(()=>{ btn.classList.remove('done'); btn.querySelector('span').textContent = 'Copy'; }, 1600);
     });
-    wrap.appendChild(btn);
+    bar.appendChild(btn);
+
+    wrap.appendChild(bar);
+    wrap.appendChild(pre);
   });
 }
 
@@ -947,51 +1298,89 @@ function addHeadingAnchors(slug){
   });
 }
 
-// ---- On this page ----------------------------------------------------
-// Built into the rail, nested under the page you are on, so one scroll
-// region holds both "which document" and "where in it".
-let tocLinks = [];
-let tocHeadings = [];
+// ---- Where you are INSIDE the document -------------------------------
+// Two surfaces, one source. The CONTENTS ledger is part of the document and
+// lists its sections (h2 only, numbered) — it is what a phone reader gets,
+// and it is a <details> so it never stands between them and §1. The ON THIS
+// PAGE rail (>=1240px) is the fine-grained version with h3s and scrollspy.
+// Neither has any business inside the document index.
+let tocLinks = [], tocHeadings = [];
+function headingText(h){ return h.textContent.replace(/#$/,'').trim(); }
+
 function buildToc(slug){
   tocLinks = []; tocHeadings = [];
-  navList.querySelectorAll('.nav-toc').forEach(n=>n.remove());
-  const active = navList.querySelector('a[data-slug="'+slug+'"]');
-  if (!active) return;
+  tocListEl.innerHTML = '';
+  tocRail.hidden = true;
+  content.querySelectorAll('.contents').forEach(n=>n.remove());
+
   const all = [...content.querySelectorAll('h1,h2,h3')];
-  // The first h1 is the document title, already shown as the page name.
   const entries = [];
   let seenFirstH1 = false;
   for (const h of all){
+    // The first h1 is the document title, already the page name.
     if (h.tagName === 'H1' && !seenFirstH1){ seenFirstH1 = true; continue; }
     entries.push({ h, lv: h.tagName === 'H3' ? 3 : 2 });
   }
   if (!entries.length) return;
-  // Very long documents drop their h3s rather than burying the page list.
+
+  const go = (h) => (ev) => {
+    // Same page: scroll directly, so an identical hash still moves.
+    ev.preventDefault();
+    closeSheet();
+    history.replaceState(null,'', '#' + slug + '~' + h.id);
+    h.scrollIntoView({block:'start'});
+  };
+
+  // ── ON THIS PAGE rail. Very long documents drop their h3s rather than
+  //    becoming a second scrolling wall.
   const deep = entries.filter(e=>e.lv===3).length;
-  const list = entries.length > 26 && deep ? entries.filter(e=>e.lv===2) : entries;
-  const ul = document.createElement('ul');
-  ul.className = 'nav-toc';
-  ul.setAttribute('aria-label','On this page');
-  list.forEach(e=>{
+  const railList = entries.length > 26 && deep ? entries.filter(e=>e.lv===2) : entries;
+  railList.forEach(e=>{
     const li = document.createElement('li');
     const a = document.createElement('a');
     a.href = '#' + slug + '~' + e.h.id;
-    a.className = e.lv === 3 ? 'lv3' : '';
-    // Strip the trailing '#' the heading anchor adds.
-    a.textContent = e.h.textContent.replace(/#$/,'').trim();
-    a.dataset.target = e.h.id;
-    a.addEventListener('click', (ev)=>{
-      // Same page: scroll directly, so an identical hash still moves.
-      ev.preventDefault();
-      closeMobileNav();
-      history.replaceState(null,'', '#' + slug + '~' + e.h.id);
-      e.h.scrollIntoView({block:'start'});
-    });
+    if (e.lv === 3) a.className = 'lv3';
+    a.textContent = headingText(e.h);
+    a.addEventListener('click', go(e.h));
     li.appendChild(a);
-    ul.appendChild(li);
+    tocListEl.appendChild(li);
     tocLinks.push(a); tocHeadings.push(e.h);
   });
-  active.parentElement.appendChild(ul);
+  tocRail.hidden = false;
+
+  // ── CONTENTS ledger, injected into the document itself after the lede.
+  const sections = entries.filter(e=>e.lv===2);
+  if (sections.length >= 3){
+    const det = document.createElement('details');
+    det.className = 'contents';
+    // Open by default where two columns of ledger cost only a few lines; a
+    // phone gets a 46px summary instead of a nineteen-item preamble.
+    try { det.open = window.matchMedia('(min-width:760px)').matches; } catch(e){ det.open = false; }
+    const sum = document.createElement('summary');
+    sum.innerHTML = '<span class="cs-n">§</span><span>Contents</span><span class="cs-r"></span>'+
+      '<span>'+sections.length+' sections</span>'+
+      '<svg class="cs-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+    det.appendChild(sum);
+    const ul = document.createElement('ul');
+    ul.className = 'contents-list';
+    sections.forEach((e,i)=>{
+      const li = document.createElement('li');
+      const a = document.createElement('a');
+      a.href = '#' + slug + '~' + e.h.id;
+      a.innerHTML = '<span class="cl-n">'+pad2(i+1)+'</span><span></span>';
+      a.lastElementChild.textContent = headingText(e.h);
+      a.addEventListener('click', go(e.h));
+      li.appendChild(a);
+      ul.appendChild(li);
+    });
+    det.appendChild(ul);
+    // After the title and its lede paragraph — the reader meets the document
+    // before they meet its table of contents.
+    const h1 = content.querySelector('h1');
+    let after = h1;
+    if (h1 && h1.nextElementSibling && h1.nextElementSibling.tagName === 'P') after = h1.nextElementSibling;
+    if (after) after.after(det); else content.prepend(det);
+  }
 }
 
 // Scrollspy: mark the heading whose section the reader is actually in, and
@@ -1009,12 +1398,11 @@ function updateSpy(){
   }
   if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) idx = tocHeadings.length - 1;
   tocLinks.forEach((a,i)=>a.classList.toggle('here', i === idx));
-  const nav = document.getElementById('docsNav');
   const cur = tocLinks[idx];
-  if (cur && nav && getComputedStyle(nav).overflowY === 'auto'){
-    const nb = nav.getBoundingClientRect(), cb = cur.getBoundingClientRect();
-    if (cb.top < nb.top + 8) nav.scrollTop -= (nb.top + 8 - cb.top);
-    else if (cb.bottom > nb.bottom - 8) nav.scrollTop += (cb.bottom - nb.bottom + 8);
+  if (cur && tocRail.offsetParent !== null && getComputedStyle(tocRail).overflowY === 'auto'){
+    const nb = tocRail.getBoundingClientRect(), cb = cur.getBoundingClientRect();
+    if (cb.top < nb.top + 8) tocRail.scrollTop -= (nb.top + 8 - cb.top);
+    else if (cb.bottom > nb.bottom - 8) tocRail.scrollTop += (cb.bottom - nb.bottom + 8);
   }
 }
 window.addEventListener('scroll', ()=>{ if(!spyTicking){ spyTicking = true; requestAnimationFrame(updateSpy); } }, {passive:true});
@@ -1026,33 +1414,64 @@ function renderPrevNext(slug){
   if (i === undefined) { docFoot.hidden = true; return; }
   const prev = DOCS[i-1], next = DOCS[i+1];
   let html = '';
-  if (prev) html += '<a class="prev" href="#'+prev.slug+'"><span class="dir">← Previous</span><span class="t">'+esc(prev.title)+'</span></a>';
-  if (next) html += '<a class="next" href="#'+next.slug+'"><span class="dir">Next →</span><span class="t">'+esc(next.title)+'</span></a>';
+  if (prev) html += '<a class="prev" href="#'+prev.slug+'"><span class="dir">'+pad2(i)+' ← Previous</span><span class="t">'+esc(prev.title)+'</span></a>';
+  if (next) html += '<a class="next" href="#'+next.slug+'"><span class="dir">Next → '+pad2(i+2)+'</span><span class="t">'+esc(next.title)+'</span></a>';
   docFoot.innerHTML = html;
   docFoot.hidden = !html;
 }
 
-// ---- Mobile nav disclosure -------------------------------------------
+// ---- The mobile index sheet ------------------------------------------
+const rail = document.getElementById('docsNav');
 const navToggle = document.getElementById('navToggle');
-const navPanel = document.getElementById('navPanel');
-function closeMobileNav(){
-  if (!navPanel.classList.contains('open')) return;
-  navPanel.classList.remove('open');
-  navToggle.setAttribute('aria-expanded','false');
+const navClose = document.getElementById('navClose');
+const navScrim = document.getElementById('navScrim');
+const railBody = document.getElementById('railBody');
+const isSheet = () => window.matchMedia('(max-width:1023px)').matches;
+let lastFocus = null;
+
+function openSheet(){
+  if (!isSheet() || rail.classList.contains('open')) return;
+  lastFocus = document.activeElement;
+  navScrim.hidden = false;
+  // Force a frame so the scrim's opacity transition actually runs.
+  requestAnimationFrame(()=>navScrim.classList.add('open'));
+  rail.classList.add('open');
+  navToggle.setAttribute('aria-expanded','true');
+  document.body.style.overflow = 'hidden';
+  const cur = rail.querySelector('a[aria-current="page"]');
+  if (cur) cur.scrollIntoView({block:'center'});
+  navClose.focus();
 }
-navToggle.addEventListener('click', ()=>{
-  const open = navPanel.classList.toggle('open');
-  navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (open) { const a = navPanel.querySelector('a[aria-current="page"]'); if (a) a.scrollIntoView({block:'nearest'}); }
-});
+function closeSheet(){
+  if (!rail.classList.contains('open')) return;
+  rail.classList.remove('open');
+  navScrim.classList.remove('open');
+  navToggle.setAttribute('aria-expanded','false');
+  document.body.style.overflow = '';
+  setTimeout(()=>{ if(!rail.classList.contains('open')) navScrim.hidden = true; }, 260);
+  if (lastFocus && document.contains(lastFocus)) { try { lastFocus.focus({preventScroll:true}); } catch(e){} }
+  lastFocus = null;
+}
+navToggle.addEventListener('click', ()=>{ rail.classList.contains('open') ? closeSheet() : openSheet(); });
+navClose.addEventListener('click', closeSheet);
+navScrim.addEventListener('click', closeSheet);
+rail.addEventListener('click', (e)=>{ if (e.target.closest('a[data-slug]')) closeSheet(); });
 document.addEventListener('keydown', (e)=>{
-  if (e.key === 'Escape' && navPanel.classList.contains('open')){ closeMobileNav(); navToggle.focus(); }
+  if (e.key === 'Escape' && rail.classList.contains('open')){ e.preventDefault(); closeSheet(); }
 });
-document.addEventListener('click', (e)=>{
-  if (!navPanel.classList.contains('open')) return;
-  if (!e.target.closest('#docsNav')) closeMobileNav();
+// Keep focus inside the sheet while it is the only thing on screen.
+rail.addEventListener('keydown', (e)=>{
+  if (e.key !== 'Tab' || !rail.classList.contains('open')) return;
+  const f = [...rail.querySelectorAll('a[href],button,input,[tabindex]:not([tabindex="-1"])')]
+    .filter(el=>el.offsetParent !== null);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length-1];
+  if (e.shiftKey && document.activeElement === first){ e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last){ e.preventDefault(); first.focus(); }
 });
-navList.addEventListener('click', (e)=>{ if (e.target.closest('a')) closeMobileNav(); });
+// Growing past the breakpoint with the sheet open would leave a fixed panel
+// stuck over a desktop layout with the body scroll still locked.
+window.addEventListener('resize', ()=>{ if (!isSheet()) closeSheet(); });
 
 // ---- Search ----------------------------------------------------------
 // Index is built once, lazily, from the same markdown the pages render —
@@ -1061,7 +1480,6 @@ navList.addEventListener('click', (e)=>{ if (e.target.closest('a')) closeMobileN
 const searchInput = document.getElementById('docSearch');
 const searchResults = document.getElementById('searchResults');
 const searchStatus = document.getElementById('searchStatus');
-const navBody = document.getElementById('navBody');
 let searchIndex = null, indexing = null;
 
 function indexDoc(doc, md){
@@ -1089,7 +1507,7 @@ function indexDoc(doc, md){
   if (out.length) out[0].anchor = '';
   return out.filter(s => s.text || s.heading);
 }
-async function buildIndex(){
+async function buildSearchIndex(){
   if (searchIndex) return searchIndex;
   if (indexing) return indexing;
   indexing = (async ()=>{
@@ -1173,12 +1591,12 @@ let searchTimer = 0;
 async function onSearchInput(){
   const q = searchInput.value;
   renderSearch(q);
-  if (q.trim() && !searchIndex){ await buildIndex(); renderSearch(searchInput.value); }
+  if (q.trim() && !searchIndex){ await buildSearchIndex(); renderSearch(searchInput.value); }
 }
 searchInput.addEventListener('input', ()=>{ clearTimeout(searchTimer); searchTimer = setTimeout(onSearchInput, 80); });
-searchInput.addEventListener('focus', ()=>{ buildIndex(); });
+searchInput.addEventListener('focus', ()=>{ buildSearchIndex(); });
 searchInput.addEventListener('keydown', (e)=>{
-  if (e.key === 'Escape'){ searchInput.value = ''; renderSearch(''); searchInput.blur(); }
+  if (e.key === 'Escape'){ e.stopPropagation(); searchInput.value = ''; renderSearch(''); searchInput.blur(); }
   else if (e.key === 'ArrowDown'){
     const first = searchResults.querySelector('.sr-item');
     if (first){ e.preventDefault(); first.focus(); }
@@ -1193,18 +1611,18 @@ searchResults.addEventListener('keydown', (e)=>{
   if (i === -1) return;
   if (e.key === 'ArrowDown'){ e.preventDefault(); (items[i+1]||items[0]).focus(); }
   else if (e.key === 'ArrowUp'){ e.preventDefault(); if (i === 0) searchInput.focus(); else items[i-1].focus(); }
-  else if (e.key === 'Escape'){ e.preventDefault(); searchInput.focus(); }
+  else if (e.key === 'Escape'){ e.preventDefault(); e.stopPropagation(); searchInput.focus(); }
 });
 searchResults.addEventListener('click', (e)=>{
   if (!e.target.closest('.sr-item')) return;
-  searchInput.value = ''; renderSearch(''); closeMobileNav();
+  searchInput.value = ''; renderSearch(''); closeSheet();
 });
 document.addEventListener('keydown', (e)=>{
   if (e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
   const t = e.target;
   if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
   e.preventDefault();
-  if (navToggle.offsetParent !== null && !navPanel.classList.contains('open')) navToggle.click();
+  if (isSheet()) openSheet();
   searchInput.focus();
   searchInput.select();
 });
@@ -1218,8 +1636,12 @@ async function load(raw){
   const slug = sep === -1 ? raw : raw.slice(0, sep);
   const subAnchor = sep === -1 ? '' : raw.slice(sep + 1);
   const doc = bySlug[slug] || DOCS[0];
+  const i = idxOf[doc.slug];
   setActive(doc.slug);
-  crumb.innerHTML = '<a href="#'+DOCS[0].slug+'">Docs</a><span class="sep" aria-hidden="true">/</span><b>'+esc(doc.title)+'</b>';
+  docRail.innerHTML =
+    '<a href="#'+DOCS[0].slug+'">Docs</a>'+
+    '<span class="dr-grp">'+esc(GROUPS[doc.group].n+' · '+GROUPS[doc.group].label)+'</span>'+
+    '<span class="dr-ix">Document '+pad2(i+1)+' / '+pad2(DOCS.length)+'</span>';
   content.innerHTML = '<p class="doc-loading">Loading…</p>';
   try {
     const res = await fetch(doc.path, {cache:'no-cache'});
@@ -1234,7 +1656,7 @@ async function load(raw){
       if(m) img.setAttribute('src','./screenshots/'+m[1]);
     });
     // Cross-doc links (e.g. ADMIN-GUIDE.md#cost-accounting, ../ROADMAP.md)
-    // become sidebar navigation; a heading fragment on the target survives as
+    // become index navigation; a heading fragment on the target survives as
     // "#slug~anchor" so load() can scroll to it once the target page renders.
     content.querySelectorAll('a[href]').forEach(a=>{
       const h=a.getAttribute('href')||'';
@@ -1247,7 +1669,7 @@ async function load(raw){
     highlightCode();
     await renderMermaid();
     buildLangPickers();
-    addCopyButtons();
+    decorateCode();
     wrapTables();
     addHeadingAnchors(doc.slug);
     buildToc(doc.slug);
@@ -1266,12 +1688,12 @@ async function load(raw){
   } catch(err){
     content.innerHTML = '<div class="docs-error">Could not load <code>'+esc(doc.path.split('/').pop())+'</code> — '+esc(err.message)+'</div>';
     docFoot.hidden = true;
-    buildToc(doc.slug);
+    tocRail.hidden = true;
   }
 }
 
 function current(){ return (location.hash||'').replace('#','') || DOCS[0].slug; }
-window.addEventListener('hashchange', ()=>{ closeMobileNav(); load(current()); });
+window.addEventListener('hashchange', ()=>{ closeSheet(); load(current()); });
 load(current());
 
 // Theme toggle — same 'llmux-site-theme' localStorage key as index.html, so a

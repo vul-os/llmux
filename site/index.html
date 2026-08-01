@@ -400,7 +400,10 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   column-gap:44px;align-items:start;
 }
 .hero-h{grid-column:1/-1;margin:52px 0 0}
-.hero-h .l1,.hero-h .l2{display:block;font-size:clamp(40px,8vw,113px)}
+/* 113px at 1440 was shouting, and Archivo's wide axis makes a line that big
+   read as heavy rather than confident. 82px still carries the page without
+   the headline becoming the only thing on it. */
+.hero-h .l1,.hero-h .l2{display:block;font-size:clamp(38px,6vw,82px)}
 .hero-tag{
   grid-column:1;grid-row:2;margin:26px 0 0;
   font-family:var(--display);font-weight:600;font-variation-settings:'wdth' 104;
@@ -1215,7 +1218,13 @@ html.js .rv.in{opacity:1;transform:none}
             translated back into the OpenAI shape, and reaches your app in the same shape it sent, streaming
             included.</desc>
 
-          <text class="t-k" x="560" y="16">PROVIDER PORTS · <tspan class="t-go">1 OF 6 DIALED</tspan></text>
+          <!-- Right-anchored, not start-anchored at a hard-coded x. Anchored from
+               the left, this label's right edge lands wherever the rendered font
+               puts it — it measured 781 units in a 780-unit viewBox here, so the
+               final glyph was shaved, and it would clip differently on any machine
+               with different mono metrics. Anchoring to the right edge makes the
+               inset the thing that is fixed. -->
+          <text class="t-k" x="772" y="16" text-anchor="end">PROVIDER PORTS · <tspan class="t-go">1 OF 6 DIALED</tspan></text>
 
           <!-- your app -->
           <rect class="bx" x="8" y="40" width="112" height="252"/>
