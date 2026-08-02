@@ -321,18 +321,18 @@ img{max-width:100%;display:block}
 .nav-grp+.nav-grp{margin-top:16px}
 .nav-grp-h{
   display:flex;align-items:center;gap:9px;margin:0 0 4px;
-  font-family:var(--mono);font-size:10.6px;letter-spacing:.16em;text-transform:uppercase;
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
 }
 .nav-grp-h .gn{color:var(--teal-ink);font-weight:600;flex:none}
 .nav-grp-h .gl{color:var(--ink);font-weight:500;flex:none}
 .nav-grp-h .gr{flex:1;height:1px;background:var(--line);min-width:10px}
 .nav-list{list-style:none;margin:0;padding:0}
 .nav-item{
-  position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);gap:7px;align-items:baseline;
-  padding:7px 9px;border-left:1px solid transparent;color:var(--muted);
+  position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);gap:7px;align-items:center;
+  min-height:44px;padding:9px;border-left:1px solid transparent;color:var(--muted);
   font-size:14.2px;line-height:1.35;transition:color .16s,background .16s,border-color .16s;
 }
-.nav-item .ix{font-family:var(--mono);font-size:10.8px;letter-spacing:.03em;color:var(--faint);transition:color .16s}
+.nav-item .ix{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--faint);transition:color .16s}
 .nav-item:hover{color:var(--ink);background:var(--panel);border-left-color:var(--line-3)}
 .nav-item:hover .ix{color:var(--teal-ink)}
 .nav-item[aria-current="page"]{color:var(--ink);font-weight:600;background:var(--panel);border-left-color:var(--teal)}
@@ -353,7 +353,7 @@ img{max-width:100%;display:block}
 .rail-search{position:relative;margin:0 0 16px}
 .rail-search .rs-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:14px;height:14px;color:var(--faint);pointer-events:none}
 .rail-search input{
-  width:100%;height:40px;border:1px solid var(--line-2);background:var(--sunk);color:var(--ink);
+  width:100%;height:44px;border:1px solid var(--line-2);background:var(--sunk);color:var(--ink);
   font-family:var(--mono);font-size:12.5px;padding:0 34px 0 33px;-webkit-appearance:none;appearance:none;border-radius:0;
 }
 .rail-search input::placeholder{color:var(--faint);letter-spacing:.04em}
@@ -367,7 +367,7 @@ img{max-width:100%;display:block}
 .search-results{margin:0 0 6px}
 .sr-item{display:block;padding:9px 10px;border-left:1px solid var(--line);transition:background .16s,border-color .16s}
 .sr-item:hover,.sr-item:focus-visible{background:var(--panel);border-left-color:var(--teal)}
-.sr-page{display:block;font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.sr-page{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
 .sr-head{display:block;color:var(--ink);font-weight:600;font-size:13.8px;line-height:1.3;margin:3px 0 2px}
 .sr-snip{display:block;color:var(--muted);font-size:12.4px;line-height:1.45;max-height:2.95em;overflow:hidden}
 .sr-item mark{background:var(--teal-wash);color:var(--teal-ink);padding:0 1px}
@@ -434,7 +434,7 @@ img{max-width:100%;display:block}
 }
 .index-tab .it-icon{width:17px;height:17px;color:var(--teal-ink);flex:none}
 .index-tab .it-txt{flex:1;min-width:0}
-.index-tab .it-lbl{display:block;font-family:var(--mono);font-size:9.6px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.index-tab .it-lbl{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 .index-tab .it-cur{display:block;font-size:14.5px;font-weight:600;line-height:1.25;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .index-tab .it-ix{flex:none;font-family:var(--mono);font-size:12px;letter-spacing:.06em;color:var(--teal-ink)}
 @media (min-width:1024px){.index-tab{display:none}}
@@ -457,12 +457,13 @@ img{max-width:100%;display:block}
 }
 .toc-h{
   display:flex;align-items:center;gap:9px;margin:0 0 10px;
-  font-family:var(--mono);font-size:10.6px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
 }
 .toc-h .th-r{flex:1;height:1px;background:var(--line)}
 .toc-list{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
 .toc-list a{
-  display:block;padding:6px 0 6px 13px;margin-left:-1px;border-left:1px solid transparent;
+  display:flex;align-items:center;min-height:44px;padding:6px 0 6px 13px;margin-left:-1px;
+  border-left:1px solid transparent;
   color:var(--muted);font-size:12.7px;line-height:1.4;transition:color .16s,border-color .16s;
 }
 .toc-list a:hover{color:var(--ink);border-left-color:var(--line-3)}
@@ -475,14 +476,15 @@ img{max-width:100%;display:block}
   border-top:1px solid var(--line);border-bottom:1px solid var(--line);
   font-family:var(--mono);font-size:11px;letter-spacing:.13em;text-transform:uppercase;color:var(--faint);
 }
-.doc-rail span,.doc-rail a{padding:10px 16px;border-right:1px solid var(--line)}
+.doc-rail span,.doc-rail a{display:inline-flex;align-items:center;min-height:44px;padding:10px 16px;
+  border-right:1px solid var(--line)}
 .doc-rail :first-child{padding-left:0}
 .doc-rail a{color:var(--muted);transition:color .16s}
 .doc-rail a:hover{color:var(--teal-ink)}
 .doc-rail .dr-grp{color:var(--ink)}
 .doc-rail .dr-ix{border-right:0;margin-left:auto;color:var(--teal-ink)}
 @media (max-width:520px){
-  .doc-rail span,.doc-rail a{padding:9px 11px;font-size:10.2px}
+  .doc-rail span,.doc-rail a{padding:9px 11px;font-size:11px}
   .doc-rail .dr-ix{margin-left:0}
 }
 
@@ -524,13 +526,13 @@ img{max-width:100%;display:block}
 /* No white-space:nowrap here on purpose — .markdown's overflow-wrap:anywhere
    has to stay able to break a long inline literal, or a 390px screen gets
    body-level horizontal scroll from a single env-var name. */
-.markdown code{font-family:var(--mono);font-size:.86em;background:var(--sunk);border:1px solid var(--line);padding:1px 5px;color:var(--ink)}
+.markdown code{font-family:var(--mono);font-size:max(11px,.86em);background:var(--sunk);border:1px solid var(--line);padding:1px 5px;color:var(--ink)}
 .markdown hr{border:none;border-top:1px solid var(--line);margin:2.6em 0}
 .markdown img{border:1px solid var(--line);margin:1.5em 0}
 
 /* Heading anchor — surfaces the deep link that already works (#slug~anchor)
    without changing how it works. */
-.h-anchor{margin-left:.4em;color:var(--line-3);font-weight:400;font-size:.62em;opacity:0;text-decoration:none;transition:opacity .15s,color .15s;font-family:var(--mono)}
+.h-anchor{margin-left:.4em;color:var(--line-3);font-weight:400;font-size:max(11px,.62em);opacity:0;text-decoration:none;transition:opacity .15s,color .15s;font-family:var(--mono)}
 .markdown h2:hover .h-anchor,.markdown h3:hover .h-anchor,.markdown h4:hover .h-anchor,.h-anchor:focus-visible{opacity:1}
 .h-anchor:hover{color:var(--teal-ink)}
 
@@ -546,7 +548,7 @@ img{max-width:100%;display:block}
 @media (min-width:1240px){.contents{display:none}}
 .contents>summary{
   display:flex;align-items:center;gap:10px;min-height:46px;padding:0 2px;cursor:pointer;
-  font-family:var(--mono);font-size:10.8px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
+  font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
   list-style:none;
 }
 .contents>summary::-webkit-details-marker{display:none}
@@ -559,11 +561,11 @@ img{max-width:100%;display:block}
 .contents-list li{break-inside:avoid}
 .contents-list a{
   display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:baseline;
-  min-height:34px;padding:5px 0;color:var(--muted);font-size:14.2px;line-height:1.35;transition:color .16s;
+  min-height:44px;padding:5px 0;color:var(--muted);font-size:14.2px;line-height:1.35;transition:color .16s;
 }
 .contents-list a:hover{color:var(--ink)}
 .contents-list a:hover .cl-n{color:var(--teal-ink)}
-.contents-list .cl-n{font-family:var(--mono);font-size:10.8px;color:var(--faint);transition:color .16s}
+.contents-list .cl-n{font-family:var(--mono);font-size:11px;color:var(--faint);transition:color .16s}
 @media (max-width:1023px){.contents-list a{min-height:44px;align-items:center}}
 
 /* ── Code fences: a titled instrument panel, not a rounded card ───────────
@@ -574,30 +576,81 @@ img{max-width:100%;display:block}
    scroll. */
 .cb{margin:1.5em 0}
 .cb-bar{
-  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:34px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:44px;
   padding:0 6px 0 12px;background:var(--hl-bar);border:1px solid var(--hl-line);border-bottom:0;
 }
-.cb-lang{font-family:var(--mono);font-size:10.4px;letter-spacing:.16em;text-transform:uppercase;color:var(--hl-punct)}
+.cb-lang{font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--hl-punct)}
 .cb-lang::before{content:"";display:inline-block;width:5px;height:5px;background:var(--hl-punct);margin-right:8px;vertical-align:1.5px}
+.cb-bar .cb-spacer{flex:1}
+/* Only on a fence that really does scroll — see isColumnar() below. It is a
+   label, not decoration: a reader who cannot see a scrollbar until they touch
+   the block is otherwise never told there is more of the line off to the right. */
+.cb-note{
+  font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--hl-punct);white-space:nowrap;
+}
 .cb-copy{
-  display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:0 9px;
-  background:transparent;border:1px solid transparent;color:var(--hl-fg);
-  font-family:var(--mono);font-size:10.4px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:44px;min-width:44px;
+  padding:0 10px;background:transparent;border:1px solid transparent;color:var(--hl-fg);
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;
   transition:border-color .16s,color .16s;
 }
 .cb-copy:hover{border-color:var(--hl-line-2)}
 .cb-copy svg{width:12px;height:12px}
 .cb-copy.done{color:var(--hl-addition);border-color:var(--hl-addition)}
 .cb-copy:focus-visible{outline:2px solid var(--hl-addition);outline-offset:1px}
-.markdown pre{background:var(--hl-bg);border:1px solid var(--hl-line);padding:15px 16px;overflow:auto;margin:0;
-  scrollbar-width:thin;scrollbar-color:var(--hl-line-2) transparent}
-.markdown pre::-webkit-scrollbar{height:8px}
-.markdown pre::-webkit-scrollbar-thumb{background:var(--hl-line-2)}
-.markdown pre code{background:none;border:0;padding:0;font-size:13.2px;line-height:1.7;color:var(--hl-fg);white-space:pre}
-.markdown pre code.hljs{display:block}
-@media (max-width:1023px){
-  .cb-bar{min-height:44px}
-  .cb-copy{min-height:38px;padding:0 12px}
+
+/* ── CODE WRAPS; IT DOES NOT PAN ──────────────────────────────────────────
+   These fences ran to 824px inside a 332px column on a 390px phone. Panning is
+   not reading: it hides the left edge of every line you are in the middle of.
+   So a code line SOFT-WRAPS by default, with a HANGING INDENT — the
+   continuation is set 2.6ch in, so "the rest of the line above" never looks
+   like "the next statement".
+
+   That hanging indent is why each source line is its own block (.ln, built by
+   wrapCodeLines() below): `text-indent` applies only to the FIRST line box of a
+   block, so one <pre> full of newlines cannot express a per-line hanging indent
+   at all. The <pre> therefore carries white-space:normal — the newlines BETWEEN
+   the .ln blocks have to collapse or everything renders double-spaced — and
+   each .ln restores pre-wrap so its own indentation survives.
+
+   The exception is a fence whose columns are load-bearing: a directory tree
+   with its comments aligned in a second column stops meaning anything the
+   moment it reflows. Those keep white-space:pre and scroll — and say so, in
+   the bar, above a scrollbar that is deliberately full-size rather than a
+   thin overlay you only discover by touching it. */
+.markdown pre{background:var(--hl-bg);border:1px solid var(--hl-line);padding:15px 16px;margin:0;
+  white-space:normal;overflow:visible}
+.markdown pre code{background:none;border:0;padding:0;font-size:13.2px;line-height:1.7;
+  color:var(--hl-fg);white-space:normal;display:block}
+.markdown pre .ln{display:block;white-space:pre-wrap;overflow-wrap:break-word;
+  padding-left:2.6ch;text-indent:-2.6ch}
+.markdown pre .ln:empty::after{content:"\00a0"}
+
+.cb.is-columnar{position:relative}
+.cb.is-columnar pre{overflow-x:auto;padding-bottom:4px}
+.cb.is-columnar pre .ln{white-space:pre;padding-left:0;text-indent:0}
+/* A full-height scrollbar with a track, NOT the thin overlay one — the whole
+   point is that the reader can see this block scrolls before they touch it.
+   Deliberately no `scrollbar-color`/`scrollbar-width` here: Blink drops every
+   ::-webkit-scrollbar rule on an element that sets either standard property,
+   which is exactly how this block ended up with an invisible overlay bar. */
+.cb.is-columnar pre::-webkit-scrollbar{height:12px}
+.cb.is-columnar pre::-webkit-scrollbar-track{background:var(--hl-bar)}
+.cb.is-columnar pre::-webkit-scrollbar-thumb{background:var(--hl-line-2);border:2px solid var(--hl-bar)}
+/* …and a soft right edge while there is more to come, removed the moment
+   there isn't, so it never lies about how much is left.
+   Absolutely positioned rather than an in-flow sibling: an in-flow box paints
+   its background in the backgrounds phase, i.e. UNDER the text of everything
+   beside it, so a fade laid out next to the code is painted and then covered
+   completely by the very code it exists to fade out. It runs the full height
+   of the frame and the title bar is lifted above it, so the fade stays tied to
+   the frame's own edges rather than to a bar height that can change. */
+.cb.is-columnar .cb-bar{position:relative;z-index:2}
+.cb.is-columnar.has-more::after{
+  content:"";position:absolute;top:1px;right:1px;bottom:1px;width:42px;
+  z-index:1;pointer-events:none;
+  background:linear-gradient(90deg,rgba(12,17,22,0),var(--hl-bg));
 }
 
 /* highlight.js token colors — see --hl-* in :root; the code surface is
@@ -641,15 +694,21 @@ img{max-width:100%;display:block}
    color, so interpolated code reads as code, not as string content — this
    is what stops an f-string/template literal from visually "swallowing"
    the variable inside it.
-   hljs-class and hljs-function (the *wrapper* spans some grammars use
-   around `class Foo` / `func bar()`) are left uncolored on purpose: their
-   own inner tokens (keyword, title, params) already carry color, and the
-   wrapper's unwrapped text (whitespace, unscoped punctuation) correctly
-   falls through to the default --hl-fg rather than needing its own rule.
+   hljs-class and hljs-function are the *wrapper* spans some grammars put
+   around a whole `class Foo …` / `func bar(…)` declaration. They are listed
+   FIRST below, and given the punctuation color, deliberately: their inner
+   tokens (keyword, title, params) all re-color themselves in the rules that
+   follow — equal specificity, later in the source, so those win — while the
+   text the wrapper holds DIRECTLY is exactly the declaration's own unscoped
+   punctuation. In the C example on client-examples that is the `*` of
+   `struct curl_slist *h =` and the `=` beside it, which used to fall through
+   to the default text color; nothing in a code fence should be default-colored
+   for lack of a rule.
    Go's struct-field access (`res.Choices[0].Message`) and bare function
    calls (`fmt.Println`) are verified NOT to be scoped by this hljs build's
    go grammar at all — they render as default text by design, not as a
    fallthrough bug. */
+.hljs-class,.hljs-function{color:var(--hl-punct)}
 .hljs-comment,.hljs-quote{color:var(--hl-comment);font-style:italic}
 .hljs-keyword,.hljs-type,.hljs-selector-tag,.hljs-variable.language_{color:var(--hl-keyword)}
 .hljs-string,.hljs-doctag,.hljs-regexp{color:var(--hl-string)}
@@ -685,15 +744,50 @@ img{max-width:100%;display:block}
 .table-wrap>table{display:table;margin:0;overflow:visible}
 /* Cells opt out of .markdown's overflow-wrap:anywhere: inside a table that
    rule shrank the column to a single character and split `/v1/chat/completions`
-   across two lines mid-token. break-word keeps the token whole and lets the
-   wrapper's overflow:auto handle the width. */
+   across two lines mid-token. break-word keeps prose words whole.
+   The one exception is an inline literal. `anywhere` (unlike `break-word`) also
+   lowers a box's MIN-CONTENT width, so scoping it to <code> is what lets a
+   table whose cells contain things like `LLMUX_URL=http://127.0.0.1:4000` fit
+   its column instead of forcing the whole table into a horizontal scroll —
+   without ever letting an ordinary sentence break mid-word. */
 .markdown th,.markdown td{border:1px solid var(--line);padding:10px 13px;text-align:left;vertical-align:top;overflow-wrap:break-word}
+.markdown th code,.markdown td code{overflow-wrap:anywhere}
 .markdown th{
   background:var(--panel);border-color:var(--line-2);color:var(--faint);
-  font-family:var(--mono);font-size:10.6px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;white-space:nowrap;
+  font-family:var(--mono);font-size:11px;font-weight:600;letter-spacing:.13em;text-transform:uppercase;
 }
 .markdown td{color:var(--body)}
 .markdown tbody tr:nth-child(even){background:var(--tint)}
+
+/* ── Narrow: a table becomes a stack of records, not a drag ───────────────
+   Same move the landing's endpoint matrix makes, for the same reason: a
+   multi-column table cannot be squeezed into a 332px column, and the
+   alternative — the whole table inside a horizontal scroller — makes the
+   reader drag every row sideways to read the columns they came for. Below
+   640px each row becomes a record and each cell is introduced by its own
+   column heading, carried on the cell as data-h by wrapTables(). The <thead>
+   is clipped, never display:none, so it stays the table's column headers in
+   the accessibility tree. */
+@media (max-width:640px){
+  .table-wrap{overflow-x:visible}
+  .markdown .table-wrap>table{display:block;margin:0}
+  .markdown thead{position:absolute;width:1px;height:1px;overflow:hidden;
+    clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap}
+  .markdown tbody{display:block}
+  .markdown tbody tr,.markdown tbody tr:nth-child(even){
+    display:flex;flex-direction:column;border:1px solid var(--line-2);background:var(--panel);
+    padding:4px 13px 10px;margin-bottom:10px}
+  .markdown tbody tr:last-child{margin-bottom:0}
+  .markdown td{display:block;border:0;padding:7px 0 0}
+  .markdown td[data-h]::before{
+    content:attr(data-h);display:block;margin-bottom:3px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);
+  }
+  /* An empty cell in a record would otherwise be a heading with nothing under
+     it; markdown tables are full of them. */
+  .markdown td:empty{display:none}
+}
 
 /* mermaid.initialize() below always renders with theme:'dark' (its node
    fills/edge-label chips assume a dark surface under them) — so, exactly like
@@ -711,14 +805,31 @@ img{max-width:100%;display:block}
    the tab strip IS the fence's title bar, so the per-fence language label is
    suppressed and only COPY remains. */
 .lang-picker{margin:1.6em 0}
+/* Seventeen languages will not fit any column, so the strip scrolls on its own
+   rather than widening the page. It is a CONTROL strip, not prose — the rule
+   that code must wrap instead of pan does not apply to it — but the reader
+   still has to be told there are tabs off the edge, so it gets the same honest
+   treatment the columnar code fences get: a soft edge on whichever side has
+   more, and nothing at all on a side that has run out. buildLangPickers() also
+   scrolls the live tab into view, so a restored preference like Rust is never
+   selected somewhere the reader cannot see. */
+.lang-strip{position:relative}
 .lang-tabs{
   display:flex;gap:0;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
-  border:1px solid var(--line-2);background:var(--panel);scrollbar-width:thin;scrollbar-color:var(--line-3) transparent;
+  border:1px solid var(--line-2);background:var(--panel);
 }
-.lang-tabs::-webkit-scrollbar{height:6px}
+.lang-tabs::-webkit-scrollbar{height:8px}
+.lang-tabs::-webkit-scrollbar-track{background:var(--tint)}
 .lang-tabs::-webkit-scrollbar-thumb{background:var(--line-3)}
+.lang-strip::before,.lang-strip::after{
+  content:"";position:absolute;top:1px;bottom:1px;width:34px;pointer-events:none;
+  opacity:0;transition:opacity .16s;z-index:1;
+}
+.lang-strip::before{left:1px;background:linear-gradient(90deg,var(--panel),rgba(0,0,0,0))}
+.lang-strip::after{right:1px;background:linear-gradient(270deg,var(--panel),rgba(0,0,0,0))}
+.lang-strip.more-l::before,.lang-strip.more-r::after{opacity:1}
 .lang-tab{
-  flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;min-height:38px;padding:0 13px;margin:0;
+  flex:0 0 auto;display:inline-flex;align-items:center;gap:7px;min-height:44px;padding:0 13px;margin:0;
   border:0;border-right:1px solid var(--line);border-bottom:2px solid transparent;background:transparent;
   color:var(--muted);font-family:var(--mono);font-size:11.6px;letter-spacing:.05em;line-height:1;cursor:pointer;
   transition:color .16s,background .16s,border-color .16s;white-space:nowrap;
@@ -726,8 +837,13 @@ img{max-width:100%;display:block}
 .lang-tab:hover{color:var(--ink);background:var(--tint)}
 .lang-tab[aria-selected="true"]{color:var(--ink);background:var(--canvas);border-bottom-color:var(--teal)}
 .lang-tab:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
-.lang-tab-icon{width:16px;height:16px;flex:0 0 auto;color:inherit}
-.lang-tab-icon text{font-family:var(--mono);font-weight:700;text-anchor:middle}
+.lang-tab-icon{
+  flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
+  min-width:22px;padding:1px 4px;border:1px solid currentColor;
+  font-family:var(--mono);font-size:11px;font-weight:500;line-height:1.35;
+  letter-spacing:0;opacity:.72;
+}
+.lang-tab[aria-selected="true"] .lang-tab-icon{opacity:1;border-color:var(--teal-edge);color:var(--teal-ink)}
 .lang-panels{margin-top:0}
 .lang-panel{display:none}
 .lang-panel.active{display:block}
@@ -736,6 +852,10 @@ img{max-width:100%;display:block}
 .lang-panel>.cb{margin:0}
 .lang-panel .cb-lang{display:none}
 @media (max-width:1023px){.lang-tab{min-height:46px}}
+/* Markdown task-list boxes. marked renders them `disabled`, so they are not
+   controls at all — but a 13px UA box next to 16.5px text just reads as a
+   rendering accident, so they get drawn at the size of the text they mark. */
+.markdown input[type=checkbox]{width:16px;height:16px;margin:0 .5em 0 0;vertical-align:-2px;accent-color:var(--teal)}
 
 /* ═══ Prev / next — a linear path through thirteen documents ══════════════ */
 .doc-foot{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line-2);margin:70px 0 0}
@@ -743,7 +863,7 @@ img{max-width:100%;display:block}
 .doc-foot a:hover{background:var(--tint)}
 .doc-foot .prev{padding-right:20px}
 .doc-foot .next{grid-column:2;text-align:right;border-left:1px solid var(--line);padding-left:20px}
-.doc-foot .dir{display:block;font-family:var(--mono);font-size:10.4px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+.doc-foot .dir{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
 .doc-foot .t{display:block;margin-top:7px;font-family:var(--display);font-variation-settings:'wdth' 104;font-weight:600;font-size:17px;line-height:1.25;color:var(--ink)}
 .doc-foot a:hover .t{color:var(--teal-ink)}
 @media (max-width:600px){
@@ -754,6 +874,19 @@ img{max-width:100%;display:block}
 
 .docs-error{color:var(--rust);background:var(--rust-wash);border:1px solid var(--rust-edge);padding:14px 16px}
 .doc-loading{color:var(--muted);font-family:var(--mono);font-size:13px;letter-spacing:.08em}
+/* No-JS fallback. Nothing can render the markdown, so the "Loading…" line is
+   dropped and the thirteen source files are offered instead. The rules that
+   HIDE the JS-only chrome live in a <style> inside the <noscript> itself —
+   that block only exists at all when scripting is off, which is exactly the
+   condition they are meant to apply under. */
+.ns-docs{padding-top:26px;counter-reset:nsd}
+.ns-list{list-style:none;margin:1.4em 0 0;padding:0;border-top:1px solid var(--line-2)}
+.ns-list li{counter-increment:nsd;border-bottom:1px solid var(--line)}
+.ns-list a{display:flex;align-items:center;gap:12px;min-height:52px;color:var(--ink);
+  text-decoration:none;font-size:15.5px}
+.ns-list a::before{content:counter(nsd,decimal-leading-zero);font-family:var(--mono);font-size:11px;
+  letter-spacing:.1em;color:var(--teal-ink)}
+.ns-list a:hover{color:var(--teal-ink)}
 
 /* ═══ Footer ═════════════════════════════════════════════════════════════ */
 .site-footer{border-top:1px solid var(--line);padding:26px 0 34px;margin-top:20px}
@@ -769,6 +902,14 @@ img{max-width:100%;display:block}
 .vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
 .vulos-foot:hover { opacity: 1; text-decoration: none; }
 .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+
+/* Hit area for the two suite-chrome controls. Deliberately written OUTSIDE the
+   block above so that block stays byte-identical across the suite and can still
+   be diffed as one thing. Only the TARGET grows to the 44px floor; both marks
+   keep their drawn size, because what is actually visible in each is the 22px
+   and 18px <img> inside, not the transparent box around it. */
+.vulos-home{width:44px;height:44px}
+.vulos-foot{min-height:44px}
 </style>
 <script src="./assets/vendor/marked.umd.js"></script>
 <script src="./assets/vendor/mermaid.min.js"></script>
@@ -823,6 +964,36 @@ img{max-width:100%;display:block}
   <main class="docs-main">
     <nav class="doc-rail" id="docRail" aria-label="Breadcrumb"></nav>
     <article class="markdown" id="content"><p class="doc-loading">Loading…</p></article>
+    <!-- These pages render the repo's own markdown in the browser, so with
+         scripting off there is nothing to render it. Rather than leave a
+         permanent "Loading…", hand the reader the thirteen source files
+         directly — same origin, same content, no gateway needed. -->
+    <noscript>
+      <style>
+        #content .doc-loading,#docRail,.index-tab,.rail,.toc{display:none}
+        @media (max-width:1023px){body{padding-bottom:0}}
+      </style>
+      <div class="ns-docs">
+        <h1>llmux documentation</h1>
+        <p>These pages are rendered from the repository's own markdown in your browser, so they need
+          JavaScript. Every document is plain markdown and can be read directly:</p>
+        <ol class="ns-list">
+          <li><a href="./docs/getting-started.md">Getting started</a></li>
+          <li><a href="./docs/client-examples.md">Client examples</a></li>
+          <li><a href="./docs/architecture.md">Architecture</a></li>
+          <li><a href="./docs/configuration.md">Configuration</a></li>
+          <li><a href="./docs/control-plane.md">Control-plane seam</a></li>
+          <li><a href="./docs/api.md">API reference</a></li>
+          <li><a href="./docs/llm-access.md">LLM access &amp; BYOK</a></li>
+          <li><a href="./docs/parity.md">Provider parity</a></li>
+          <li><a href="./docs/admin-guide.md">Admin guide</a></li>
+          <li><a href="./docs/operations.md">Operations</a></li>
+          <li><a href="./docs/troubleshooting.md">Troubleshooting</a></li>
+          <li><a href="./docs/roadmap.md">Roadmap</a></li>
+          <li><a href="./docs/changelog.md">Changelog</a></li>
+        </ol>
+      </div>
+    </noscript>
     <nav class="doc-foot" id="docFoot" aria-label="Document navigation" hidden></nav>
   </main>
 
@@ -1022,35 +1193,24 @@ function langBadge(lang){
   const m = LANG_META[lang];
   return m ? m.badge : lang.slice(0,2);
 }
-// Every tab icon is the same monoline badge template (square, currentColor
-// stroke, monospace lettermark) — a deliberate lettermark system rather than
-// pictographic per-language logos: several of these languages' real marks
-// (Java's cup, Rust's gear, PHP's elephant, Swift's bird) are registered
-// trademarks, and redrawing them close enough to be recognisable would be
-// reproducing someone else's logo. A single consistent badge family avoids
-// that entirely while staying legible at tab size, and reads as one
-// deliberate system rather than clip art.
+// Every tab carries the same hairline lettermark chip — a deliberate lettermark
+// system rather than pictographic per-language logos: several of these
+// languages' real marks (Java's cup, Rust's gear, PHP's elephant, Swift's bird)
+// are registered trademarks, and redrawing them close enough to be recognisable
+// would be reproducing someone else's logo.
+//
+// It used to be drawn as SVG <text> inside a fixed 16x16 viewBox, which meant
+// the lettermark shrank to fit the box: 8.5px for `sh`, 7px for `c++`, 6px for
+// `java` and `dart`. A 6px lettermark is not a lettermark, it is grit. It is
+// real text now, set at the same 11px floor as every other label on the page,
+// in a hairline box that sizes itself to the glyphs instead of the other way
+// round — the page's own chip idiom, and legible at every tab size.
 function makeLangIcon(lang){
-  const label = langBadge(lang);
-  const size = label.length >= 4 ? 6 : label.length === 3 ? 7 : 8.5;
-  const svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-  svg.setAttribute('viewBox','0 0 16 16');
-  svg.setAttribute('class','lang-tab-icon');
-  svg.setAttribute('aria-hidden','true');
-  svg.setAttribute('focusable','false');
-  const rect = document.createElementNS('http://www.w3.org/2000/svg','rect');
-  rect.setAttribute('x','1'); rect.setAttribute('y','1');
-  rect.setAttribute('width','14'); rect.setAttribute('height','14');
-  rect.setAttribute('fill','none');
-  rect.setAttribute('stroke','currentColor'); rect.setAttribute('stroke-width','1.2');
-  const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-  text.setAttribute('x','8'); text.setAttribute('y','8.7');
-  text.setAttribute('dominant-baseline','middle');
-  text.setAttribute('font-size',String(size));
-  text.setAttribute('fill','currentColor');
-  text.textContent = label;
-  svg.appendChild(rect); svg.appendChild(text);
-  return svg;
+  const el = document.createElement('span');
+  el.className = 'lang-tab-icon';
+  el.setAttribute('aria-hidden','true');
+  el.textContent = langBadge(lang);
+  return el;
 }
 
 // Walks content's direct children and groups them into "code items": a
@@ -1125,6 +1285,10 @@ function activateLangTab(picker, lang){
   picker.querySelectorAll('.lang-panel').forEach(p=>{
     p.classList.toggle('active', p.dataset.lang === lang);
   });
+  // A tab selected in one run may be off-screen in another; bring it back.
+  const strip = picker.querySelector('.lang-tabs');
+  const live = picker.querySelector('.lang-tab[aria-selected="true"]');
+  if (strip && live) live.scrollIntoView({block:'nearest', inline:'nearest'});
   return true;
 }
 
@@ -1144,10 +1308,19 @@ function buildLangPickers(){
       const picker = document.createElement('div');
       picker.className = 'lang-picker';
 
+      const strip = document.createElement('div');
+      strip.className = 'lang-strip';
       const tablist = document.createElement('div');
       tablist.className = 'lang-tabs';
       tablist.setAttribute('role','tablist');
       tablist.setAttribute('aria-label','Language');
+      strip.appendChild(tablist);
+      const edges = ()=>{
+        strip.classList.toggle('more-l', tablist.scrollLeft > 2);
+        strip.classList.toggle('more-r', tablist.scrollWidth - tablist.clientWidth - tablist.scrollLeft > 2);
+      };
+      tablist.addEventListener('scroll', edges, {passive:true});
+      window.addEventListener('resize', edges);
 
       const panels = document.createElement('div');
       panels.className = 'lang-panels';
@@ -1209,10 +1382,13 @@ function buildLangPickers(){
         panels.appendChild(panel);
       });
 
-      picker.appendChild(tablist);
+      picker.appendChild(strip);
       picker.appendChild(panels);
       anchor.parentNode.insertBefore(picker, anchor);
       anchor.remove();
+      const live = tablist.querySelector('.lang-tab[aria-selected="true"]');
+      if (live) tablist.scrollLeft = Math.max(0, live.offsetLeft - 12);
+      edges();
     } catch(e){ console.warn('lang-picker build', e); }
   });
 }
@@ -1223,15 +1399,82 @@ function buildLangPickers(){
 // picker re-parents <pre> nodes by walking content's direct children, and
 // wrapping them first would hide every fence from that walk.
 const COPY_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
+
+// Splits a highlighted <code> into one block element per SOURCE line, so each
+// line can carry its own hanging indent (see the .ln rules above — text-indent
+// only ever addresses the first line box of a block, so this cannot be done
+// with one <pre> and a pile of newlines).
+//
+// It has to rebuild the open-element chain at every line break rather than just
+// splitting on '\n': highlight.js emits spans that legitimately straddle a
+// newline — a block comment, a multi-line string, a bash line continuation —
+// and naively cutting the text would either drop those spans' colour on every
+// line after the first or produce unbalanced markup.
+function wrapCodeLines(codeEl){
+  const open = [];               // the source spans currently open, outermost first
+  const lines = [];
+  let cursor = null;
+  function newLine(){
+    const line = document.createElement('span');
+    line.className = 'ln';
+    lines.push(line);
+    cursor = line;
+    for (const t of open){ const c = t.cloneNode(false); cursor.appendChild(c); cursor = c; }
+  }
+  newLine();
+  (function walk(node){
+    for (const child of Array.from(node.childNodes)){
+      if (child.nodeType === 3){
+        const parts = child.nodeValue.split('\n');
+        for (let i = 0; i < parts.length; i++){
+          if (i > 0) newLine();
+          if (parts[i]) cursor.appendChild(document.createTextNode(parts[i]));
+        }
+      } else if (child.nodeType === 1){
+        const clone = child.cloneNode(false);
+        cursor.appendChild(clone);
+        open.push(child);
+        cursor = clone;
+        walk(child);
+        open.pop();
+        // Whether or not a line broke inside this element, the element we are
+        // now sitting in is this one's clone on the CURRENT line — so stepping
+        // up one level is correct in both cases.
+        cursor = cursor.parentNode;
+      }
+    }
+  })(codeEl);
+  while (lines.length > 1 && !lines[lines.length-1].textContent) lines.pop();
+  codeEl.textContent = '';
+  lines.forEach(l => codeEl.appendChild(l));
+}
+
+// A fence whose COLUMNS carry meaning — a directory tree with its comments
+// aligned in a second column, a two-column request sketch — stops saying
+// anything the moment it soft-wraps, so those keep white-space:pre and scroll.
+// Everything else wraps. The test is deliberately about shape rather than
+// filename or heading: a majority of the lines line something up in a second
+// column, and the fence is untagged or tagged `text` (a fence that declared a
+// real language is source code, and source code reflows fine).
+function isColumnar(text, lang){
+  if (lang && lang !== 'text' && lang !== 'plain' && lang !== 'plaintext') return false;
+  const lines = text.replace(/\n+$/,'').split('\n').filter(l => l.trim());
+  if (lines.length < 2) return false;
+  const aligned = lines.filter(l => /\S {2,}\S/.test(l)).length;
+  return aligned >= 2 && aligned / lines.length >= 0.6;
+}
+
 function decorateCode(){
   content.querySelectorAll('pre').forEach(pre=>{
     if (pre.parentElement && pre.parentElement.classList.contains('cb')) return;
     const code = pre.querySelector('code');
     const cls = code ? [...code.classList].find(c=>c.startsWith('language-')) : null;
     const lang = cls ? cls.slice('language-'.length) : '';
+    const columnar = code ? isColumnar(code.textContent, lang) : false;
+    if (code) wrapCodeLines(code);
 
     const wrap = document.createElement('div');
-    wrap.className = 'cb';
+    wrap.className = 'cb' + (columnar ? ' is-columnar' : '');
     pre.parentNode.insertBefore(wrap, pre);
 
     const bar = document.createElement('div');
@@ -1240,6 +1483,15 @@ function decorateCode(){
     label.className = 'cb-lang';
     label.textContent = lang ? langName(lang) : '';
     bar.appendChild(label);
+    const spacer = document.createElement('span');
+    spacer.className = 'cb-spacer';
+    bar.appendChild(spacer);
+    if (columnar){
+      const note = document.createElement('span');
+      note.className = 'cb-note';
+      note.textContent = 'aligned · scrolls →';
+      bar.appendChild(note);
+    }
 
     const btn = document.createElement('button');
     btn.type = 'button';
@@ -1270,10 +1522,34 @@ function decorateCode(){
   });
 }
 
+// Keeps the "there is more of this line to the right" edge honest: it is on
+// while the block can still be scrolled further, and off the instant it can't.
+function markColumnarScroll(){
+  content.querySelectorAll('.cb.is-columnar').forEach(cb=>{
+    const pre = cb.querySelector('pre');
+    if (!pre) return;
+    const upd = ()=>{ cb.classList.toggle('has-more', pre.scrollWidth - pre.clientWidth - pre.scrollLeft > 2); };
+    pre.addEventListener('scroll', upd, {passive:true});
+    window.addEventListener('resize', upd);
+    upd();
+  });
+}
+
 // ---- Table wrappers --------------------------------------------------
 function wrapTables(){
   content.querySelectorAll('table').forEach(t=>{
     if (t.parentElement && t.parentElement.classList.contains('table-wrap')) return;
+    // Carry each column's heading onto its own cells. Below 640px the table
+    // reflows into one record per row (see the @media rule above) and this is
+    // what lets every cell still say which column it came from.
+    const heads = [...t.querySelectorAll('thead th')].map(th => th.textContent.trim());
+    if (heads.length){
+      t.querySelectorAll('tbody tr').forEach(tr=>{
+        [...tr.children].forEach((cell,i)=>{
+          if (cell.tagName === 'TD' && heads[i]) cell.setAttribute('data-h', heads[i]);
+        });
+      });
+    }
     const wrap = document.createElement('div');
     wrap.className = 'table-wrap';
     wrap.tabIndex = 0;               // a scroll region has to be keyboard-scrollable
@@ -1670,6 +1946,7 @@ async function load(raw){
     await renderMermaid();
     buildLangPickers();
     decorateCode();
+    markColumnarScroll();
     wrapTables();
     addHeadingAnchors(doc.slug);
     buildToc(doc.slug);
@@ -1679,11 +1956,31 @@ async function load(raw){
     // multi-thousand-pixel leap on a freshly-loaded page — over a
     // multi-second crawl. Land instantly, exactly like a same-page fragment
     // navigation would.
+    //
+    // `behavior:'instant'` on the call itself, not just the inline-style guard
+    // around it: scrollIntoView QUEUES its scroll, and restoring the property
+    // in the same task handed the queued scroll back to the CSS `smooth` value
+    // before it ever ran. Following an in-document link therefore still crawled
+    // ~5,600px over about a second. The explicit behavior cannot be raced; the
+    // style guard stays for engines that ignore it, and is now released a frame
+    // later so it cannot lose the same way.
     const prevBehavior = document.documentElement.style.scrollBehavior;
     document.documentElement.style.scrollBehavior = 'auto';
-    if(anchorEl) anchorEl.scrollIntoView({block:'start'});
-    else window.scrollTo({top:0});
-    document.documentElement.style.scrollBehavior = prevBehavior;
+    if(anchorEl) anchorEl.scrollIntoView({block:'start', behavior:'instant'});
+    else window.scrollTo({top:0, behavior:'instant'});
+    requestAnimationFrame(()=>{ document.documentElement.style.scrollBehavior = prevBehavior; });
+    // Webfonts land after this scroll and reflow everything above the target,
+    // which left a deep link sitting ~80px off its own heading in a long
+    // document. Re-aim once the fonts are in — but only if the reader has not
+    // scrolled in the meantime, because correcting a position they chose
+    // themselves would be worse than the error being corrected.
+    if(anchorEl && document.fonts && document.fonts.ready){
+      const landedAt = window.scrollY;
+      document.fonts.ready.then(()=>{
+        if(Math.abs(window.scrollY - landedAt) > 4) return;
+        anchorEl.scrollIntoView({block:'start', behavior:'instant'});
+      }).catch(()=>{});
+    }
     updateSpy();
   } catch(err){
     content.innerHTML = '<div class="docs-error">Could not load <code>'+esc(doc.path.split('/').pop())+'</code> — '+esc(err.message)+'</div>';

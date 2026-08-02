@@ -290,7 +290,8 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .secnav a:hover{color:var(--ink);border-bottom-color:var(--teal)}
 .hdr-act{display:flex;align-items:center;gap:6px;flex:none}
 .hbtn{
-  height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  height:44px;min-width:44px;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
   padding:0 12px;border:1px solid var(--line-2);background:transparent;color:var(--muted);
   font-family:var(--mono);font-size:12.2px;cursor:pointer;transition:color .18s,border-color .18s;
 }
@@ -386,7 +387,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .toprail .live{display:inline-block;width:6px;height:6px;background:var(--teal);margin-right:8px;
   position:relative;top:-1px}
 @media (max-width:720px){
-  .toprail span{padding:9px 12px;font-size:10.6px}
+  .toprail span{padding:9px 12px;font-size:11px}
   .toprail span:last-child{margin-left:0}
 }
 
@@ -490,7 +491,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:-.02em;color:var(--ink);
 }
 .port h4 em{
-  font-style:normal;font-size:10.4px;letter-spacing:.11em;text-transform:uppercase;font-weight:500;
+  font-style:normal;font-size:11px;letter-spacing:.11em;text-transform:uppercase;font-weight:500;
   color:var(--faint);
 }
 .port.no h4 em{color:var(--rust)}
@@ -526,14 +527,14 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    a bare `.core span` rule would uppercase and letter-space them apart —
    which is the very thing the wordmark must never do. */
 .core .lbl > span{
-  display:block;margin-top:5px;font-family:var(--mono);font-size:10.2px;line-height:1.6;
+  display:block;margin-top:5px;font-family:var(--mono);font-size:11px;line-height:1.6;
   letter-spacing:.08em;text-transform:uppercase;color:var(--faint);
 }
 .appcard{
   border:1px solid var(--line-2);background:var(--panel);padding:22px;align-self:center;
   display:flex;flex-direction:column;justify-content:center;
 }
-.appcard .k{font-family:var(--mono);font-size:10.6px;letter-spacing:.14em;text-transform:uppercase;
+.appcard .k{font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
   color:var(--faint)}
 .appcard > b{display:block;margin-top:9px;font-family:var(--display);font-weight:700;font-variation-settings:'wdth' 110;
   font-size:19px;letter-spacing:-.02em;line-height:1.2}
@@ -552,7 +553,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 @media (max-width:1160px){
   .mux-grid{grid-template-columns:minmax(0,1fr) 50px auto 40px minmax(0,.76fr)}
   .core .lbl{width:104px;top:calc(50% + 58px)}
-  .core .lbl > span{font-size:9.4px;letter-spacing:.06em}
+  .core .lbl > span{font-size:11px;letter-spacing:.04em}
   .core .glyph{width:54px;height:94px}
   .core{width:54px}
 }
@@ -594,7 +595,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .triptych > div:first-child{padding-left:0}
 .triptych > div:last-child{border-right:0;padding-right:0}
 .triptych .n{
-  display:block;font-family:var(--mono);font-size:10.8px;letter-spacing:.15em;text-transform:uppercase;
+  display:block;font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;
   color:var(--teal-ink);
 }
 .triptych > div > b{
@@ -609,83 +610,310 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 }
 
 /* ═══ Instrument diagrams ═════════════════════════════════════════════════
-   Four hand-authored inline SVGs, one per channel, each drawing something the
-   prose asserts. They are drawn as INSTRUMENT diagrams, not flowcharts, and
-   they belong to the same front panel as the rest of the page: hairline rules
+   Four figures, one per channel, each drawing something the prose asserts.
+   They belong to the same front panel as the rest of the page: hairline rules
    at one weight, zero rounded corners, mono labels, one accent for permitted
    and one for blocked, and nothing coloured that does not mean something.
 
-   Everything is tinted from the page's own custom properties, so both themes
-   and the ink band are handled by the same markup. Strokes are declared
-   non-scaling so a hairline stays a hairline at any render width, exactly as
-   the hero's converging traces already do.
+   THEY REFLOW; THEY DO NOT PAN.  These were four fixed-viewBox SVGs, and a
+   fixed viewBox has exactly two behaviours in the ~282px column a 390px phone
+   leaves: scale the whole drawing, which put every label at about 4px, or
+   scroll it sideways, which showed the reader half a drawing and asked them to
+   drag the rest. Neither of those is a diagram. So the figures are DOM now —
+   grid rows, hairline borders, real wrapping text — and the only SVG left
+   inside them is geometry with no text in it: the wire-shape tokens and the
+   brand trapezoid. Columns stack, labels wrap, and no label in any figure is
+   set below 11px at any width. (The same move patala's rail diagram makes, for
+   the same reason.)
 
-   Sizing: the drawings never scale UP past their authored size (max-width),
-   so label type is never blown out on a wide screen; on a narrow one they
-   scroll inside their own box rather than shrinking to illegibility — the
-   same compromise .tscroll already makes for the spec tables, and the reason
-   the page body still never scrolls sideways. */
+   THEY RESPOND TO THEIR OWN WIDTH, not the window's: .dgm is a size container,
+   so every two-column arrangement below switches on the space the drawing
+   actually has. That distinction is load-bearing here, because .flow hangs the
+   caption beside the drawing on a wide screen — which changes the drawing's
+   width without changing the viewport's, and would desync any @media rule.
+
+   SIZING. Capped at 760px and left-aligned rather than centred, with the .flow
+   legend column sized so the cap is reached exactly at the breakpoint where the
+   legend appears. The drawing is therefore a NON-DECREASING function of viewport
+   width — 316 / 514 / 670 / 760 / 760 / 760 at 390 / 600 / 768 / 900 / 1024 /
+   1440 — and identical on every desktop-class screen. It used to be 802px wide
+   at a 900px viewport and 726px wide at 1440, i.e. widest exactly where there
+   was least reason for it to be. */
 .flow{margin:38px 0 0;padding:24px;border:1px solid var(--line);background:var(--panel)}
-.dgm{overflow-x:auto;overflow-y:hidden}
-.dgm > svg{display:block;width:100%;max-width:900px;height:auto;margin:0 auto}
-@media (max-width:820px){
-  .dgm > svg{min-width:560px;margin:0}
-  /* macOS/iOS hide overlay scrollbars until something moves, so at the widths
-     where the drawing does pan, say so. Sticky pins the hint to the left edge
-     of the scroll box rather than letting it slide away with the drawing. */
-  .dgm::after{
-    content:"drag to pan →";position:sticky;left:0;display:block;width:max-content;
-    margin-top:10px;font-family:var(--mono);font-size:10.4px;letter-spacing:.14em;
-    text-transform:uppercase;color:var(--faint);
-  }
+.dgm{max-width:760px;container-type:inline-size;font-family:var(--mono);color:var(--muted)}
+/* <code> inside a drawing must not fall back to the UA's monospace stack at
+   the UA's smaller size: everything in here is already mono, and the 11px
+   floor is only a floor if nothing quietly halves it. */
+.dgm code{font-family:inherit;font-size:inherit;color:var(--ink);background:none;border:0;padding:0}
+
+/* Screen-reader-only. Each figure's role="img" name and description live in a
+   pair of these — the DOM equivalent of the <title>/<desc> pair the drawings
+   used to carry inside their SVG, referenced the same way, by aria-labelledby.
+   Clipped rather than display:none, because a display:none target is not
+   universally resolved by the accessible-name computation. */
+.vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;
+  clip:rect(0 0 0 0);clip-path:inset(50%);white-space:nowrap;border:0}
+
+/* ── Primitives shared by all four ─────────────────────────────────────── */
+.d-strip{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;
+  gap:6px 18px;padding-bottom:10px;margin-bottom:15px;border-bottom:1px solid var(--line-2)}
+.d-k{font-size:11px;line-height:1.55;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.d-k b{font-weight:500;color:var(--ink)}
+.d-k .on,.d-k.on{color:var(--teal-ink)}
+.d-k .off,.d-k.off{color:var(--rust)}
+.d-hd{margin:20px 0 10px}
+.d-mt{margin-top:10px}
+.d-mt2{margin-top:12px}
+
+.d-bx{border:1px solid var(--line-2);background:var(--band-a);padding:11px 13px}
+.d-bx.sunk{background:var(--sunk);border-color:var(--line-3)}
+.d-bx.on{border-color:var(--teal-edge);background:var(--teal-wash)}
+.d-bx.off{border-color:var(--rust-edge);background:var(--rust-wash)}
+.d-bx.ghost{opacity:.45}
+
+.d-t{display:block;font-size:13.4px;font-weight:600;line-height:1.35;letter-spacing:-.01em;color:var(--ink)}
+.d-s{display:block;margin-top:5px;font-size:12.2px;line-height:1.5;color:var(--muted)}
+.d-s code{color:var(--ink)}
+.d-t.on,.d-s.on,.d-s.on code{color:var(--teal-ink)}
+.d-t.off,.d-s.off,.d-s.off code{color:var(--rust)}
+
+.d-chip{display:inline-flex;align-items:center;gap:7px;max-width:100%;padding:4px 8px;
+  border:1px solid var(--line-2);font-size:11.4px;line-height:1.45;color:var(--muted);
+  overflow-wrap:anywhere}
+.d-chip.on{border-color:var(--teal-edge);background:var(--teal-wash);color:var(--teal-ink)}
+.d-chip.off{border-color:var(--rust-edge);background:var(--rust-wash);color:var(--rust)}
+/* The wire-shape token. Two chips carrying the SAME token are carrying the
+   same wire shape — that is the entire argument of illustration 01, and it is
+   drawn rather than asserted. Fixed pixel size, so it survives every reflow. */
+.d-shape{width:24px;height:14px;flex:none;overflow:visible}
+.d-shape path{fill:none;stroke:currentColor;stroke-width:1.1;vector-effect:non-scaling-stroke}
+
+/* A vertical connector between two stacked modules. */
+.d-drop{position:relative;height:24px}
+.d-drop::before{content:"";position:absolute;left:11px;top:0;bottom:7px;border-left:1px solid var(--line-3)}
+.d-drop::after{content:"";position:absolute;left:6.5px;bottom:0;width:0;height:0;
+  border-top:7px solid var(--line-3);border-left:5px solid transparent;border-right:5px solid transparent}
+.d-drop.on::before{border-left-color:var(--teal)}
+.d-drop.on::after{border-top-color:var(--teal)}
+
+/* A distribution bus with taps: one hairline down the left of a stack of
+   modules, every module reaching it with a stub, and only the module actually
+   carrying signal ending its stub in a filled pip. Used by the mux's channel
+   bank and by the fallback chain's candidate ladder — two different drawings,
+   one mechanism. */
+.d-bank{position:relative;padding-left:var(--gut,36px);--bus:12px}
+.d-bank::before{content:"";position:absolute;left:var(--bus);top:0;bottom:0;
+  border-left:1px solid var(--line-3)}
+.d-tap{position:relative}
+.d-tap::before{content:"";position:absolute;left:calc(var(--bus) - var(--gut,36px));top:50%;
+  width:calc(var(--gut,36px) - var(--bus) - 1px);border-top:1px dashed var(--line-3);opacity:.8}
+.d-tap.on::before{border-top-style:solid;border-top-color:var(--teal);opacity:1}
+.d-tap.off::before{border-top-color:var(--rust);opacity:1}
+.d-tap.on::after{content:"";position:absolute;left:calc(var(--bus) - var(--gut,36px) - 3px);
+  top:calc(50% - 3.5px);width:7px;height:7px;background:var(--teal)}
+
+/* ── 01 · THE MUX ─────────────────────────────────────────────────────────
+   A 6:1 routing front panel, read top to bottom in the order a request
+   actually travels: the ONE connection your app holds (request and response
+   carrying the identical wire-shape token, because they are the identical
+   shape), the core that translates, and behind it the channel bank with
+   exactly one channel dialed. The select input enters the core on its own
+   dashed lane, perpendicular to the data path, because what closes a channel
+   here is a RESOLVED ROUTE and not an operator at a switchboard — that lane is
+   the difference between this drawing and a flowchart. */
+.mx{--gut:36px}
+.mx-io .d-t{font-family:var(--display);font-size:17px;font-weight:700;
+  font-variation-settings:'wdth' 110;letter-spacing:-.02em}
+.mx-lane{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;
+  margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
+.mx-dir{font-size:12px;line-height:1;color:var(--teal)}
+.mx-lane .nm{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.mx-same{margin:12px 0 0;font-size:11.8px;line-height:1.6;color:var(--faint)}
+.mx-same b{color:var(--ink);font-weight:600}
+
+.mx-core{border:1px solid var(--line-3);background:var(--sunk);padding:14px 16px}
+.mx-core-r{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
+.mx-core-r > div{flex:1 1 240px;min-width:0}
+.mx-glyph{width:32px;height:54px;flex:none}
+.mx-glyph path{fill:var(--teal)}
+/* Same rule as the header wordmark and the hero's: the product name is set in
+   the sans, tight, `mux` in the accent, with NO whitespace between the spans —
+   never in the mono face, whose `l` and `1` are indistinguishable. */
+.mx-wm{display:block;font-family:var(--display);font-size:19px;font-weight:700;
+  font-variation-settings:'wdth' 100;letter-spacing:-.045em;line-height:1;color:var(--ink)}
+.mx-wm .m{color:var(--teal-ink)}
+.mx-role{margin:7px 0 0;font-size:11.8px;line-height:1.55;color:var(--muted)}
+.mx-sel{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;
+  margin-top:13px;padding-top:12px;border-top:1px dashed var(--teal-edge)}
+
+.mx-ch{border:1px solid var(--line-2);background:var(--band-a);padding:9px 12px;margin-bottom:5px}
+.mx-ch:last-child{margin-bottom:0}
+.mx-ch.on{border-color:var(--teal-edge);background:var(--teal-wash);box-shadow:inset 2px 0 0 var(--teal)}
+.mx-g{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:3px 10px}
+.mx-no{grid-column:1;grid-row:1/span 2;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--faint)}
+.mx-ch.on .mx-no{color:var(--teal-ink)}
+.mx-nm{grid-column:2;grid-row:1;font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.mx-ch.on .mx-nm{color:var(--teal-ink)}
+.mx-st{grid-column:3;grid-row:1;justify-self:end;display:inline-flex;align-items:center;gap:6px;
+  font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+.mx-st i{width:7px;height:7px;flex:none;border:1px solid var(--line-3)}
+.mx-ch.on .mx-st{color:var(--teal-ink)}
+.mx-ch.on .mx-st i{background:var(--teal);border-color:var(--teal)}
+.mx-w{grid-column:2/-1;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;gap:4px 9px;
+  font-size:11.4px;line-height:1.5;color:var(--faint)}
+.mx-w code{font-size:11.4px;color:var(--muted)}
+.mx-ch.on .mx-w code{color:var(--teal-ink)}
+.mx-w .tp{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+@container (min-width:520px){
+  .mx{--gut:44px}
+  .mx-ch{padding:10px 14px}
+  .mx-g{grid-template-columns:42px minmax(88px,auto) minmax(0,1fr) auto}
+  .mx-no{grid-row:1}
+  .mx-w{grid-column:3;grid-row:1;justify-self:start}
+  .mx-st{grid-column:4;grid-row:1}
+}
+/* The live channel: one short dash riding the dialed card, and only that one —
+   the ordering a static drawing of this cannot say. `left` rather than a
+   transform because the travel has to end at the card's own right edge, and the
+   card's width is whatever the reflow gave it. */
+.mx-ride{position:absolute;left:0;bottom:-1px;width:34px;height:2px;background:var(--teal);opacity:0}
+.rv.in .mx-ride{opacity:.95;animation:mxRide 3.2s linear .4s infinite}
+@keyframes mxRide{from{left:-34px}to{left:100%}}
+
+/* ── 02 · THE GATE ────────────────────────────────────────────────────────
+   The boundary is the whole point of this drawing, so it is a real element
+   rather than a coordinate: a dashed rule that is a COLUMN between the two
+   sides when there is room and a ROW between them when there is not. The
+   allowed lane is the only thing on the figure that reaches the far side, and
+   it arrives carrying a teal edge; the blocked provider out there has no edge
+   at all, because nothing ever reached it. */
+.gt{display:grid;grid-template-columns:minmax(0,1fr);align-items:start}
+.gt-edge{height:0;margin:20px 0;border-top:1px dashed var(--line-3)}
+@container (min-width:560px){
+  .gt{grid-template-columns:minmax(0,1.3fr) 1px minmax(0,1fr);column-gap:24px}
+  .gt-edge{height:auto;margin:0;align-self:stretch;border-top:0;border-left:1px dashed var(--line-3)}
+}
+.gt-mod{margin-top:12px;border:1px solid var(--line-3);background:var(--sunk);padding:13px 14px}
+.gt-lane{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.gt-lane + .gt-lane{margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
+/* OPEN is two parallel open rails; SHUT is a hatched block. Both read with hue
+   removed entirely, which is the rule the tier legend already keeps. */
+.gt-port{width:38px;height:16px;flex:none}
+.gt-port.open{border-top:1.5px solid var(--teal);border-bottom:1.5px solid var(--teal)}
+.gt-port.shut{border:1px solid var(--rust-edge);
+  background:repeating-linear-gradient(-45deg,var(--rust) 0 1px,transparent 1px 5px)}
+.gt-nm{font-size:12.8px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.gt-nm.on{color:var(--teal-ink)}
+.gt-nm.off{color:var(--rust)}
+.gt-why{width:100%;margin:2px 0 0;font-size:11.8px;line-height:1.6;color:var(--faint)}
+.gt-why code{color:var(--muted)}
+.gt-why b{color:var(--ink);font-weight:600}
+.gt-cut{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--rust)}
+.gt-cut::before{content:"";width:30px;border-top:1px solid var(--rust)}
+.gt-out{margin-top:13px;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center}
+.gt-count{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;
+  margin-top:12px;border:1px solid var(--line-2);background:var(--band-a);padding:10px 12px}
+.gt-mn{font-size:11.8px;overflow-wrap:anywhere}
+.gt-sub{display:block;margin-top:4px}
+.gt-plus{font-size:19px;font-weight:600;line-height:1;color:var(--rust)}
+.gt-arrive{box-shadow:inset 0 2px 0 var(--teal)}
+@container (min-width:560px){.gt-arrive{box-shadow:inset 2px 0 0 var(--teal)}}
+
+/* ── 03 · THE FALLBACK CHAIN ──────────────────────────────────────────────
+   A ladder, not a sideways flow: an ordered list already IS a stack, so drawn
+   this way it needs no reflow beyond its own row internals. Two candidates
+   dead-end for two completely different reasons — a transport error and the
+   sovereignty gate — and only the third has an outgoing wire. */
+.ch{--gut:36px}
+.ch-row{border:1px solid var(--line-2);background:var(--band-a);padding:10px 12px;margin-bottom:6px}
+.ch-row:last-child{margin-bottom:0}
+.ch-row.on{border-color:var(--teal-edge);background:var(--teal-wash);box-shadow:inset 2px 0 0 var(--teal)}
+.ch-row.off{border-color:var(--rust-edge);background:var(--rust-wash)}
+.ch-g{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+.ch-hd{display:flex;flex-wrap:wrap;align-items:baseline;gap:3px 10px}
+.ch-n{font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+.ch-row.on .ch-n{color:var(--teal-ink)}
+.ch-row.off .ch-n{color:var(--rust)}
+.ch-nm{font-size:13.4px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.ch-why{margin:0;font-size:11.8px;line-height:1.6;color:var(--faint)}
+.ch-why em{font-style:normal;color:var(--muted);font-weight:600}
+.ch-out{justify-self:start}
+@container (min-width:560px){
+  .ch{--gut:42px}
+  .ch-g{grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:6px 16px}
+  .ch-hd{grid-column:1;grid-row:1}
+  .ch-why{grid-column:1;grid-row:2}
+  .ch-out{grid-column:2;grid-row:1/span 2;justify-self:end}
+}
+/* The selector marker: on exactly one candidate at a time, which is the whole
+   point — the chain is tried in ORDER, never in parallel. Three markers taking
+   turns rather than one marker translated by a hard-coded pixel offset, so it
+   cannot drift out of register when a row wraps to a taller height. */
+.ch-sel{position:absolute;left:calc(var(--bus) - var(--gut) - 4px);top:calc(50% - 5px);
+  width:0;height:0;opacity:0;
+  border-left:9px solid var(--teal);border-top:5px solid transparent;border-bottom:5px solid transparent}
+.rv.in .ch-sel{animation:chSel 4.5s steps(1,end) infinite}
+.ch-s2{animation-delay:1.5s}
+.ch-s3{animation-delay:3s}
+@keyframes chSel{0%,33.2%{opacity:1}33.4%,100%{opacity:0}}
+
+/* ── 04 · THE BUDGET METER ────────────────────────────────────────────────
+   Drawn to scale, and it STAYS to scale at every width because every figure on
+   it is a percentage of the track rather than a coordinate: the fill is really
+   15.50/25.00, and the two projection bars are really 1.20 and 12.00 wide on
+   that same track, so the one that overshoots the cap visibly overshoots it at
+   390px exactly as it does at 1440px. The track stops at 88% of the row and the
+   last 12% is reserved head-room — that is what lets the overshooting bar
+   overshoot without ever leaving the panel. */
+.bg-scale{position:relative;padding-right:12%;margin-top:6px}
+.bg-track{position:relative;height:26px;border:1px solid var(--line-3);background:var(--sunk)}
+.bg-fill{position:absolute;left:0;top:0;bottom:0;width:62%;background:var(--teal)}
+.bg-cap{position:absolute;left:88%;top:0;bottom:0;border-left:1px dashed var(--rust)}
+.bg-projrow{position:relative;height:15px}
+.bg-proj{position:absolute;top:1px;left:62%;height:13px;border:1px solid}
+.bg-proj.on{width:4.8%;border-color:var(--teal-edge);background:var(--teal-wash)}
+.bg-proj.off{width:48%;border-color:var(--rust-edge);background:var(--rust-wash)}
+.bg-ticks{position:relative;height:26px}
+.bg-ticks i{position:absolute;top:0;height:5px;border-left:1px solid var(--line-3)}
+.bg-ticks span{position:absolute;top:10px;font-size:11px;line-height:1.3;color:var(--faint);
+  transform:translateX(-50%)}
+.bg-ticks span.f{transform:none}
+.bg-ticks span.l{transform:translateX(-100%);padding-right:6px}
+.bg-ticks span.off{color:var(--rust)}
+.bg-ticks .p0{left:0}.bg-ticks .p1{left:20%}.bg-ticks .p2{left:40%}
+.bg-ticks .p3{left:60%}.bg-ticks .p4{left:80%}.bg-ticks .p5{left:100%}
+.bg-legend{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:16px}
+
+.bg-lanes{display:grid;grid-template-columns:minmax(0,1fr);margin-top:24px}
+.bg-b1{margin-top:18px}
+.bg-up{display:flex;flex-direction:column;justify-content:center}
+.bg-arr{position:relative;height:22px}
+.bg-arr::before{content:"";position:absolute;left:11px;top:0;bottom:7px;border-left:1px solid var(--teal)}
+.bg-arr::after{content:"";position:absolute;left:6.5px;bottom:0;width:0;height:0;
+  border-top:7px solid var(--teal);border-left:5px solid transparent;border-right:5px solid transparent}
+/* The blocked lane gets a wall where the allowed lane gets an arrowhead. */
+.bg-arr.off::before{border-left-color:var(--rust);bottom:9px}
+.bg-arr.off::after{border:0;left:0;bottom:0;width:36px;height:5px;background:var(--rust)}
+@container (min-width:600px){
+  .bg-lanes{grid-template-columns:minmax(0,1fr) 30px minmax(0,1.3fr) 30px minmax(0,1fr);
+    row-gap:12px;align-items:stretch}
+  .bg-a1{grid-area:1/1}.bg-a2{grid-area:1/2}.bg-a3{grid-area:1/3}.bg-a4{grid-area:1/4}
+  .bg-b1{grid-area:2/1;margin-top:0}.bg-b2{grid-area:2/2}.bg-b3{grid-area:2/3}
+  .bg-up{grid-area:1/5/3/6}
+  .bg-arr{height:auto;align-self:stretch}
+  .bg-arr::before{left:3px;right:10px;top:50%;bottom:auto;width:auto;
+    border-left:0;border-top:1px solid var(--teal)}
+  .bg-arr::after{left:auto;right:3px;bottom:auto;top:calc(50% - 5px);
+    border-top:5px solid transparent;border-bottom:5px solid transparent;
+    border-left:7px solid var(--teal);border-right:0}
+  .bg-arr.off::before{right:14px;bottom:auto;border-left:0;border-top-color:var(--rust)}
+  .bg-arr.off::after{border:0;right:5px;left:auto;bottom:auto;top:calc(50% - 13px);
+    width:5px;height:26px;background:var(--rust)}
 }
 
-.dgm .bx{fill:var(--band-a);stroke:var(--line-2);stroke-width:1;vector-effect:non-scaling-stroke}
-.dgm .bx-2{fill:var(--sunk);stroke:var(--line-3);stroke-width:1;vector-effect:non-scaling-stroke}
-.dgm .ln{fill:none;stroke:var(--line-3);stroke-width:1;vector-effect:non-scaling-stroke}
-.dgm .ln-f{fill:var(--line-3)}
-.dgm .dim{opacity:.55}
-.dgm .go{fill:none;stroke:var(--teal);stroke-width:1.4;vector-effect:non-scaling-stroke}
-.dgm .go-f{fill:var(--teal)}
-.dgm .go-bx{fill:var(--teal-wash);stroke:var(--teal-edge);stroke-width:1;vector-effect:non-scaling-stroke}
-.dgm .no{fill:none;stroke:var(--rust);stroke-width:1.4;vector-effect:non-scaling-stroke}
-.dgm .no-f{fill:var(--rust)}
-.dgm .no-bx{fill:var(--rust-wash);stroke:var(--rust-edge);stroke-width:1;vector-effect:non-scaling-stroke}
-.dgm .edge{fill:none;stroke:var(--line-3);stroke-width:1;stroke-dasharray:5 5;
-  vector-effect:non-scaling-stroke}
-.dgm .ghost{opacity:.34}
-
-.dgm text{font-family:var(--mono);fill:var(--muted);font-size:11.6px}
-.dgm .t-n{font-size:13.6px;fill:var(--ink);font-weight:600;letter-spacing:-.02em}
-.dgm .t-s{font-size:10.8px;fill:var(--faint)}
-.dgm .t-k{font-size:9.8px;fill:var(--faint);letter-spacing:.15em}
-.dgm .t-go{fill:var(--teal-ink)}
-.dgm .t-no{fill:var(--rust)}
-.dgm .t-fig{font-size:16px;fill:var(--ink);font-weight:600;letter-spacing:-.03em}
-/* The product name inside a drawing obeys the same rule as the header: sans,
-   tight, `mux` in the accent — never the mono face. */
-.dgm .t-brand{font-family:var(--display);font-weight:700;font-size:14.5px;
-  letter-spacing:-.045em;fill:var(--ink)}
-.dgm .t-brand tspan{fill:var(--teal-ink)}
-
-/* The travelling signal. One dash chasing along the whole route, started only
-   once the figure has been revealed — it shows the ORDER things happen in,
-   which is the one thing a static drawing of this cannot say. */
-.dgm .pulse{fill:none;stroke:var(--teal);stroke-width:2.6;stroke-linecap:square;
-  vector-effect:non-scaling-stroke;opacity:0}
-.dgm .pulse.no-p{stroke:var(--rust)}
-.rv.in .dgm .pulse{opacity:.95;animation:chase var(--dur,3.6s) linear var(--del,.3s) infinite}
-@keyframes chase{to{stroke-dashoffset:var(--chase-end)}}
-/* The fallback selector: the marker sits on exactly one candidate at a time,
-   which is the whole point — the chain is tried in order, not in parallel. The
-   paired keyframes make each move instantaneous and each dwell equal. */
-.rv.in .dgm .sel{animation:step3 4.5s linear .4s infinite}
-@keyframes step3{
-  0%,31%{transform:translateY(0)}
-  33%,64%{transform:translateY(84px)}
-  66%,100%{transform:translateY(168px)}
-}
-@media (prefers-reduced-motion:reduce){.dgm .pulse{display:none}.dgm .sel{animation:none}}
+@media (prefers-reduced-motion:reduce){.mx-ride,.ch-sel{display:none}}
 
 .cap{
   margin:20px 0 0;padding-top:16px;border-top:1px solid var(--line);
@@ -695,13 +923,15 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .cap b{color:var(--muted);font-weight:600}
 /* Wide: the caption becomes the drawing's legend, hung to the right of the
    schematic rather than stacked under it — which is also what stops every
-   schematic from ending in the same wide band of empty panel. */
-/* Wide — and specifically only once .wrap has hit its own max, so the drawing
-   column is a CONSTANT 724px from here up and the diagram never rescales as
-   the window grows. Below this the legend stacks under the drawing and the
-   drawing takes the full panel. */
+   schematic from ending in the same wide band of empty panel.
+
+   The breakpoint is chosen so the drawing width does not JUMP across it. Just
+   below 1220 the panel's inner width is 1107px and the drawing takes its 760px
+   cap; at 1220 the panel is 1108px, the legend takes the remaining 320px, and
+   the drawing takes 760px again. Same number on both sides of the line — the
+   property the old max-width:900px arrangement did not have. */
 @media (min-width:1220px){
-  .flow{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:0 28px;align-items:start}
+  .flow{display:grid;grid-template-columns:minmax(0,760px) minmax(260px,1fr);gap:0 28px;align-items:start}
   .flow > *{grid-column:1}
   .flow > .cap{
     grid-column:2;grid-row:1;margin:0;padding:0 0 0 22px;
@@ -723,9 +953,32 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 }
 .code-bar i{width:5px;height:5px;background:var(--hl-line-2);flex:none}
 .code-bar .path{margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.code pre{margin:0;padding:16px;overflow-x:auto;font-family:var(--mono);font-size:12.9px;
-  line-height:1.72;color:var(--hl-fg)}
-.code.soft pre{white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* ── CODE WRAPS; IT DOES NOT PAN ──────────────────────────────────────────
+   A <pre> with overflow-x:auto is a 488px-wide box inside a 352px column on a
+   390px phone: the reader drags every sample sideways, one line at a time,
+   losing the left edge of the code to do it. So a code line SOFT-WRAPS, and it
+   wraps with a HANGING INDENT — a continuation is set 2.6ch in, so you can
+   always tell "this is the rest of the line above" from "this is the next
+   statement". That distinction is the whole reason the indent is there, and it
+   is why each source line is its own block element (.ln): `text-indent` only
+   ever applies to the FIRST line box of a block, so a single <pre> full of
+   newlines cannot express a per-line hanging indent at all.
+
+   The <pre> itself therefore carries white-space:normal — the newlines BETWEEN
+   the .ln blocks must collapse, or every line would render twice-spaced — and
+   each .ln restores pre-wrap so its own leading indentation survives. An empty
+   source line has no content to give it height, hence the NBSP. */
+.code pre{margin:0;padding:16px 18px;font-family:var(--mono);font-size:12.9px;
+  line-height:1.72;color:var(--hl-fg);white-space:normal}
+/* The generic `code{color:var(--ink)}` rule above targets this <code> and,
+   because the code surface is fixed-dark in BOTH themes while --ink is not,
+   it painted unhighlighted code #0B1416 on #0C1116 in light mode — a 1.005:1
+   contrast, i.e. invisible. Default code text is the palette's own default. */
+.code pre code{color:var(--hl-fg);font-size:inherit}
+.code .ln{display:block;white-space:pre-wrap;overflow-wrap:break-word;
+  padding-left:2.6ch;text-indent:-2.6ch}
+.code .ln:empty::after{content:"\00a0"}
 .cb-f{color:var(--hl-function)}    /* function / command name / constructor  */
 .cb-s{color:var(--hl-string)}      /* string literal, quotes included        */
 .cb-k{color:var(--hl-keyword)}     /* language keyword                       */
@@ -743,7 +996,7 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .tscroll{overflow-x:auto;border:1px solid var(--line-2);background:var(--panel)}
 table.spec{width:100%;border-collapse:collapse;font-size:13.6px;min-width:620px}
 table.spec thead th{
-  text-align:left;font-family:var(--mono);font-size:10.8px;font-weight:500;letter-spacing:.15em;
+  text-align:left;font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.15em;
   text-transform:uppercase;color:var(--faint);padding:12px 16px;border-bottom:1px solid var(--line-2);
   background:var(--sunk);white-space:nowrap;
 }
@@ -754,8 +1007,40 @@ table.spec td.m{font-family:var(--mono);font-size:11.6px;color:var(--faint);whit
   letter-spacing:.06em}
 table.spec td.r{font-family:var(--mono);font-size:13px;color:var(--ink);white-space:nowrap;font-weight:500}
 table.spec td.g{width:1%}
+
+/* ── Narrow: the matrix becomes a stack of records, not a drag ────────────
+   A four-column matrix cannot honestly be squeezed into a 352px column, and
+   the alternative it used to take — 620px of table inside a 352px scroller —
+   made the reader drag every one of twelve rows sideways to find out what the
+   Mode column said. Below 640px each ROW becomes a record and each cell is
+   introduced by its own column heading, carried on the cell as data-h. Same
+   twelve routes, same four facts per route, nothing hidden and nothing to
+   drag. The <thead> is not display:none — it stays in the accessibility tree
+   as the table's column headers, it is only visually clipped. */
+@media (max-width:640px){
+  .tscroll{overflow-x:visible;border:0;background:none}
+  table.spec{min-width:0;display:block;font-size:14px}
+  table.spec thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);
+    clip-path:inset(50%);white-space:nowrap}
+  table.spec tbody{display:block}
+  /* flex, not block: the route is promoted to the head of its own record with
+     `order`, and `order` is inert on a block container. */
+  table.spec tr{display:flex;flex-direction:column;border:1px solid var(--line-2);
+    background:var(--panel);padding:4px 14px 10px;margin-bottom:10px}
+  table.spec tr:last-child{margin-bottom:0}
+  table.spec td,table.spec td.m,table.spec td.r,table.spec td.g{
+    display:block;width:auto;padding:7px 0 0;border:0;white-space:normal;overflow-wrap:anywhere}
+  table.spec td::before{
+    content:attr(data-h);display:block;margin-bottom:3px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--faint);
+  }
+  /* The route is the record's title, so it leads and is set as one. */
+  table.spec td.r{order:-1;font-size:14.5px;padding-top:9px}
+  table.spec td.m{font-size:12.4px}
+}
 .tag{
-  display:inline-block;font-family:var(--mono);font-size:10.4px;letter-spacing:.11em;
+  display:inline-block;font-family:var(--mono);font-size:11px;letter-spacing:.11em;
   text-transform:uppercase;padding:4px 8px;border:1px solid var(--line-2);color:var(--faint);
   white-space:nowrap;
 }
@@ -780,7 +1065,7 @@ ul.chips li{
   font-family:var(--mono);font-size:12.4px;color:var(--ink);padding:7px 11px;
   border:1px solid var(--line-2);background:var(--panel);
 }
-ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spacing:.06em;margin-left:7px}
+ul.chips li em{font-style:normal;color:var(--faint);font-size:11px;letter-spacing:.06em;margin-left:7px}
 @media (max-width:900px){
   .roster{grid-template-columns:minmax(0,1fr)}
   .roster .rcol{padding:22px 0;border-right:0;border-bottom:1px solid var(--line)}
@@ -799,7 +1084,7 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:10.6px;letter-spac
   letter-spacing:-.03em;line-height:1;color:var(--ink);
 }
 .step .verdict{
-  display:inline-block;margin-top:10px;font-family:var(--mono);font-size:10.4px;letter-spacing:.11em;
+  display:inline-block;margin-top:10px;font-family:var(--mono);font-size:11px;letter-spacing:.11em;
   text-transform:uppercase;padding:4px 8px;border:1px solid var(--teal-edge);background:var(--teal-wash);
   color:var(--teal-ink);
 }
@@ -912,6 +1197,7 @@ ol.steps span{display:block;margin-top:5px;font-size:13.8px;line-height:1.58;col
 .foot-l a:hover{color:var(--ink)}
 .foot-links{display:flex;flex-wrap:wrap;gap:0}
 .foot-links a{font-family:var(--mono);font-size:12.4px;color:var(--muted);padding:0 14px;height:44px;
+  min-width:44px;justify-content:center;
   display:inline-flex;align-items:center;border-left:1px solid var(--line)}
 .foot-links a:first-child{padding-left:0;border-left:0}
 .foot-links a:hover{color:var(--teal-ink)}
@@ -948,6 +1234,14 @@ html.js .rv.in{opacity:1;transform:none}
   .vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
   .vulos-foot:hover { opacity: 1; text-decoration: none; }
   .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+
+/* Hit area for the two suite-chrome controls. Deliberately written OUTSIDE the
+   block above so that block stays byte-identical across the suite and can still
+   be diffed as one thing. Only the TARGET grows to the 44px floor; both marks
+   keep their drawn size, because what is actually visible in each is the 22px
+   and 18px <img> inside, not the transparent box around it. */
+.vulos-home{width:44px;height:44px}
+.vulos-foot{min-height:44px}
 </style>
 </head>
 <body>
@@ -1018,8 +1312,8 @@ html.js .rv.in{opacity:1;transform:none}
                  setting being assigned, i.e. a property — deliberately NOT the
                  variable role, whose rose is close enough to the deletion rose
                  that the marker would stop reading as a marker. -->
-            <pre><code><span class="cb-del">-</span> <span class="cb-pr">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"https://api.openai.com/v1"</span>
-<span class="cb-add">+</span> <span class="cb-pr">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"http://localhost:4000/v1"</span></code></pre>
+            <pre><code><span class="ln"><span class="cb-del">-</span> <span class="cb-pr">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"https://api.openai.com/v1"</span></span>
+<span class="ln"><span class="cb-add">+</span> <span class="cb-pr">base_url</span> <span class="cb-op">=</span> <span class="cb-s">"http://localhost:4000/v1"</span></span></code></pre>
         </div>
         <div class="cta">
           <a class="btn pri" href="#start">Get started
@@ -1137,11 +1431,11 @@ html.js .rv.in{opacity:1;transform:none}
                -d payload are strings. That payload is ONE bash single-quoted
                string from the opening ' to the closing ' — it is emphatically
                not JSON in this context, so it is not tokenised as JSON. -->
-          <pre><code><span class="cb-f">curl</span> http://localhost:4000/v1/chat/completions <span class="cb-p">\</span>
-  <span class="cb-flag">-H</span> <span class="cb-s">"Authorization: Bearer sk-team-a"</span> <span class="cb-p">\</span>
-  <span class="cb-flag">-H</span> <span class="cb-s">"Content-Type: application/json"</span> <span class="cb-p">\</span>
-  <span class="cb-flag">-d</span> <span class="cb-s">'{"model":"assistant",
-       "messages":[{"role":"user","content":"Hello!"}]}'</span></code></pre>
+          <pre><code><span class="ln"><span class="cb-f">curl</span> http://localhost:4000/v1/chat/completions <span class="cb-p">\</span></span>
+<span class="ln">  <span class="cb-flag">-H</span> <span class="cb-s">"Authorization: Bearer sk-team-a"</span> <span class="cb-p">\</span></span>
+<span class="ln">  <span class="cb-flag">-H</span> <span class="cb-s">"Content-Type: application/json"</span> <span class="cb-p">\</span></span>
+<span class="ln">  <span class="cb-flag">-d</span> <span class="cb-s">'{"model":"assistant",</span></span>
+<span class="ln"><span class="cb-s">       "messages":[{"role":"user","content":"Hello!"}]}'</span></span></code></pre>
         </div>
         <p class="aside">The <code>model</code> string is what selects the route — an alias, a
           <code>provider/model</code> prefix, a wildcard, or a least-cost pseudo-model. Streaming
@@ -1151,13 +1445,13 @@ html.js .rv.in{opacity:1;transform:none}
       <div>
         <div class="code">
           <div class="code-bar"><i></i><span class="path">↓ response · usage block</span></div>
-          <pre><code><span class="cb-p">{</span> <span class="cb-pr">"usage"</span><span class="cb-p">:</span> <span class="cb-p">{</span>
-    <span class="cb-pr">"prompt_tokens"</span><span class="cb-p">:</span> <span class="cb-n">9</span><span class="cb-p">,</span> <span class="cb-pr">"completion_tokens"</span><span class="cb-p">:</span> <span class="cb-n">12</span><span class="cb-p">,</span>
-    <span class="cb-pr">"total_tokens"</span><span class="cb-p">:</span> <span class="cb-n">21</span><span class="cb-p">,</span>
-    <span class="cb-pr">"cost"</span><span class="cb-p">:</span> <span class="cb-p">{</span> <span class="cb-pr">"input_cost"</span><span class="cb-p">:</span>  <span class="cb-n">0.0000014</span><span class="cb-p">,</span>
-              <span class="cb-pr">"output_cost"</span><span class="cb-p">:</span> <span class="cb-n">0.0000072</span><span class="cb-p">,</span>
-              <span class="cb-pr">"total_cost"</span><span class="cb-p">:</span>  <span class="cb-n">0.0000086</span><span class="cb-p">,</span>
-              <span class="cb-pr">"currency"</span><span class="cb-p">:</span>    <span class="cb-s">"USD"</span> <span class="cb-p">}</span> <span class="cb-p">}</span> <span class="cb-p">}</span></code></pre>
+          <pre><code><span class="ln"><span class="cb-p">{</span> <span class="cb-pr">"usage"</span><span class="cb-p">:</span> <span class="cb-p">{</span></span>
+<span class="ln">    <span class="cb-pr">"prompt_tokens"</span><span class="cb-p">:</span> <span class="cb-n">9</span><span class="cb-p">,</span> <span class="cb-pr">"completion_tokens"</span><span class="cb-p">:</span> <span class="cb-n">12</span><span class="cb-p">,</span></span>
+<span class="ln">    <span class="cb-pr">"total_tokens"</span><span class="cb-p">:</span> <span class="cb-n">21</span><span class="cb-p">,</span></span>
+<span class="ln">    <span class="cb-pr">"cost"</span><span class="cb-p">:</span> <span class="cb-p">{</span> <span class="cb-pr">"input_cost"</span><span class="cb-p">:</span>  <span class="cb-n">0.0000014</span><span class="cb-p">,</span></span>
+<span class="ln">              <span class="cb-pr">"output_cost"</span><span class="cb-p">:</span> <span class="cb-n">0.0000072</span><span class="cb-p">,</span></span>
+<span class="ln">              <span class="cb-pr">"total_cost"</span><span class="cb-p">:</span>  <span class="cb-n">0.0000086</span><span class="cb-p">,</span></span>
+<span class="ln">              <span class="cb-pr">"currency"</span><span class="cb-p">:</span>    <span class="cb-s">"USD"</span> <span class="cb-p">}</span> <span class="cb-p">}</span> <span class="cb-p">}</span></span></code></pre>
         </div>
         <p class="aside">The standard OpenAI <code>usage</code> shape plus exactly one additive
           extension — a <code>cost</code> object priced from the live catalog, which any OpenAI client
@@ -1195,116 +1489,158 @@ html.js .rv.in{opacity:1;transform:none}
       </div>
     </div>
 
-    <!-- One OpenAI-shaped call, fanned to whichever provider the route
-         resolves to, folded back through the same shape before your app sees
-         it — the request/response half of the story the hero tells about
-         sovereignty tiers. -->
-    <!-- ILLUSTRATION 01 — the wire.
-         The claim being drawn: your client holds ONE shape, in and out, and the
-         translation happens on the far side of the gateway. So the packet
-         silhouette leaving your app and the packet silhouette coming back are
-         literally the same outline, and the silhouette on the provider side is
-         a different one. The port swatches are the same drawing device: the two
-         passthrough ports carry the app's own outline, because a passthrough
-         provider needs no translation at all. -->
-    <figure class="flow rv">
-      <div class="dgm">
-        <svg viewBox="0 0 780 320" role="img" aria-labelledby="il1t il1d">
-          <title id="il1t">One OpenAI-shaped call, fanned out to six provider ports and folded back
-            through the same shape</title>
-          <desc id="il1d">Your app sends a request in the OpenAI wire shape. llmux translates it into the
-            shape the resolved provider speaks — here Anthropic, one of six ports on the distribution bus,
-            the other five being candidates that are not dialed. The reply travels the return lane, is
-            translated back into the OpenAI shape, and reaches your app in the same shape it sent, streaming
-            included.</desc>
+    <!-- ILLUSTRATION 01 — THE MUX.
+         This replaces a left-to-right flowchart (app slab, arrow, gateway slab,
+         arrow, column of provider cards, return lane) that could have been
+         drawn for any piece of middleware ever shipped. llmux IS a
+         multiplexer, so the drawing is one: many channels, a select line, one
+         output — the shape the product's own mark already has.
 
-          <!-- Right-anchored, not start-anchored at a hard-coded x. Anchored from
-               the left, this label's right edge lands wherever the rendered font
-               puts it — it measured 781 units in a 780-unit viewBox here, so the
-               final glyph was shaved, and it would clip differently on any machine
-               with different mono metrics. Anchoring to the right edge makes the
-               inset the thing that is fixed. -->
-          <text class="t-k" x="772" y="16" text-anchor="end">PROVIDER PORTS · <tspan class="t-go">1 OF 6 DIALED</tspan></text>
+         Three claims, each drawn rather than captioned:
 
-          <!-- your app -->
-          <rect class="bx" x="8" y="40" width="112" height="252"/>
-          <text class="t-n" x="64" y="150" text-anchor="middle">your app</text>
-          <text class="t-s" x="64" y="170" text-anchor="middle">any OpenAI SDK</text>
-          <text class="t-s" x="64" y="185" text-anchor="middle">one base_url</text>
+          1. MANY CHANNELS, EXACTLY ONE SELECTED. Six channels hang off one
+             distribution bus. Five reach it with a dashed stub and stop; the
+             dialed one reaches it with a solid stub that ends in a filled pip,
+             and it is the only card on the figure carrying the accent. "One of
+             six" is a thing you can count here, not a label to be believed.
 
-          <!-- llmux -->
-          <rect class="bx" x="316" y="40" width="84" height="252"/>
-          <path class="go-f" d="M341 54 L377 70 L377 84 L341 100 Z"/>
-          <text class="t-brand" x="358" y="152" text-anchor="middle">ll<tspan>mux</tspan></text>
-          <text class="t-s" x="358" y="172" text-anchor="middle">translates</text>
-          <text class="t-s" x="358" y="187" text-anchor="middle">both ways</text>
+          2. IN AND OUT ARE THE SAME SHAPE. The request lane and the response
+             lane carry the IDENTICAL wire-shape token, and the five translated
+             channels each carry a visibly different one. The two passthrough
+             channels carry your app's own token back, because an OpenAI-shaped
+             upstream needs no translation at all — the same drawing device the
+             old figure used, kept because it was the one part of it that was
+             actually saying something.
 
-          <!-- ── request lane, y=116 ── -->
-          <text class="t-k" x="146" y="92">REQUEST</text>
-          <path class="ln" d="M120 116 H140"/><path class="ln-f" d="M133 111.5 L140 116 L133 120.5 Z"/>
-          <path class="ln" d="M146 101 H284 L296 116 L284 131 H146 Z"/>
-          <text x="215" y="120" text-anchor="middle" font-size="10.4">/v1/chat/completions</text>
-          <path class="ln" d="M296 116 H316"/><path class="ln-f" d="M309 111.5 L316 116 L309 120.5 Z"/>
-          <path class="ln" d="M400 116 H414"/><path class="ln-f" d="M407 111.5 L414 116 L407 120.5 Z"/>
-          <path class="go" d="M420 101 H512 V108 H530 V124 H512 V131 H420 Z"/>
-          <text class="t-go" x="466" y="120" text-anchor="middle" font-size="10.4">anthropic</text>
-          <path class="go" d="M530 116 H552"/><path class="go-f" d="M545 111.5 L552 116 L545 120.5 Z"/>
+          3. WHAT SELECTS IS A RESOLVED ROUTE. The select input enters the core
+             on its own dashed lane, set apart from the data path exactly as a
+             multiplexer's select line is. That lane is the whole difference
+             between this and a flowchart: a flowchart's diamond asks a
+             question, a mux's select line carries a value that was already
+             decided upstream.
 
-          <!-- distribution bus + the five candidates that are not dialed -->
-          <path class="ln dim" d="M540 40 V230"/>
-          <rect class="go-f" x="537" y="113" width="6" height="6"/>
-          <g class="dim">
-            <path class="ln" d="M540 40 H560 M540 78 H560 M540 154 H560 M540 192 H560 M540 230 H560"/>
-            <rect class="bx" x="560" y="25" width="144" height="30"/>
-            <path class="ln-f" d="M568 34.5 H582 L588 40 L582 45.5 H568 Z"/>
-            <text x="598" y="44">openai</text>
-            <rect class="bx" x="560" y="63" width="144" height="30"/>
-            <path class="ln-f" d="M568 72.5 H582 L588 78 L582 83.5 H568 L574 78 Z"/>
-            <text x="598" y="82">gemini</text>
-            <rect class="bx" x="560" y="139" width="144" height="30"/>
-            <path class="ln-f" d="M568 148.5 H588 V152 H576 V156 H588 V159.5 H568 Z"/>
-            <text x="598" y="158">cohere</text>
-            <rect class="bx" x="560" y="177" width="144" height="30"/>
-            <path class="ln-f" d="M572 186.5 H588 V197.5 H572 L568 192 Z"/>
-            <text x="598" y="196">bedrock</text>
-            <rect class="bx" x="560" y="215" width="144" height="30"/>
-            <path class="ln-f" d="M568 224.5 H582 L588 230 L582 235.5 H568 Z"/>
-            <text x="598" y="234">local</text>
-          </g>
-          <!-- the dialed port -->
-          <rect class="go-bx" x="560" y="101" width="144" height="30"/>
-          <path class="go-f" d="M568 110.5 H580 V113 H588 V119 H580 V121.5 H568 Z"/>
-          <text class="t-go" x="598" y="120">anthropic</text>
+         Built as DOM rather than as one fixed-viewBox SVG so a phone reader
+         gets the whole drawing instead of half of one and a drag hint. -->
+    <figure class="flow rv" id="fig-mux">
+      <div class="dgm mx" role="img" aria-labelledby="il1t il1d">
+        <b class="vh" id="il1t">A six-to-one multiplexer: six provider channels on one bus, exactly one
+          dialed by the resolved route, and a single OpenAI-shaped connection out to your app</b>
+        <span class="vh" id="il1d">Your application holds one connection to llmux. The request it sends and
+          the response it gets back carry the identical OpenAI wire shape, drawn here as the same token on
+          both lanes. Behind the core sits a bank of six provider channels tapped off one distribution bus.
+          Exactly one of them is dialed — anthropic, on channel 1 — and what dials it is the resolved
+          route, which arrives on the core's own select input rather than on the data path. The other five
+          channels are candidates that are never contacted. Two of the six are passthrough providers and
+          carry the same OpenAI token your app does, because an OpenAI-shaped upstream needs no translation
+          at all; the rest are translated on the way out and folded back into the OpenAI shape on the way
+          in, streaming included.</span>
 
-          <!-- ── return lane, y=282 ── -->
-          <path class="go" d="M704 116 H740 V282 H530"/>
-          <g class="go-f">
-            <rect x="560" y="276" width="2" height="12"/><rect x="578" y="276" width="2" height="12"/>
-            <rect x="596" y="276" width="2" height="12"/><rect x="614" y="276" width="2" height="12"/>
-            <rect x="632" y="276" width="2" height="12"/><rect x="650" y="276" width="2" height="12"/>
-            <rect x="668" y="276" width="2" height="12"/>
-          </g>
-          <text class="t-k t-go" x="704" y="266" text-anchor="end">BYTE-IDENTICAL SSE</text>
-          <path class="go" d="M530 267 H438 V274 H420 V290 H438 V297 H530 Z"/>
-          <text class="t-go" x="484" y="286" text-anchor="middle" font-size="10.4">anthropic</text>
-          <path class="go" d="M420 282 H400"/><path class="go-f" d="M407 277.5 L400 282 L407 286.5 Z"/>
-          <path class="ln" d="M316 282 H296"/><path class="ln-f" d="M303 277.5 L296 282 L303 286.5 Z"/>
-          <path class="ln" d="M296 267 H158 L146 282 L158 297 H296 Z"/>
-          <text x="227" y="286" text-anchor="middle" font-size="10.4">/v1/chat/completions</text>
-          <path class="ln" d="M146 282 H120"/><path class="ln-f" d="M127 277.5 L120 282 L127 286.5 Z"/>
-          <text class="t-k" x="146" y="313">RESPONSE · SAME SHAPE, TRANSLATED BACK</text>
+        <div class="d-strip" aria-hidden="true">
+          <span class="d-k"><b>MUX</b> · 6 channels in · 1 out</span>
+          <span class="d-k">select · <span class="on">1 of 6 dialed</span></span>
+        </div>
 
-          <path class="pulse" d="M120 116 H740 V282 H120"
-                style="stroke-dasharray:24 1400;--chase-end:-1424px;--dur:4s"/>
-        </svg>
+        <div class="d-bx mx-io" aria-hidden="true">
+          <span class="d-t">your app</span>
+          <span class="d-s">any OpenAI SDK, unchanged · one <code>base_url</code> · one virtual key</span>
+          <div class="mx-lane">
+            <span class="mx-dir">&#9654;</span><span class="nm">request</span>
+            <span class="d-chip on"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg>POST /v1/chat/completions</span>
+          </div>
+          <div class="mx-lane">
+            <span class="mx-dir">&#9664;</span><span class="nm">response</span>
+            <span class="d-chip on"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg>200 chat.completion · SSE</span>
+          </div>
+          <p class="mx-same">Those two tokens are <b>the same outline</b> — one shape, in and out, whichever
+            channel below actually answered.</p>
+        </div>
+
+        <div class="d-drop on" aria-hidden="true"></div>
+
+        <div class="mx-core" aria-hidden="true">
+          <div class="mx-core-r">
+            <svg class="mx-glyph" viewBox="0 0 60 100" aria-hidden="true"><path d="M6 4 L54 34 L54 66 L6 96 Z"/></svg>
+            <div>
+              <b class="mx-wm"><span>ll</span><span class="m">mux</span></b>
+              <p class="mx-role">The 6:1 core. Translates the OpenAI shape into whatever the dialed channel
+                speaks, and folds the answer back into it before your app sees a byte.</p>
+            </div>
+          </div>
+          <div class="mx-sel">
+            <span class="d-k">select &#9664;</span>
+            <span class="d-chip on">route resolved · model &#8594; anthropic</span>
+            <span class="d-k">a resolved route, not an operator</span>
+          </div>
+        </div>
+
+        <div class="d-drop on" aria-hidden="true"></div>
+
+        <div class="d-k d-hd" aria-hidden="true">channel bank · one distribution bus ·
+          <span class="on">ch 1 dialed</span></div>
+
+        <div class="d-bank" aria-hidden="true">
+          <div class="mx-ch d-tap">
+            <div class="mx-g">
+              <span class="mx-no">ch 0</span>
+              <span class="mx-nm">openai</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg><code>POST /v1/chat/completions</code><span class="tp">passthrough</span></span>
+              <span class="mx-st"><i></i>idle</span>
+            </div>
+          </div>
+          <div class="mx-ch d-tap on">
+            <span class="mx-ride"></span>
+            <div class="mx-g">
+              <span class="mx-no">ch 1</span>
+              <span class="mx-nm">anthropic</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h13v4h8v4h-8v4H1Z"/></svg><code>POST /v1/messages</code><span class="tp">translated</span></span>
+              <span class="mx-st"><i></i>dialed</span>
+            </div>
+          </div>
+          <div class="mx-ch d-tap">
+            <div class="mx-g">
+              <span class="mx-no">ch 2</span>
+              <span class="mx-nm">gemini</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h13l8 6-8 6H1l5-6Z"/></svg><code>POST …:generateContent</code><span class="tp">translated</span></span>
+              <span class="mx-st"><i></i>idle</span>
+            </div>
+          </div>
+          <div class="mx-ch d-tap">
+            <div class="mx-g">
+              <span class="mx-no">ch 3</span>
+              <span class="mx-nm">cohere</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h21v4H8v4h14v4H1Z"/></svg><code>POST /v2/chat</code><span class="tp">translated</span></span>
+              <span class="mx-st"><i></i>idle</span>
+            </div>
+          </div>
+          <div class="mx-ch d-tap">
+            <div class="mx-g">
+              <span class="mx-no">ch 4</span>
+              <span class="mx-nm">bedrock</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M6 1h16v12H6L1 7Z"/></svg><code>POST /model/{id}/invoke</code><span class="tp">translated · sigv4</span></span>
+              <span class="mx-st"><i></i>idle</span>
+            </div>
+          </div>
+          <div class="mx-ch d-tap">
+            <div class="mx-g">
+              <span class="mx-no">ch 5</span>
+              <span class="mx-nm">local</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg><code>POST /v1/chat/completions</code><span class="tp">passthrough</span></span>
+              <span class="mx-st"><i></i>idle</span>
+            </div>
+          </div>
+        </div>
+
+        <p class="mx-same" aria-hidden="true"><b>ch 0 and ch 5 carry your app's own token.</b> A passthrough
+          provider is already OpenAI-shaped, so on those two channels there is nothing to translate —
+          which is why their outline is the one at the top of this panel and not one of their own.</p>
       </div>
-      <figcaption class="cap">Every call arrives in the same OpenAI shape and is translated to whichever
-        provider the route resolves to — here, Anthropic; the other five ports were candidates and were
-        never dialed. The reply is translated back before your app ever sees it, so your client only ever
-        holds the one shape it already speaks, in and out — streaming included: <code>"stream":true</code>
-        returns byte-identical OpenAI SSE regardless of which provider actually answered.
-        <b>The two passthrough ports carry your app's own outline</b>, because an OpenAI-shaped upstream
-        needs no translation at all.</figcaption>
+      <figcaption class="cap">Six channels, one bus, exactly one of them dialed — and what dials it is a
+        <b>resolved route</b>, arriving on the core's select input rather than on the data path. Everything
+        your app holds is the single connection at the top: the request token and the response token are
+        the same outline, because the translation happens inside, on the far side of the core. Streaming
+        included — <code>"stream":true</code> returns byte-identical OpenAI SSE no matter which channel
+        answered. The two passthrough channels carry your app's own outline back, because an OpenAI-shaped
+        upstream needs no translation at all.</figcaption>
     </figure>
 
     <!-- The full endpoint surface: every route the gateway serves, not just the
@@ -1316,18 +1652,18 @@ html.js .rv.in{opacity:1;transform:none}
         <table class="spec">
           <thead><tr><th>Method</th><th>Route</th><th class="g">Mode</th><th>Behaviour</th></tr></thead>
           <tbody>
-            <tr><td class="m">POST</td><td class="r">/v1/chat/completions</td><td class="g"><span class="tag routed">routed</span></td><td>Native per-provider translation; streaming is byte-identical OpenAI SSE.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/embeddings</td><td class="g"><span class="tag routed">routed</span></td><td>Native translation on <code>passthrough</code>, <code>gemini</code>, <code>cohere</code> and <code>azure</code>.</td></tr>
-            <tr><td class="m">GET</td><td class="r">/v1/models</td><td class="g"><span class="tag catalog">catalog</span></td><td>Every model with live price and context window.</td></tr>
-            <tr><td class="m">GET</td><td class="r">/v1/catalog.json</td><td class="g"><span class="tag catalog">catalog</span></td><td>The full merged pricing catalog behind that list.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/completions</td><td class="g"><span class="tag">forwarded</span></td><td>Legacy text completions — <code>passthrough</code> providers only.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/responses</td><td class="g"><span class="tag">forwarded</span></td><td>OpenAI Responses API; the get/cancel lifecycle isn't ported yet.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/rerank</td><td class="g"><span class="tag">forwarded</span></td><td>Reranking, passed through as-is.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/moderations</td><td class="g"><span class="tag">forwarded</span></td><td>Moderation, passed through as-is.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/images/generations</td><td class="g"><span class="tag">forwarded</span></td><td>Image generation, passed through as-is.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/audio/speech</td><td class="g"><span class="tag">forwarded</span></td><td>Text-to-speech, passed through as-is.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/audio/transcriptions</td><td class="g"><span class="tag">forwarded</span></td><td>Multipart upload, speech-to-text. No per-minute price exists yet, so a served call meters as an auditable $0 line rather than billing silently.</td></tr>
-            <tr><td class="m">POST</td><td class="r">/v1/audio/translations</td><td class="g"><span class="tag">forwarded</span></td><td>Same as transcription, plus translation to English. Also multipart.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/chat/completions</td><td class="g" data-h="Mode"><span class="tag routed">routed</span></td><td data-h="Behaviour">Native per-provider translation; streaming is byte-identical OpenAI SSE.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/embeddings</td><td class="g" data-h="Mode"><span class="tag routed">routed</span></td><td data-h="Behaviour">Native translation on <code>passthrough</code>, <code>gemini</code>, <code>cohere</code> and <code>azure</code>.</td></tr>
+            <tr><td class="m" data-h="Method">GET</td><td class="r" data-h="Route">/v1/models</td><td class="g" data-h="Mode"><span class="tag catalog">catalog</span></td><td data-h="Behaviour">Every model with live price and context window.</td></tr>
+            <tr><td class="m" data-h="Method">GET</td><td class="r" data-h="Route">/v1/catalog.json</td><td class="g" data-h="Mode"><span class="tag catalog">catalog</span></td><td data-h="Behaviour">The full merged pricing catalog behind that list.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/completions</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Legacy text completions — <code>passthrough</code> providers only.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/responses</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">OpenAI Responses API; the get/cancel lifecycle isn't ported yet.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/rerank</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Reranking, passed through as-is.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/moderations</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Moderation, passed through as-is.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/images/generations</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Image generation, passed through as-is.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/audio/speech</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Text-to-speech, passed through as-is.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/audio/transcriptions</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Multipart upload, speech-to-text. No per-minute price exists yet, so a served call meters as an auditable $0 line rather than billing silently.</td></tr>
+            <tr><td class="m" data-h="Method">POST</td><td class="r" data-h="Route">/v1/audio/translations</td><td class="g" data-h="Mode"><span class="tag">forwarded</span></td><td data-h="Behaviour">Same as transcription, plus translation to English. Also multipart.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1391,93 +1727,84 @@ html.js .rv.in{opacity:1;transform:none}
       </div>
     </div>
 
-    <!-- Where the gate actually sits: between route resolution and the network
-         call, never after it. -->
     <!-- ILLUSTRATION 02 — the gate.
          Two things are being drawn, and only two. WHERE the gate sits: after
-         route resolution, before the socket — so it is upstream of the dashed
-         line that separates this box from the network. And WHAT a block is: the
-         blocked lane terminates against a shut channel that is itself entirely
-         to the left of that line, which is the whole meaning of "never dialed".
-         The 403 goes back to the caller and the counter increments; nothing
-         crosses. -->
-    <figure class="flow rv">
-      <div class="dgm">
-        <svg viewBox="0 0 780 366" role="img" aria-labelledby="il2t il2d">
-          <title id="il2t">Where the default-deny gate sits in the dispatch path, and what a blocked call
-            does</title>
-          <desc id="il2d">A resolved request reaches the sovereignty gate before any socket is opened. An
-            allowed provider passes through an open channel and is dialed across the boundary between your
-            box and the network, logged with its tier. A blocked provider hits a shut channel entirely on
-            your side of that boundary: it is never dialed, the caller gets a 403 egress_not_allowed, and
-            the llmux_egress_blocked_total counter increments.</desc>
+         route resolution, before any socket. And WHAT A REFUSAL COSTS: nothing,
+         because it happens on your side of the boundary.
 
-          <!-- the boundary this drawing exists to make visible -->
-          <path class="edge" d="M520 20 V330"/>
-          <text class="t-k" x="512" y="32" text-anchor="end">YOUR BOX</text>
-          <text class="t-k" x="528" y="32">THE NETWORK</text>
+         The boundary is therefore a real element rather than a coordinate — a
+         dashed rule that is a COLUMN between the two sides when the panel is
+         wide and a ROW between them when it is not. That is what lets the
+         drawing reflow without losing its one claim: the allowed lane is the
+         only thing on the figure that reaches the far side, and it arrives
+         carrying a teal edge, while the blocked provider out there has no edge
+         at all, because nothing ever reached it. -->
+    <figure class="flow rv" id="fig-gate">
+      <div class="dgm gt-w" role="img" aria-labelledby="il2t il2d">
+        <b class="vh" id="il2t">Where the default-deny sovereignty gate sits in the dispatch path, and what
+          a blocked call costs</b>
+        <span class="vh" id="il2d">A request whose route is already resolved reaches the sovereignty gate
+          before any socket is opened. An allowed provider passes through an open channel and is dialed
+          across the boundary between your box and the network, logged with its tier. A blocked provider
+          meets a shut channel that is entirely on your side of that boundary: it is never dialed, the
+          caller gets a 403 egress_not_allowed, and the llmux_egress_blocked_total counter increments. The
+          provider it was aimed at is drawn out on the network side with nothing reaching it.</span>
 
-          <!-- request -->
-          <rect class="bx" x="8" y="74" width="150" height="56"/>
-          <text class="t-n" x="83" y="98" text-anchor="middle">request</text>
-          <text class="t-s" x="83" y="116" text-anchor="middle">route resolved</text>
+        <div class="d-strip" aria-hidden="true">
+          <span class="d-k"><b>sovereignty gate</b> · before the dial, never after</span>
+          <span class="d-k">default <span class="off">deny</span></span>
+        </div>
 
-          <!-- the gate itself. Drawn BEFORE the two lanes so the lanes run
-               visibly through it rather than under an opaque module face. -->
-          <rect class="bx-2" x="312" y="56" width="110" height="200"/>
-          <text class="t-k" x="326" y="156" text-anchor="middle"
-                transform="rotate(-90 326 156)">SOVEREIGNTY GATE</text>
-          <text class="t-k t-go" x="382" y="86" text-anchor="middle">OPEN</text>
-          <path class="go" d="M344 92 H416 M344 112 H416"/>
-          <text class="t-k t-no" x="382" y="192" text-anchor="middle">SHUT</text>
+        <div class="gt" aria-hidden="true">
+          <div class="gt-box">
+            <span class="d-k">your box</span>
+            <div class="d-bx d-mt"><span class="d-t">request</span>
+              <span class="d-s">route resolved · provider chosen · nothing dialed yet</span></div>
 
-          <!-- the two lanes into the gate -->
-          <text class="t-s" x="176" y="94">an allowed provider</text>
-          <path class="ln" d="M158 102 H370"/>
-          <text class="t-s t-no" x="176" y="202">a blocked provider</text>
-          <path class="no" d="M83 130 V210 H337"/><path class="no-f" d="M336 205.5 L344 210 L336 214.5 Z"/>
+            <div class="gt-mod">
+              <div class="gt-lane">
+                <span class="gt-port open"></span>
+                <span class="d-k on">open</span>
+                <span class="gt-nm on">an allowed provider</span>
+                <p class="gt-why">Tier <code>local</code>, <code>sovereign</code> or <code>brokered</code>,
+                  or an explicit <code>allow_egress</code>. The channel is open, and the dial crosses the
+                  boundary logged with its tier.</p>
+              </div>
+              <div class="gt-lane">
+                <span class="gt-port shut"></span>
+                <span class="d-k off">shut</span>
+                <span class="gt-nm off">a blocked provider</span>
+                <p class="gt-why">Tier <code>external</code>, no <code>allow_egress</code>. The channel is
+                  shut, and it is shut <b>on this side</b> of the boundary — so there is no socket, no
+                  handshake, and no byte to take back.</p>
+                <span class="gt-cut">never dialed</span>
+              </div>
+            </div>
 
-          <!-- the shut channel the blocked lane terminates against -->
-          <rect class="no-bx" x="344" y="198" width="72" height="24"/>
-          <path class="no" d="M350 222 L358 198 M362 222 L370 198 M374 222 L382 198 M386 222 L394 198
-                               M398 222 L406 198"/>
+            <div class="gt-out">
+              <span class="d-chip off">403 · egress_not_allowed</span>
+              <span class="d-k">returned to the caller</span>
+            </div>
+            <div class="gt-count">
+              <span><code class="gt-mn">llmux_egress_blocked_total</code>
+                <span class="d-k gt-sub">counted, never silent</span></span>
+              <span class="gt-plus">+1</span>
+            </div>
+          </div>
 
-          <!-- allowed: through the open channel, across the boundary, and it is
-               the only thing on this drawing that crosses -->
-          <path class="go" d="M370 102 H541"/><path class="go-f" d="M540 97.5 L548 102 L540 106.5 Z"/>
-          <rect class="go-bx" x="548" y="76" width="224" height="52"/>
-          <text class="t-n t-go" x="660" y="98" text-anchor="middle">provider dialed</text>
-          <text class="t-s t-go" x="660" y="116" text-anchor="middle">logged with its tier</text>
+          <div class="gt-edge"></div>
 
-          <!-- blocked: stops dead, well short of the boundary. The provider it
-               was aimed at is drawn out there, greyed and unwired — no trace
-               reaches it, which is the entire point of the picture. -->
-          <path class="no" d="M428 202 L442 218 M442 202 L428 218"/>
-          <text class="t-s t-no" x="430" y="238">not dialed</text>
-          <text class="t-s t-no" x="430" y="253">no socket</text>
-          <g class="ghost">
-            <rect class="bx" x="548" y="184" width="224" height="52"/>
-            <text class="t-n" x="660" y="206" text-anchor="middle">the blocked provider</text>
-            <text class="t-s" x="660" y="224" text-anchor="middle">never contacted</text>
-          </g>
-
-          <!-- …and answers the caller -->
-          <path class="no" d="M338 234 H96 V140"/><path class="no-f" d="M91.5 141 L96 132 L100.5 141 Z"/>
-          <text class="t-s t-no" x="110" y="256">403 · egress_not_allowed</text>
-          <text class="t-s" x="110" y="272">returned to the caller</text>
-
-          <!-- …and is counted -->
-          <path class="no" style="stroke-dasharray:4 4" d="M380 224 V292"/>
-          <rect class="bx" x="284" y="292" width="272" height="60"/>
-          <text x="300" y="318">llmux_egress_blocked_total</text>
-          <text class="t-s" x="300" y="336">counted, never silent</text>
-          <text class="t-no" x="540" y="326" text-anchor="end" font-size="20"
-                font-weight="600">+1</text>
-
-          <path class="pulse" d="M158 102 H548" style="stroke-dasharray:20 390;--chase-end:-410px;--dur:2.6s"/>
-          <path class="pulse no-p" d="M83 130 V210 H338"
-                style="stroke-dasharray:20 336;--chase-end:-356px;--dur:2.6s;--del:.5s"/>
-        </svg>
+          <div class="gt-net">
+            <span class="d-k">the network</span>
+            <div class="d-bx on gt-arrive d-mt"><span class="d-t on">provider dialed</span>
+              <span class="d-s on">the only thing on this figure that crosses · logged with its tier</span></div>
+            <div class="d-bx ghost d-mt2"><span class="d-t">the blocked provider</span>
+              <span class="d-s">never contacted · no wire reaches this box</span></div>
+            <p class="gt-why d-mt2">Nothing on this side of the rule was dialed except the one provider
+              above it. That is the entire difference the gate makes, and it is drawn rather than
+              claimed: the blocked lane has no line crossing.</p>
+          </div>
+        </div>
       </div>
       <figcaption class="cap">The gate sits between route resolution and the network call — never after it.
         An allowed provider gets dialed and logged with its tier; a blocked one is never dialed at all: it
@@ -1489,36 +1816,36 @@ html.js .rv.in{opacity:1;transform:none}
       <div class="rv">
         <div class="code">
           <div class="code-bar"><i></i><span class="path">llmux.json</span></div>
-          <pre><code><span class="cb-p">{</span>
-  <span class="cb-pr">"providers"</span><span class="cb-p">:</span> <span class="cb-p">[</span>
-    <span class="cb-c">// loopback = local, always allowed</span>
-    <span class="cb-p">{</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"local"</span><span class="cb-p">,</span>  <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"passthrough"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"base_url"</span><span class="cb-p">:</span> <span class="cb-s">"http://127.0.0.1:11434/v1"</span> <span class="cb-p">},</span>
-
-    <span class="cb-c">// explicit opt-in for an off-box provider</span>
-    <span class="cb-p">{</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"openai"</span><span class="cb-p">,</span> <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"passthrough"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"base_url"</span><span class="cb-p">:</span> <span class="cb-s">"https://api.openai.com/v1"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"api_key_env"</span><span class="cb-p">:</span> <span class="cb-s">"OPENAI_API_KEY"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"allow_egress"</span><span class="cb-p">:</span> <span class="cb-n">true</span> <span class="cb-p">},</span>
-
-    <span class="cb-c">// a named no-train third party</span>
-    <span class="cb-p">{</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"broker"</span><span class="cb-p">,</span> <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"passthrough"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"base_url"</span><span class="cb-p">:</span> <span class="cb-s">"https://inference.example.com/v1"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"tier"</span><span class="cb-p">:</span> <span class="cb-s">"brokered"</span><span class="cb-p">,</span> <span class="cb-pr">"allow_brokered"</span><span class="cb-p">:</span> <span class="cb-n">true</span> <span class="cb-p">}</span>
-  <span class="cb-p">]</span>
-<span class="cb-p">}</span></code></pre>
+          <pre><code><span class="ln"><span class="cb-p">{</span></span>
+<span class="ln">  <span class="cb-pr">"providers"</span><span class="cb-p">:</span> <span class="cb-p">[</span></span>
+<span class="ln">    <span class="cb-c">// loopback = local, always allowed</span></span>
+<span class="ln">    <span class="cb-p">{</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"local"</span><span class="cb-p">,</span>  <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"passthrough"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"base_url"</span><span class="cb-p">:</span> <span class="cb-s">"http://127.0.0.1:11434/v1"</span> <span class="cb-p">},</span></span>
+<span class="ln"></span>
+<span class="ln">    <span class="cb-c">// explicit opt-in for an off-box provider</span></span>
+<span class="ln">    <span class="cb-p">{</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"openai"</span><span class="cb-p">,</span> <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"passthrough"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"base_url"</span><span class="cb-p">:</span> <span class="cb-s">"https://api.openai.com/v1"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"api_key_env"</span><span class="cb-p">:</span> <span class="cb-s">"OPENAI_API_KEY"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"allow_egress"</span><span class="cb-p">:</span> <span class="cb-n">true</span> <span class="cb-p">},</span></span>
+<span class="ln"></span>
+<span class="ln">    <span class="cb-c">// a named no-train third party</span></span>
+<span class="ln">    <span class="cb-p">{</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"broker"</span><span class="cb-p">,</span> <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"passthrough"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"base_url"</span><span class="cb-p">:</span> <span class="cb-s">"https://inference.example.com/v1"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"tier"</span><span class="cb-p">:</span> <span class="cb-s">"brokered"</span><span class="cb-p">,</span> <span class="cb-pr">"allow_brokered"</span><span class="cb-p">:</span> <span class="cb-n">true</span> <span class="cb-p">}</span></span>
+<span class="ln">  <span class="cb-p">]</span></span>
+<span class="ln"><span class="cb-p">}</span></span></code></pre>
         </div>
       </div>
       <div class="rv">
-        <div class="code soft">
+        <div class="code">
           <div class="code-bar"><i></i><span class="path">403 · blocked, and told why</span></div>
-          <pre><code><span class="cb-p">{</span>
-  <span class="cb-pr">"error"</span><span class="cb-p">:</span> <span class="cb-p">{</span>
-    <span class="cb-pr">"message"</span><span class="cb-p">:</span> <span class="cb-s">"sovereignty: provider \"openai\" is a non-local endpoint and egress is not enabled; set \"allow_egress\": true on this provider to permit off-box calls"</span><span class="cb-p">,</span>
-    <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"sovereignty_error"</span><span class="cb-p">,</span>
-    <span class="cb-pr">"code"</span><span class="cb-p">:</span> <span class="cb-s">"egress_not_allowed"</span>
-  <span class="cb-p">}</span>
-<span class="cb-p">}</span></code></pre>
+          <pre><code><span class="ln"><span class="cb-p">{</span></span>
+<span class="ln">  <span class="cb-pr">"error"</span><span class="cb-p">:</span> <span class="cb-p">{</span></span>
+<span class="ln">    <span class="cb-pr">"message"</span><span class="cb-p">:</span> <span class="cb-s">"sovereignty: provider \"openai\" is a non-local endpoint and egress is not enabled; set \"allow_egress\": true on this provider to permit off-box calls"</span><span class="cb-p">,</span></span>
+<span class="ln">    <span class="cb-pr">"type"</span><span class="cb-p">:</span> <span class="cb-s">"sovereignty_error"</span><span class="cb-p">,</span></span>
+<span class="ln">    <span class="cb-pr">"code"</span><span class="cb-p">:</span> <span class="cb-s">"egress_not_allowed"</span></span>
+<span class="ln">  <span class="cb-p">}</span></span>
+<span class="ln"><span class="cb-p">}</span></span></code></pre>
         </div>
         <p class="aside">On a fallback chain, a sovereignty-blocked primary is simply skipped so a local
           fallback can still serve — the gate costs availability of one route, never a silent privacy
@@ -1582,11 +1909,11 @@ html.js .rv.in{opacity:1;transform:none}
         <table class="spec">
           <thead><tr><th class="g">Step</th><th>Pattern</th><th>Resolves to</th></tr></thead>
           <tbody>
-            <tr><td class="m g">1</td><td class="r">"assistant"</td><td>Exact match — the route whose <code>model</code> is that string.</td></tr>
-            <tr><td class="m g">2</td><td class="r">"claude-*"</td><td>The longest matching trailing-<code>*</code> wildcard route.</td></tr>
-            <tr><td class="m g">3</td><td class="r">"*"</td><td>The catch-all route, forwarding the requested name unchanged.</td></tr>
-            <tr><td class="m g">4</td><td class="r">"openai/gpt-4o"</td><td>Only if no route matched at all: <code>provider/model</code> prefix syntax dials that named provider directly.</td></tr>
-            <tr><td class="m g">—</td><td class="r">"strategy": "least-cost"</td><td>A route with a <code>candidates[]</code> list picks the cheapest by catalog price (input+output per MTok) at request time; the rest become its fallback chain in cost order, unpriced candidates last.</td></tr>
+            <tr><td class="m g" data-h="Step">1</td><td class="r" data-h="Pattern">"assistant"</td><td data-h="Resolves to">Exact match — the route whose <code>model</code> is that string.</td></tr>
+            <tr><td class="m g" data-h="Step">2</td><td class="r" data-h="Pattern">"claude-*"</td><td data-h="Resolves to">The longest matching trailing-<code>*</code> wildcard route.</td></tr>
+            <tr><td class="m g" data-h="Step">3</td><td class="r" data-h="Pattern">"*"</td><td data-h="Resolves to">The catch-all route, forwarding the requested name unchanged.</td></tr>
+            <tr><td class="m g" data-h="Step">4</td><td class="r" data-h="Pattern">"openai/gpt-4o"</td><td data-h="Resolves to">Only if no route matched at all: <code>provider/model</code> prefix syntax dials that named provider directly.</td></tr>
+            <tr><td class="m g" data-h="Step">—</td><td class="r" data-h="Pattern">"strategy": "least-cost"</td><td data-h="Resolves to">A route with a <code>candidates[]</code> list picks the cheapest by catalog price (input+output per MTok) at request time; the rest become its fallback chain in cost order, unpriced candidates last.</td></tr>
           </tbody>
         </table>
       </div>
@@ -1596,71 +1923,72 @@ html.js .rv.in{opacity:1;transform:none}
         is skipped so a local fallback can still serve.</p>
     </div>
 
-    <!-- A fallback chain stepping through candidates — one skip is an ordinary
-         transport error, the other is the sovereignty gate, and the page treats
-         both as the same kind of "try the next one" event. -->
     <!-- ILLUSTRATION 03 — the fallback chain.
-         Drawn as a selector stepping down a bus rather than as three boxes in a
-         row, because the true thing here is ORDER and ARBITRATION: one marker
-         is on exactly one candidate at a time, two candidates dead-end for two
-         completely different reasons — a transport error and the sovereignty
-         gate — and only the third has an outgoing wire. -->
-    <figure class="flow rv">
-      <div class="dgm">
-        <svg viewBox="0 0 780 300" role="img" aria-labelledby="il3t il3d">
-          <title id="il3t">A fallback chain stepping candidate to candidate until one serves</title>
-          <desc id="il3d">One request enters a selector that steps down three candidates in order.
-            Candidate one, openai, returns 503 and is retried twice with backoff before being skipped.
-            Candidate two, anthropic, is skipped by the sovereignty gate without being dialed at all.
-            Candidate three, a local provider on this box, returns 200 and serves the call. Your app
-            receives one response, not the attempts behind it.</desc>
+         An ordered list already IS a stack, so this is drawn as a ladder rather
+         than as three boxes strung sideways: the candidates hang off one bus in
+         the order they are tried, the selector marker sits on exactly one of
+         them at a time, two dead-end for two completely different reasons — a
+         transport error and the sovereignty gate — and only the third has an
+         outgoing wire. Drawn this way it needs no reflow beyond its own row
+         internals, because top-to-bottom is already the phone layout.
 
-          <text class="t-k" x="224" y="24">CANDIDATES, IN ORDER</text>
+         The marker is three markers taking turns rather than one marker
+         translated by a hard-coded pixel offset, so it cannot drift out of
+         register when a row wraps to a taller height. -->
+    <figure class="flow rv" id="fig-chain">
+      <div class="dgm ch" role="img" aria-labelledby="il3t il3d">
+        <b class="vh" id="il3t">A fallback chain stepping candidate to candidate until one serves</b>
+        <span class="vh" id="il3d">One request enters a selector that steps down three candidates in order.
+          Candidate one, openai, returns 503 and is retried twice with backoff before being skipped.
+          Candidate two, anthropic, is skipped by the sovereignty gate without being dialed at all — not an
+          error, so nothing about it is retried. Candidate three, a local provider on this box, returns 200
+          and serves the call. Your app receives one response, not the attempts behind it.</span>
 
-          <rect class="bx" x="8" y="124" width="140" height="56"/>
-          <text class="t-n" x="78" y="148" text-anchor="middle">one request</text>
-          <text class="t-s" x="78" y="166" text-anchor="middle">your app made</text>
-          <path class="ln" d="M148 152 H196"/>
-          <path class="ln" d="M196 68 V236"/>
+        <div class="d-strip" aria-hidden="true">
+          <span class="d-k"><b>fallback chain</b> · tried in order, never in parallel</span>
+          <span class="d-k">3 candidates · <span class="on">1 serves</span></span>
+        </div>
 
-          <!-- the selector marker: on exactly one candidate at a time -->
-          <path class="go-f sel" d="M180 62 L192 68 L180 74 Z"/>
+        <div class="d-bx" aria-hidden="true"><span class="d-t">one request</span>
+          <span class="d-s">one logical call your app made · <code>max_retries</code> 2 ·
+            <code>backoff_ms</code> 200</span></div>
 
-          <!-- 1 · primary — a transport error -->
-          <path class="ln" d="M196 68 H218"/><path class="ln-f" d="M217 63.5 L224 68 L217 72.5 Z"/>
-          <rect class="no-bx" x="224" y="40" width="356" height="56"/>
-          <text class="t-n" x="240" y="66">1 · primary</text>
-          <text class="t-s" x="240" y="84">openai · 503 → retried ×2</text>
-          <rect class="bx" x="436" y="54" width="128" height="28"/>
-          <text class="t-no" x="500" y="73" text-anchor="middle">503 · skip</text>
-          <path class="no" d="M588 62 L600 74 M600 62 L588 74"/>
-          <text class="t-s" x="240" y="112">retryable status · backed off 200ms, then 400ms</text>
+        <div class="d-drop" aria-hidden="true"></div>
 
-          <!-- 2 · fallback — the gate, not an error -->
-          <path class="ln" d="M196 152 H218"/><path class="ln-f" d="M217 147.5 L224 152 L217 156.5 Z"/>
-          <rect class="no-bx" x="224" y="124" width="356" height="56"/>
-          <text class="t-n" x="240" y="150">2 · fallback</text>
-          <text class="t-s" x="240" y="168">anthropic · sovereignty gate</text>
-          <rect class="bx" x="436" y="138" width="128" height="28"/>
-          <text class="t-no" x="500" y="157" text-anchor="middle">blocked · skip</text>
-          <path class="no" d="M588 146 L600 158 M600 146 L588 158"/>
-          <text class="t-s" x="240" y="196">not an error · refused before any dial, so nothing is retried</text>
+        <div class="d-bank" aria-hidden="true">
+          <div class="ch-row d-tap off">
+            <span class="ch-sel"></span>
+            <div class="ch-g">
+              <div class="ch-hd"><span class="ch-n">1 · primary</span><span class="ch-nm">openai</span></div>
+              <p class="ch-why">A retryable status, so it <em>is</em> retried: backed off 200ms, then
+                400ms, then the candidate is given up on.</p>
+              <span class="d-chip off ch-out">503 · retried ×2 · skip</span>
+            </div>
+          </div>
+          <div class="ch-row d-tap off">
+            <span class="ch-sel ch-s2"></span>
+            <div class="ch-g">
+              <div class="ch-hd"><span class="ch-n">2 · fallback</span><span class="ch-nm">anthropic</span></div>
+              <p class="ch-why">Not an error — the sovereignty gate refused it before any dial, so there is
+                nothing to retry and no socket was opened.</p>
+              <span class="d-chip off ch-out">blocked · skip</span>
+            </div>
+          </div>
+          <div class="ch-row d-tap on">
+            <span class="ch-sel ch-s3"></span>
+            <div class="ch-g">
+              <div class="ch-hd"><span class="ch-n">3 · fallback</span><span class="ch-nm">local</span></div>
+              <p class="ch-why">On this box. Answers, and the chain stops here — the fourth candidate, if
+                there were one, is never reached.</p>
+              <span class="d-chip on ch-out">200 · served</span>
+            </div>
+          </div>
+        </div>
 
-          <!-- 3 · fallback — served -->
-          <path class="ln" d="M196 236 H218"/><path class="ln-f" d="M217 231.5 L224 236 L217 240.5 Z"/>
-          <rect class="go-bx" x="224" y="208" width="356" height="56"/>
-          <text class="t-n" x="240" y="234">3 · fallback</text>
-          <text class="t-s" x="240" y="252">local · on this box</text>
-          <rect class="bx" x="436" y="222" width="128" height="28"/>
-          <text class="t-go" x="500" y="241" text-anchor="middle">200 · served</text>
+        <div class="d-drop on" aria-hidden="true"></div>
 
-          <!-- only the candidate that served has an outgoing wire -->
-          <path class="go" d="M580 236 H620 V152 H636"/>
-          <path class="go-f" d="M635 147.5 L644 152 L635 156.5 Z"/>
-          <rect class="bx" x="644" y="124" width="128" height="56"/>
-          <text class="t-n" x="708" y="148" text-anchor="middle">one response</text>
-          <text class="t-s" x="708" y="166" text-anchor="middle">not the attempts</text>
-        </svg>
+        <div class="d-bx on" aria-hidden="true"><span class="d-t on">one response</span>
+          <span class="d-s on">what your app receives · not the two attempts behind it</span></div>
       </div>
       <figcaption class="cap">One logical request, up to three tries. A primary that errors is retried with
         backoff on <code>429/500/502/503/504</code>; a fallback the sovereignty gate blocks is skipped
@@ -1707,86 +2035,70 @@ html.js .rv.in{opacity:1;transform:none}
       </div>
     </dl>
 
-    <!-- What a virtual key's budget actually gates: spend fills toward the cap,
-         and a call that would cross it is refused before it's dialed. -->
     <!-- ILLUSTRATION 04 — the budget.
-         A meter, drawn to scale: the fill is really 15.5/25 of the track, and
-         the two projection bars are really 1.20 and 12.00 wide on the same
-         scale, so the one that overshoots the cap tick visibly overshoots it.
-         The refusal is placed BEFORE the upstream module, not after — that
+         A meter, drawn to scale — and it STAYS to scale at every width, because
+         every figure on it is a percentage of the track rather than a
+         coordinate: the fill is really 15.50/25.00 = 62%, and the two
+         projection bars are really 1.20 and 12.00 wide on that same track
+         (4.8% and 48%), so the one that overshoots the cap visibly overshoots
+         it at 390px exactly as it does at 1440px.
+
+         The track deliberately stops at 88% of the row; the last 12% is
+         reserved head-room, which is what lets the overshooting bar actually
+         overshoot without ever leaving the panel.
+
+         The refusal is placed BEFORE the upstream module, not after it — that
          position is the claim being made. -->
-    <figure class="flow rv">
-      <div class="dgm">
-        <svg viewBox="0 0 780 300" role="img" aria-labelledby="il4t il4d">
-          <title id="il4t">A virtual key's budget refusing a request before any upstream spend</title>
-          <desc id="il4d">The key sk-team-a has spent 15.50 US dollars of a 25.00 dollar budget_usd. A
-            request projected at 1 dollar 20 stays under the cap, is dialed, is billed, and is added to the
-            key's spend. A request projected at 12 dollars would carry the key past the cap: it is refused
-            with 402 budget_exceeded at the gateway, before any socket to the upstream provider is opened,
-            so nothing is spent upstream.</desc>
+    <figure class="flow rv" id="fig-budget">
+      <div class="dgm bg" role="img" aria-labelledby="il4t il4d">
+        <b class="vh" id="il4t">A virtual key's budget refusing a request before any upstream spend</b>
+        <span class="vh" id="il4d">The key sk-team-a has spent 15.50 US dollars of a 25.00 dollar
+          budget_usd, so its meter is 62 per cent full. A request projected at 1 dollar 20 stays under the
+          cap: it is dialed, billed, and added to the key's spend. A request projected at 12 dollars would
+          carry the key past the cap, and its projection bar is drawn crossing the cap line: it is refused
+          with 402 budget_exceeded at the gateway, before any socket to the upstream provider is opened, so
+          nothing at all is spent upstream.</span>
 
-          <text class="t-k" x="180" y="22">KEY BUDGET METER · DRAWN TO SCALE</text>
-          <text class="t-s" x="180" y="42">spend $15.50 · budget_usd $25.00</text>
+        <div class="d-strip" aria-hidden="true">
+          <span class="d-k"><b>key budget meter</b> · drawn to scale</span>
+          <span class="d-k">sk-team-a · spend $15.50 / <span class="off">budget_usd $25.00</span></span>
+        </div>
 
-          <rect class="bx" x="8" y="42" width="152" height="48"/>
-          <text class="t-n" x="84" y="64" text-anchor="middle">sk-team-a</text>
-          <text class="t-s" x="84" y="82" text-anchor="middle">virtual key</text>
-          <path class="ln" d="M160 66 H174"/><path class="ln-f" d="M173 61.5 L180 66 L173 70.5 Z"/>
+        <div class="bg-scale" aria-hidden="true">
+          <span class="bg-cap"></span>
+          <div class="bg-projrow"><span class="bg-proj on"></span></div>
+          <div class="bg-track"><span class="bg-fill"></span></div>
+          <div class="bg-ticks">
+            <i class="p0"></i><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i>
+            <span class="p0 f">$0</span><span class="p1">$5</span><span class="p2">$10</span><span
+              class="p3">$15</span><span class="p4">$20</span><span class="p5 l off">$25</span>
+          </div>
+          <div class="bg-projrow"><span class="bg-proj off"></span></div>
+        </div>
 
-          <!-- the meter -->
-          <rect class="bx-2" x="180" y="52" width="460" height="28"/>
-          <rect class="go-f" x="181" y="53" width="284" height="26"/>
-          <path class="ln" d="M180 80 V88 M272 80 V88 M364 80 V88 M456 80 V88 M548 80 V88 M640 80 V88"/>
-          <g class="t-s">
-            <text x="180" y="100" text-anchor="middle">$0</text>
-            <text x="272" y="100" text-anchor="middle">$5</text>
-            <text x="364" y="100" text-anchor="middle">$10</text>
-            <text x="456" y="100" text-anchor="middle">$15</text>
-            <text x="548" y="100" text-anchor="middle">$20</text>
-            <text x="640" y="100" text-anchor="middle">$25</text>
-          </g>
-          <!-- broken around the axis label so the $25 tick stays readable -->
-          <path class="no" style="stroke-dasharray:5 5" d="M640 24 V88 M640 106 V126"/>
-          <text class="t-k t-no" x="648" y="32">CAP</text>
+        <div class="bg-legend" aria-hidden="true">
+          <span class="d-chip on">+$1.20 &#8594; $16.70 · fits under the cap</span>
+          <span class="d-chip off">+$12.00 &#8594; $27.50 · crosses it</span>
+        </div>
 
-          <!-- what each pending request would add, on the same scale -->
-          <rect class="go-bx" x="465" y="26" width="23" height="14"/>
-          <text class="t-s t-go" x="496" y="38">+$1.20 → $16.70 fits</text>
-          <rect class="no-bx" x="465" y="110" width="220" height="14"/>
-          <text class="t-s t-no" x="465" y="138">+$12.00 → $27.50 · overshoots the cap</text>
+        <div class="bg-lanes" aria-hidden="true">
+          <div class="d-bx bg-a1"><span class="d-t">request A</span>
+            <span class="d-s">projected +$1.20 · stays under</span></div>
+          <span class="bg-arr bg-a2"></span>
+          <div class="d-bx on bg-a3"><span class="d-t on">200 · billed</span>
+            <span class="d-s on">real cost from <code>usage.cost</code>, added to this key's spend</span></div>
+          <span class="bg-arr bg-a4"></span>
 
-          <!-- lane A: under the cap -->
-          <rect class="bx" x="8" y="168" width="176" height="48"/>
-          <text class="t-n" x="96" y="190" text-anchor="middle">request A</text>
-          <text class="t-s" x="96" y="208" text-anchor="middle">+$1.20, under the cap</text>
-          <path class="go" d="M184 192 H293"/><path class="go-f" d="M292 187.5 L300 192 L292 196.5 Z"/>
-          <rect class="go-bx" x="300" y="168" width="196" height="48"/>
-          <text class="t-n t-go" x="398" y="190" text-anchor="middle">200 · billed</text>
-          <text class="t-s t-go" x="398" y="208" text-anchor="middle">added to this key's spend</text>
-          <path class="go" d="M496 192 H569"/><path class="go-f" d="M568 187.5 L576 192 L568 196.5 Z"/>
+          <div class="d-bx bg-up"><span class="d-t">upstream provider</span>
+            <span class="d-s">only ever billed for calls that passed the budget — request B never reaches
+              this box</span></div>
 
-          <!-- lane B: refused, and refused HERE -->
-          <rect class="bx" x="8" y="236" width="176" height="48"/>
-          <text class="t-n" x="96" y="258" text-anchor="middle">request B</text>
-          <text class="t-s" x="96" y="276" text-anchor="middle">+$12.00, would cross</text>
-          <path class="no" d="M184 260 H292"/>
-          <rect class="no-f" x="292" y="238" width="6" height="44"/>
-          <rect class="no-bx" x="300" y="236" width="196" height="48"/>
-          <text class="t-n t-no" x="398" y="258" text-anchor="middle">402 budget_exceeded</text>
-          <text class="t-s t-no" x="398" y="276" text-anchor="middle">refused, never dialed</text>
-          <text class="t-s t-no" x="502" y="256">no socket</text>
-          <text class="t-s t-no" x="502" y="272">$0 spend</text>
-
-          <!-- the upstream that never hears about request B -->
-          <rect class="bx" x="576" y="168" width="196" height="116"/>
-          <text class="t-n" x="674" y="206" text-anchor="middle">upstream provider</text>
-          <text class="t-s" x="674" y="228" text-anchor="middle">only ever billed for calls</text>
-          <text class="t-s" x="674" y="244" text-anchor="middle">that passed the budget</text>
-
-          <path class="pulse" d="M184 192 H576" style="stroke-dasharray:20 392;--chase-end:-412px;--dur:2.8s"/>
-          <path class="pulse no-p" d="M184 260 H292"
-                style="stroke-dasharray:20 110;--chase-end:-130px;--dur:2.8s;--del:.4s"/>
-        </svg>
+          <div class="d-bx bg-b1"><span class="d-t">request B</span>
+            <span class="d-s">projected +$12.00 · would cross</span></div>
+          <span class="bg-arr off bg-b2"></span>
+          <div class="d-bx off bg-b3"><span class="d-t off">402 budget_exceeded</span>
+            <span class="d-s off">refused at the gateway · no socket · $0 spent</span></div>
+        </div>
       </div>
       <figcaption class="cap">Every virtual key carries its own USD budget. Each response's real cost fills
         the bar; a request that would cross the cap is refused <b>before it is ever dialed</b> —
@@ -1942,16 +2254,16 @@ html.js .rv.in{opacity:1;transform:none}
                    names are variables. `build`, the two filenames and the `...`
                    placeholder are plain shell words and stay default text —
                    none of them is a quoted string. -->
-              <pre><code><span class="cb-c"># 1. Build the binary (embeds web/ui.html — no Node, no build step)</span>
-<span class="cb-f">make</span> build
-
-<span class="cb-c"># 2. Configure providers</span>
-<span class="cb-k">export</span> <span class="cb-var">OPENAI_API_KEY</span><span class="cb-op">=</span>...
-<span class="cb-k">export</span> <span class="cb-var">ANTHROPIC_API_KEY</span><span class="cb-op">=</span>...
-
-<span class="cb-c"># 3. Run — gateway on :4000, dashboard at /ui</span>
-<span class="cb-f">cp</span> llmux.example.json llmux.json
-<span class="cb-f">./dist/llmux</span> <span class="cb-flag">-config</span> llmux.json</code></pre>
+              <pre><code><span class="ln"><span class="cb-c"># 1. Build the binary (embeds web/ui.html — no Node, no build step)</span></span>
+<span class="ln"><span class="cb-f">make</span> build</span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-c"># 2. Configure providers</span></span>
+<span class="ln"><span class="cb-k">export</span> <span class="cb-var">OPENAI_API_KEY</span><span class="cb-op">=</span>...</span>
+<span class="ln"><span class="cb-k">export</span> <span class="cb-var">ANTHROPIC_API_KEY</span><span class="cb-op">=</span>...</span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-c"># 3. Run — gateway on :4000, dashboard at /ui</span></span>
+<span class="ln"><span class="cb-f">cp</span> llmux.example.json llmux.json</span>
+<span class="ln"><span class="cb-f">./dist/llmux</span> <span class="cb-flag">-config</span> llmux.json</span></code></pre>
             </div>
           </div>
           <div class="tabpanel" id="panel-call">
@@ -1963,29 +2275,29 @@ html.js .rv.in{opacity:1;transform:none}
                    dict LITERAL inside messages=[…] really is data, so its keys
                    are strings there, not properties — Python has no bare-key
                    object syntax. -->
-              <pre><code><span class="cb-k">from</span> openai <span class="cb-k">import</span> <span class="cb-f">OpenAI</span>
-
-<span class="cb-var">client</span> <span class="cb-op">=</span> <span class="cb-f">OpenAI</span><span class="cb-p">(</span><span class="cb-pr">base_url</span><span class="cb-op">=</span><span class="cb-s">"http://localhost:4000/v1"</span><span class="cb-p">,</span> <span class="cb-pr">api_key</span><span class="cb-op">=</span><span class="cb-s">"sk-team-a"</span><span class="cb-p">)</span>
-
-<span class="cb-var">resp</span> <span class="cb-op">=</span> <span class="cb-var">client</span><span class="cb-p">.</span>chat<span class="cb-p">.</span>completions<span class="cb-p">.</span><span class="cb-f">create</span><span class="cb-p">(</span>
-    <span class="cb-pr">model</span><span class="cb-op">=</span><span class="cb-s">"cheapest"</span><span class="cb-p">,</span>       <span class="cb-c"># least-cost route from your config</span>
-    <span class="cb-pr">messages</span><span class="cb-op">=</span><span class="cb-p">[{</span><span class="cb-s">"role"</span><span class="cb-p">:</span> <span class="cb-s">"user"</span><span class="cb-p">,</span> <span class="cb-s">"content"</span><span class="cb-p">:</span> <span class="cb-s">"hi"</span><span class="cb-p">}],</span>
-<span class="cb-p">)</span>
-<span class="cb-f">print</span><span class="cb-p">(</span><span class="cb-var">resp</span><span class="cb-p">.</span><span class="cb-pr">usage</span><span class="cb-p">)</span>
-<span class="cb-c"># usage.cost = {input_cost, output_cost, total_cost, currency}</span></code></pre>
+              <pre><code><span class="ln"><span class="cb-k">from</span> openai <span class="cb-k">import</span> <span class="cb-f">OpenAI</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">client</span> <span class="cb-op">=</span> <span class="cb-f">OpenAI</span><span class="cb-p">(</span><span class="cb-pr">base_url</span><span class="cb-op">=</span><span class="cb-s">"http://localhost:4000/v1"</span><span class="cb-p">,</span> <span class="cb-pr">api_key</span><span class="cb-op">=</span><span class="cb-s">"sk-team-a"</span><span class="cb-p">)</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">resp</span> <span class="cb-op">=</span> <span class="cb-var">client</span><span class="cb-p">.</span>chat<span class="cb-p">.</span>completions<span class="cb-p">.</span><span class="cb-f">create</span><span class="cb-p">(</span></span>
+<span class="ln">    <span class="cb-pr">model</span><span class="cb-op">=</span><span class="cb-s">"cheapest"</span><span class="cb-p">,</span>       <span class="cb-c"># least-cost route from your config</span></span>
+<span class="ln">    <span class="cb-pr">messages</span><span class="cb-op">=</span><span class="cb-p">[{</span><span class="cb-s">"role"</span><span class="cb-p">:</span> <span class="cb-s">"user"</span><span class="cb-p">,</span> <span class="cb-s">"content"</span><span class="cb-p">:</span> <span class="cb-s">"hi"</span><span class="cb-p">}],</span></span>
+<span class="ln"><span class="cb-p">)</span></span>
+<span class="ln"><span class="cb-f">print</span><span class="cb-p">(</span><span class="cb-var">resp</span><span class="cb-p">.</span><span class="cb-pr">usage</span><span class="cb-p">)</span></span>
+<span class="ln"><span class="cb-c"># usage.cost = {input_cost, output_cost, total_cost, currency}</span></span></code></pre>
             </div>
           </div>
           <div class="tabpanel" id="panel-conf">
             <div class="code">
               <div class="code-bar"><i></i><span class="path">llmux.json</span></div>
-              <pre><code><span class="cb-p">{</span>
-  <span class="cb-pr">"keys"</span><span class="cb-p">:</span> <span class="cb-p">[</span>
-    <span class="cb-p">{</span> <span class="cb-pr">"key"</span><span class="cb-p">:</span> <span class="cb-s">"sk-team-a"</span><span class="cb-p">,</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"team-a"</span><span class="cb-p">,</span>
-      <span class="cb-pr">"budget_usd"</span><span class="cb-p">:</span> <span class="cb-n">25.0</span><span class="cb-p">,</span>          <span class="cb-c">// 0 = unlimited</span>
-      <span class="cb-pr">"rpm"</span><span class="cb-p">:</span> <span class="cb-n">60</span><span class="cb-p">,</span>
-      <span class="cb-pr">"allowed_models"</span><span class="cb-p">:</span> <span class="cb-p">[</span><span class="cb-s">"assistant"</span><span class="cb-p">,</span> <span class="cb-s">"cheapest"</span><span class="cb-p">]</span> <span class="cb-p">}</span>
-  <span class="cb-p">]</span>
-<span class="cb-p">}</span></code></pre>
+              <pre><code><span class="ln"><span class="cb-p">{</span></span>
+<span class="ln">  <span class="cb-pr">"keys"</span><span class="cb-p">:</span> <span class="cb-p">[</span></span>
+<span class="ln">    <span class="cb-p">{</span> <span class="cb-pr">"key"</span><span class="cb-p">:</span> <span class="cb-s">"sk-team-a"</span><span class="cb-p">,</span> <span class="cb-pr">"name"</span><span class="cb-p">:</span> <span class="cb-s">"team-a"</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"budget_usd"</span><span class="cb-p">:</span> <span class="cb-n">25.0</span><span class="cb-p">,</span>          <span class="cb-c">// 0 = unlimited</span></span>
+<span class="ln">      <span class="cb-pr">"rpm"</span><span class="cb-p">:</span> <span class="cb-n">60</span><span class="cb-p">,</span></span>
+<span class="ln">      <span class="cb-pr">"allowed_models"</span><span class="cb-p">:</span> <span class="cb-p">[</span><span class="cb-s">"assistant"</span><span class="cb-p">,</span> <span class="cb-s">"cheapest"</span><span class="cb-p">]</span> <span class="cb-p">}</span></span>
+<span class="ln">  <span class="cb-p">]</span></span>
+<span class="ln"><span class="cb-p">}</span></span></code></pre>
             </div>
           </div>
         </div>
@@ -2013,11 +2325,11 @@ html.js .rv.in{opacity:1;transform:none}
         <table class="spec">
           <thead><tr><th class="g">Status</th><th>Code</th><th>Meaning</th></tr></thead>
           <tbody>
-            <tr><td class="m g">402</td><td class="r">budget_exceeded</td><td>The key or account is over its USD budget. Fail-closed: an unreadable spend store is treated as over budget, not unspent.</td></tr>
-            <tr><td class="m g">403</td><td class="r">egress_not_allowed</td><td>The sovereignty gate blocked an off-box provider the operator hasn't opted in.</td></tr>
-            <tr><td class="m g">403</td><td class="r">model_not_allowed</td><td>The key's model allow-list doesn't include the requested model.</td></tr>
-            <tr><td class="m g">429</td><td class="r">rate_limit_exceeded</td><td>The key's RPM limit — or a control-plane per-account cap — was hit.</td></tr>
-            <tr><td class="m g">404</td><td class="r">model_not_found</td><td>No route matches the requested model string.</td></tr>
+            <tr><td class="m g" data-h="Status">402</td><td class="r" data-h="Code">budget_exceeded</td><td data-h="Meaning">The key or account is over its USD budget. Fail-closed: an unreadable spend store is treated as over budget, not unspent.</td></tr>
+            <tr><td class="m g" data-h="Status">403</td><td class="r" data-h="Code">egress_not_allowed</td><td data-h="Meaning">The sovereignty gate blocked an off-box provider the operator hasn't opted in.</td></tr>
+            <tr><td class="m g" data-h="Status">403</td><td class="r" data-h="Code">model_not_allowed</td><td data-h="Meaning">The key's model allow-list doesn't include the requested model.</td></tr>
+            <tr><td class="m g" data-h="Status">429</td><td class="r" data-h="Code">rate_limit_exceeded</td><td data-h="Meaning">The key's RPM limit — or a control-plane per-account cap — was hit.</td></tr>
+            <tr><td class="m g" data-h="Status">404</td><td class="r" data-h="Code">model_not_found</td><td data-h="Meaning">No route matches the requested model string.</td></tr>
           </tbody>
         </table>
       </div>
