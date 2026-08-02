@@ -713,44 +713,78 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   top:calc(50% - 3.5px);width:7px;height:7px;background:var(--teal)}
 
 /* ── 01 · THE MUX ─────────────────────────────────────────────────────────
-   A 6:1 routing front panel, read top to bottom in the order a request
-   actually travels: the ONE connection your app holds (request and response
-   carrying the identical wire-shape token, because they are the identical
-   shape), the core that translates, and behind it the channel bank with
-   exactly one channel dialed. The select input enters the core on its own
-   dashed lane, perpendicular to the data path, because what closes a channel
-   here is a RESOLVED ROUTE and not an operator at a switchboard — that lane is
-   the difference between this drawing and a flowchart. */
-.mx{--gut:36px}
-.mx-io .d-t{font-family:var(--display);font-size:17px;font-weight:700;
-  font-variation-settings:'wdth' 110;letter-spacing:-.02em}
-.mx-lane{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;
-  margin-top:9px;padding-top:9px;border-top:1px solid var(--line)}
-.mx-dir{font-size:12px;line-height:1;color:var(--teal)}
-.mx-lane .nm{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
-.mx-same{margin:12px 0 0;font-size:11.8px;line-height:1.6;color:var(--faint)}
-.mx-same b{color:var(--ink);font-weight:600}
+   A six-to-one multiplexer drawn as one, rather than as a flowchart of slabs
+   and arrows. The product IS a mux and the product's mark IS the symbol, so
+   the drawing is the symbol: six channel leads landing on the core's wide
+   INPUT edge, one connection leaving its narrow OUTPUT edge, and a select line
+   entering the body from underneath — off the data path, the way a mux's
+   select line always is.
 
-.mx-core{border:1px solid var(--line-3);background:var(--sunk);padding:14px 16px}
-.mx-core-r{display:flex;flex-wrap:wrap;align-items:center;gap:12px 16px}
-.mx-core-r > div{flex:1 1 240px;min-width:0}
-.mx-glyph{width:32px;height:54px;flex:none}
-.mx-glyph path{fill:var(--teal)}
-/* Same rule as the header wordmark and the hero's: the product name is set in
-   the sans, tight, `mux` in the accent, with NO whitespace between the spans —
-   never in the mono face, whose `l` and `1` are indistinguishable. */
-.mx-wm{display:block;font-family:var(--display);font-size:19px;font-weight:700;
-  font-variation-settings:'wdth' 100;letter-spacing:-.045em;line-height:1;color:var(--ink)}
-.mx-wm .m{color:var(--teal-ink)}
-.mx-role{margin:7px 0 0;font-size:11.8px;line-height:1.55;color:var(--muted)}
-.mx-sel{display:flex;flex-wrap:wrap;align-items:center;gap:7px 10px;
-  margin-top:13px;padding-top:12px;border-top:1px dashed var(--teal-edge)}
+   Three claims, each drawn rather than captioned:
 
-.mx-ch{border:1px solid var(--line-2);background:var(--band-a);padding:9px 12px;margin-bottom:5px}
-.mx-ch:last-child{margin-bottom:0}
-.mx-ch.on{border-color:var(--teal-edge);background:var(--teal-wash);box-shadow:inset 2px 0 0 var(--teal)}
-.mx-g{display:grid;grid-template-columns:38px minmax(0,1fr) auto;align-items:center;gap:3px 10px}
-.mx-no{grid-column:1;grid-row:1/span 2;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
+    1. SIX IN, ONE OUT, AND THE ONE IS COUNTABLE. Six leads arrive at the input
+       edge. Five are dashed and end nowhere; one is solid teal and ends in a
+       filled pip on the edge itself. The dialed channel is the only object in
+       the figure carrying the accent, so "one of six" is something the reader
+       counts rather than something the caption asserts.
+
+    2. IN AND OUT ARE ONE SHAPE. The request token and the response token on
+       the single connection are the identical outline, and the four translated
+       channels each carry a visibly different one. That places the translation
+       — inside the body, on the far side of the input edge — instead of
+       claiming it. The two passthrough channels carry the app's own outline
+       back, because an OpenAI-shaped upstream has nothing to translate.
+
+    3. WHAT SELECTS IS A RESOLVED ROUTE. It arrives on the select input, not on
+       the data path. A flowchart's diamond asks a question at the moment of
+       drawing; a mux's select line carries a value that was already decided
+       upstream, which is exactly what a resolved route is.
+
+   THE BODY IS THE ONLY SVG AND IT CARRIES NO TEXT — just the trapezoid,
+   stretched by preserveAspectRatio="none" to whatever height the reflow hands
+   it, with a non-scaling hairline so the outline stays one pixel at every
+   size. There are two of them because this drawing REFLOWS RATHER THAN PANS:
+   wide, the leads come in from the left and the body points right at the
+   connection; narrow, the rig stacks, the body points up at the connection,
+   and the bank hangs off one distribution bus underneath it — the same bus the
+   other figures on this page use. Nothing is ever a scaled-down copy of the
+   wide arrangement, and no label in either one is set below 11px. */
+.mx{--gap:26px;--core:96px}
+
+.mx-rig{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) var(--core) minmax(158px,.72fr);
+  grid-template-rows:auto minmax(0,1fr) auto;
+  column-gap:var(--gap);
+}
+/* The three column captions are their own grid row, bottom-aligned, so a
+   caption that wraps at one width cannot push its column's body out of line
+   with the other two — the leads have to meet the input edge exactly. */
+.mx-lbl{align-self:end;margin:0 0 9px;font-size:11px;line-height:1.45;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--faint)}
+.mx-lbl .on{color:var(--teal-ink)}
+.mx-lbl.a{grid-column:1;grid-row:1}
+.mx-lbl.b{grid-column:2;grid-row:1}
+.mx-lbl.c{grid-column:3;grid-row:1}
+
+/* ── The six inputs ── */
+/* grid-auto-rows:1fr, not a flex column: the six leads have to land at even
+   intervals on the input edge, and one channel whose endpoint wraps to a
+   second line must not shift the other five off their spacing. */
+.mx-bank{grid-column:1;grid-row:2;display:grid;gap:6px;grid-auto-rows:1fr}
+.mx-ch{position:relative;display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;align-items:center;align-content:center;gap:3px 9px;
+  border:1px solid var(--line-2);background:var(--band-a);padding:8px 11px}
+.mx-ch.on{border-color:var(--teal);background:var(--teal-wash)}
+/* The lead. Every candidate reaches the input edge — they are all real,
+   configured providers — but only the dialed one reaches it with a solid line,
+   and only the dialed one lands a pip on the edge. */
+.mx-ch::after{content:"";position:absolute;left:100%;top:50%;width:calc(var(--gap) + 1px);
+  border-top:1px dashed var(--line-3);opacity:.85}
+.mx-ch.on::after{border-top:1px solid var(--teal);opacity:1}
+.mx-ch.on::before{content:"";position:absolute;left:calc(100% + var(--gap) - 3.5px);
+  top:calc(50% - 3.5px);width:7px;height:7px;background:var(--teal);z-index:2}
+.mx-no{grid-column:1;grid-row:1;font-size:11px;letter-spacing:.06em;text-transform:uppercase;
   color:var(--faint)}
 .mx-ch.on .mx-no{color:var(--teal-ink)}
 .mx-nm{grid-column:2;grid-row:1;font-size:13px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
@@ -760,19 +794,57 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .mx-st i{width:7px;height:7px;flex:none;border:1px solid var(--line-3)}
 .mx-ch.on .mx-st{color:var(--teal-ink)}
 .mx-ch.on .mx-st i{background:var(--teal);border-color:var(--teal)}
-.mx-w{grid-column:2/-1;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;gap:4px 9px;
+.mx-w{grid-column:1/-1;grid-row:2;display:flex;flex-wrap:wrap;align-items:center;gap:4px 9px;
   font-size:11.4px;line-height:1.5;color:var(--faint)}
 .mx-w code{font-size:11.4px;color:var(--muted)}
 .mx-ch.on .mx-w code{color:var(--teal-ink)}
 .mx-w .tp{font-size:11px;letter-spacing:.06em;text-transform:uppercase}
-@container (min-width:520px){
-  .mx{--gut:44px}
-  .mx-ch{padding:10px 14px}
-  .mx-g{grid-template-columns:42px minmax(88px,auto) minmax(0,1fr) auto}
-  .mx-no{grid-row:1}
-  .mx-w{grid-column:3;grid-row:1;justify-self:start}
-  .mx-st{grid-column:4;grid-row:1}
-}
+
+/* ── The body ── */
+.mx-core{grid-column:2;grid-row:2;position:relative;display:flex;align-items:center;
+  justify-content:center;min-height:172px}
+.mx-body{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
+.mx-body path{fill:var(--sunk);stroke:var(--teal-edge);stroke-width:1.3;
+  vector-effect:non-scaling-stroke}
+.mx-body.v{display:none}
+.mx-face{position:relative;z-index:1;text-align:center;padding:0 6px}
+.mx-ratio{display:block;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--teal-ink)}
+/* Same rule as the header wordmark and the hero's: the product name is set in
+   the sans, tight, `mux` in the accent, with NO whitespace between the spans —
+   never in the mono face, whose `l` and `1` are indistinguishable. */
+.mx-wm{display:block;margin:6px 0 0;font-family:var(--display);font-size:18.5px;font-weight:700;
+  font-variation-settings:'wdth' 100;letter-spacing:-.045em;line-height:1;color:var(--ink)}
+.mx-wm .m{color:var(--teal-ink)}
+
+/* ── The one connection out ── */
+.mx-out{grid-column:3;grid-row:2;align-self:center;position:relative;
+  border:1px solid var(--line-3);background:var(--band-a);padding:11px 12px}
+/* The two tokens on this connection are the argument of the figure, so they
+   are given the room to sit on one line each: wrapped, `POST` and its path
+   read as two different things and the "same outline" claim goes with it. */
+.mx-out .d-chip{padding:4px 7px;gap:6px}
+.mx-out::before{content:"";position:absolute;right:100%;top:50%;width:var(--gap);
+  border-top:1px solid var(--teal)}
+.mx-out::after{content:"";position:absolute;right:calc(100% + var(--gap) - 3.5px);
+  top:calc(50% - 3.5px);width:7px;height:7px;background:var(--teal)}
+.mx-out .d-t{font-family:var(--display);font-size:17px;font-weight:700;
+  font-variation-settings:'wdth' 110;letter-spacing:-.02em}
+.mx-lane{display:flex;flex-wrap:wrap;align-items:center;gap:6px 9px;
+  margin-top:10px;padding-top:9px;border-top:1px solid var(--line)}
+.mx-dir{display:inline-block;font-size:11px;line-height:1;color:var(--teal)}
+.mx-lane .nm{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--faint)}
+.mx-same{margin:16px 0 0;font-size:11.8px;line-height:1.6;color:var(--faint)}
+.mx-same b{color:var(--ink);font-weight:600}
+
+/* ── The select input ── */
+.mx-sel{grid-column:2/-1;grid-row:3;position:relative;padding-top:36px;
+  display:flex;flex-wrap:wrap;align-items:center;gap:8px 11px}
+.mx-sel::before{content:"";position:absolute;left:20px;top:-32px;height:66px;
+  border-left:1px dashed var(--teal)}
+.mx-sel::after{content:"";position:absolute;left:15px;top:-34px;width:0;height:0;
+  border-bottom:7px solid var(--teal);border-left:5px solid transparent;border-right:5px solid transparent}
+.mx-selnote{font-size:11px;line-height:1.5;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+
 /* The live channel: one short dash riding the dialed card, and only that one —
    the ordering a static drawing of this cannot say. `left` rather than a
    transform because the travel has to end at the card's own right edge, and the
@@ -780,6 +852,45 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .mx-ride{position:absolute;left:0;bottom:-1px;width:34px;height:2px;background:var(--teal);opacity:0}
 .rv.in .mx-ride{opacity:.95;animation:mxRide 3.2s linear .4s infinite}
 @keyframes mxRide{from{left:-34px}to{left:100%}}
+
+/* ── Narrow: the same mux, stood on end ───────────────────────────────────
+   The connection is on top, the body points up at it, the select line still
+   enters the body from underneath, and the six channels hang off one
+   distribution bus below. Every label keeps its size; nothing is scaled. */
+@container (max-width:619px){
+  .mx-rig{display:flex;flex-direction:column;align-items:stretch}
+  .mx-lbl{align-self:auto}
+  .mx-lbl.c{order:1}
+  .mx-out{order:2;align-self:auto;margin-bottom:24px}
+  .mx-lbl.b{display:none}
+  .mx-core{order:3;min-height:92px}
+  .mx-sel{order:4;grid-column:auto}
+  .mx-lbl.a{order:5;margin:26px 0 9px;padding-left:34px}
+  .mx-bank{order:6}
+
+  .mx-body.h{display:none}
+  .mx-body.v{display:block}
+
+  /* The connection now leaves the TOP of the body, so its lane turns with it. */
+  .mx-out::before{right:auto;left:calc(50% - .5px);top:100%;width:0;height:24px;
+    border-top:0;border-left:1px solid var(--teal)}
+  .mx-out::after{right:auto;left:calc(50% - 4px);top:calc(100% + 20px)}
+  .mx-dir{transform:rotate(-90deg)}
+
+  /* The select enters the body's underside on the same dashed lane. */
+  .mx-sel{padding-top:30px}
+  .mx-sel::before{left:56px;top:-26px;height:54px}
+  .mx-sel::after{left:51px;top:-28px}
+
+  /* One distribution bus, six taps, one of them live — the mechanism the gate
+     and fallback figures on this page already use. */
+  .mx-bank{position:relative;padding-left:34px}
+  .mx-bank::before{content:"";position:absolute;left:11px;top:-24px;bottom:16px;
+    border-left:1px dashed var(--line-3)}
+  .mx-bank{grid-auto-rows:auto}
+  .mx-ch::after{left:auto;right:100%;width:23px}
+  .mx-ch.on::before{left:auto;right:calc(100% + 19px)}
+}
 
 /* ── 02 · THE GATE ────────────────────────────────────────────────────────
    The boundary is the whole point of this drawing, so it is a real element
@@ -1489,158 +1600,137 @@ html.js .rv.in{opacity:1;transform:none}
       </div>
     </div>
 
-    <!-- ILLUSTRATION 01 — THE MUX.
-         This replaces a left-to-right flowchart (app slab, arrow, gateway slab,
-         arrow, column of provider cards, return lane) that could have been
-         drawn for any piece of middleware ever shipped. llmux IS a
-         multiplexer, so the drawing is one: many channels, a select line, one
-         output — the shape the product's own mark already has.
+    <!-- ILLUSTRATION 01 — THE MUX.  The first drawing a visitor meets, so it
+         has to assert what makes this product different rather than be a
+         diagram any middleware could reuse.
 
-         Three claims, each drawn rather than captioned:
+         It replaces a stack of grey slabs joined by arrows — app slab, arrow,
+         gateway slab, arrow, column of provider cards — which is a flowchart,
+         and a flowchart of a gateway says nothing a hundred other gateways
+         could not say. llmux IS a multiplexer and the product mark IS the mux
+         symbol, so this is now the symbol, drawn to scale: six leads landing
+         on the body's wide input edge, one connection leaving the narrow
+         output edge, and the select line entering underneath.
 
-          1. MANY CHANNELS, EXACTLY ONE SELECTED. Six channels hang off one
-             distribution bus. Five reach it with a dashed stub and stop; the
-             dialed one reaches it with a solid stub that ends in a filled pip,
-             and it is the only card on the figure carrying the accent. "One of
-             six" is a thing you can count here, not a label to be believed.
-
-          2. IN AND OUT ARE THE SAME SHAPE. The request lane and the response
-             lane carry the IDENTICAL wire-shape token, and the five translated
-             channels each carry a visibly different one. The two passthrough
-             channels carry your app's own token back, because an OpenAI-shaped
-             upstream needs no translation at all — the same drawing device the
-             old figure used, kept because it was the one part of it that was
-             actually saying something.
-
-          3. WHAT SELECTS IS A RESOLVED ROUTE. The select input enters the core
-             on its own dashed lane, set apart from the data path exactly as a
-             multiplexer's select line is. That lane is the whole difference
-             between this and a flowchart: a flowchart's diamond asks a
-             question, a mux's select line carries a value that was already
-             decided upstream.
-
-         Built as DOM rather than as one fixed-viewBox SVG so a phone reader
-         gets the whole drawing instead of half of one and a drag hint. -->
+         The full argument for the geometry, and the two arrangements it
+         reflows between, is in the .mx block of the stylesheet above. -->
     <figure class="flow rv" id="fig-mux">
       <div class="dgm mx" role="img" aria-labelledby="il1t il1d">
-        <b class="vh" id="il1t">A six-to-one multiplexer: six provider channels on one bus, exactly one
-          dialed by the resolved route, and a single OpenAI-shaped connection out to your app</b>
-        <span class="vh" id="il1d">Your application holds one connection to llmux. The request it sends and
-          the response it gets back carry the identical OpenAI wire shape, drawn here as the same token on
-          both lanes. Behind the core sits a bank of six provider channels tapped off one distribution bus.
-          Exactly one of them is dialed — anthropic, on channel 1 — and what dials it is the resolved
-          route, which arrives on the core's own select input rather than on the data path. The other five
-          channels are candidates that are never contacted. Two of the six are passthrough providers and
-          carry the same OpenAI token your app does, because an OpenAI-shaped upstream needs no translation
-          at all; the rest are translated on the way out and folded back into the OpenAI shape on the way
-          in, streaming included.</span>
+        <b class="vh" id="il1t">A six-to-one multiplexer: six provider channels arriving at the core's wide
+          input edge, exactly one of them dialed by a resolved route on the select line, and one
+          OpenAI-shaped connection leaving the core's narrow output edge to your app</b>
+        <span class="vh" id="il1d">Six provider channels — openai, anthropic, gemini, cohere, bedrock and a
+          local model — each reach the wide input edge of the llmux core on their own lead. Five of those
+          leads are drawn dashed and dead; one, channel 1, anthropic, is drawn solid and lands a filled
+          marker on the edge itself, because it is the only channel dialed for this request. What dials it
+          is not an operator and not a branch in the data path: a resolved route arrives underneath the core
+          on its own dashed select line, carrying the value model maps to anthropic, decided before the
+          request reached the drawing. From the core's narrow output edge a single connection runs to your
+          app, which holds nothing else: any OpenAI SDK unchanged, one base_url, one virtual key. The
+          request token on that connection and the response token coming back are drawn as the identical
+          outline, because the translation happens inside the core, on the far side of the input edge —
+          streaming included. Each translated channel carries a visibly different outline of its own, and
+          the two passthrough channels, openai and the local model, carry your app's outline unchanged,
+          because an OpenAI-shaped upstream has nothing to translate.</span>
 
         <div class="d-strip" aria-hidden="true">
-          <span class="d-k"><b>MUX</b> · 6 channels in · 1 out</span>
-          <span class="d-k">select · <span class="on">1 of 6 dialed</span></span>
+          <span class="d-k"><b>MUX 6:1</b> · six channels in · one connection out</span>
+          <span class="d-k">select · <span class="on">ch 1 dialed</span></span>
         </div>
 
-        <div class="d-bx mx-io" aria-hidden="true">
-          <span class="d-t">your app</span>
-          <span class="d-s">any OpenAI SDK, unchanged · one <code>base_url</code> · one virtual key</span>
-          <div class="mx-lane">
-            <span class="mx-dir">&#9654;</span><span class="nm">request</span>
-            <span class="d-chip on"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg>POST /v1/chat/completions</span>
-          </div>
-          <div class="mx-lane">
-            <span class="mx-dir">&#9664;</span><span class="nm">response</span>
-            <span class="d-chip on"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg>200 chat.completion · SSE</span>
-          </div>
-          <p class="mx-same">Those two tokens are <b>the same outline</b> — one shape, in and out, whichever
-            channel below actually answered.</p>
-        </div>
+        <div class="mx-rig" aria-hidden="true">
+          <span class="mx-lbl a">channel bank · 6 candidates · <span class="on">1 dialed</span></span>
+          <span class="mx-lbl b">the core</span>
+          <span class="mx-lbl c">one connection out</span>
 
-        <div class="d-drop on" aria-hidden="true"></div>
-
-        <div class="mx-core" aria-hidden="true">
-          <div class="mx-core-r">
-            <svg class="mx-glyph" viewBox="0 0 60 100" aria-hidden="true"><path d="M6 4 L54 34 L54 66 L6 96 Z"/></svg>
-            <div>
-              <b class="mx-wm"><span>ll</span><span class="m">mux</span></b>
-              <p class="mx-role">The 6:1 core. Translates the OpenAI shape into whatever the dialed channel
-                speaks, and folds the answer back into it before your app sees a byte.</p>
-            </div>
-          </div>
-          <div class="mx-sel">
-            <span class="d-k">select &#9664;</span>
-            <span class="d-chip on">route resolved · model &#8594; anthropic</span>
-            <span class="d-k">a resolved route, not an operator</span>
-          </div>
-        </div>
-
-        <div class="d-drop on" aria-hidden="true"></div>
-
-        <div class="d-k d-hd" aria-hidden="true">channel bank · one distribution bus ·
-          <span class="on">ch 1 dialed</span></div>
-
-        <div class="d-bank" aria-hidden="true">
-          <div class="mx-ch d-tap">
-            <div class="mx-g">
+          <div class="mx-bank">
+            <div class="mx-ch">
               <span class="mx-no">ch 0</span>
               <span class="mx-nm">openai</span>
-              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg><code>POST /v1/chat/completions</code><span class="tp">passthrough</span></span>
               <span class="mx-st"><i></i>idle</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg><code>POST /v1/chat/completions</code><span class="tp">passthrough</span></span>
             </div>
-          </div>
-          <div class="mx-ch d-tap on">
-            <span class="mx-ride"></span>
-            <div class="mx-g">
+            <div class="mx-ch on">
+              <span class="mx-ride"></span>
               <span class="mx-no">ch 1</span>
               <span class="mx-nm">anthropic</span>
-              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h13v4h8v4h-8v4H1Z"/></svg><code>POST /v1/messages</code><span class="tp">translated</span></span>
               <span class="mx-st"><i></i>dialed</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h13v4h8v4h-8v4H1Z"/></svg><code>POST /v1/messages</code><span class="tp">translated</span></span>
             </div>
-          </div>
-          <div class="mx-ch d-tap">
-            <div class="mx-g">
+            <div class="mx-ch">
               <span class="mx-no">ch 2</span>
               <span class="mx-nm">gemini</span>
-              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h13l8 6-8 6H1l5-6Z"/></svg><code>POST …:generateContent</code><span class="tp">translated</span></span>
               <span class="mx-st"><i></i>idle</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h13l8 6-8 6H1l5-6Z"/></svg><code>POST …:generateContent</code><span class="tp">translated</span></span>
             </div>
-          </div>
-          <div class="mx-ch d-tap">
-            <div class="mx-g">
+            <div class="mx-ch">
               <span class="mx-no">ch 3</span>
               <span class="mx-nm">cohere</span>
-              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h21v4H8v4h14v4H1Z"/></svg><code>POST /v2/chat</code><span class="tp">translated</span></span>
               <span class="mx-st"><i></i>idle</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h21v4H8v4h14v4H1Z"/></svg><code>POST /v2/chat</code><span class="tp">translated</span></span>
             </div>
-          </div>
-          <div class="mx-ch d-tap">
-            <div class="mx-g">
+            <div class="mx-ch">
               <span class="mx-no">ch 4</span>
               <span class="mx-nm">bedrock</span>
-              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M6 1h16v12H6L1 7Z"/></svg><code>POST /model/{id}/invoke</code><span class="tp">translated · sigv4</span></span>
               <span class="mx-st"><i></i>idle</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M6 1h16v12H6L1 7Z"/></svg><code>POST /model/{id}/invoke</code><span class="tp">translated · sigv4</span></span>
             </div>
-          </div>
-          <div class="mx-ch d-tap">
-            <div class="mx-g">
+            <div class="mx-ch">
               <span class="mx-no">ch 5</span>
               <span class="mx-nm">local</span>
-              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg><code>POST /v1/chat/completions</code><span class="tp">passthrough</span></span>
               <span class="mx-st"><i></i>idle</span>
+              <span class="mx-w"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg><code>POST /v1/chat/completions</code><span class="tp">passthrough</span></span>
             </div>
+          </div>
+
+          <!-- The body. Two trapezoids, one per arrangement, and no text inside
+               either: wide edge toward the six channels, narrow edge toward the
+               one connection, which is the mux symbol and the product's mark. -->
+          <div class="mx-core">
+            <svg class="mx-body h" viewBox="0 0 120 260" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M1 1 L119 88 L119 172 L1 259 Z"/>
+            </svg>
+            <svg class="mx-body v" viewBox="0 0 260 96" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M1 95 L88 1 L172 1 L259 95 Z"/>
+            </svg>
+            <span class="mx-face">
+              <span class="mx-ratio">6:1</span>
+              <b class="mx-wm"><span>ll</span><span class="m">mux</span></b>
+            </span>
+          </div>
+
+          <div class="mx-out">
+            <span class="d-t">your app</span>
+            <span class="d-s">any OpenAI SDK, unchanged · one <code>base_url</code> · one virtual key</span>
+            <div class="mx-lane">
+              <span class="mx-dir">&#9664;</span><span class="nm">request</span>
+              <span class="d-chip on"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg>POST /v1/chat/completions</span>
+            </div>
+            <div class="mx-lane">
+              <span class="mx-dir">&#9654;</span><span class="nm">response</span>
+              <span class="d-chip on"><svg class="d-shape" viewBox="0 0 24 14" aria-hidden="true"><path d="M1 1h16l5 6-5 6H1Z"/></svg>200 chat.completion · SSE</span>
+            </div>
+          </div>
+
+          <div class="mx-sel">
+            <span class="d-k">select</span>
+            <span class="d-chip on">route resolved · model &#8594; anthropic</span>
+            <span class="mx-selnote">decided upstream · not an operator</span>
           </div>
         </div>
 
-        <p class="mx-same" aria-hidden="true"><b>ch 0 and ch 5 carry your app's own token.</b> A passthrough
-          provider is already OpenAI-shaped, so on those two channels there is nothing to translate —
-          which is why their outline is the one at the top of this panel and not one of their own.</p>
+        <p class="mx-same" aria-hidden="true">Both tokens on the connection are <b>the same outline</b> —
+          one shape in, the same shape back, whichever channel answered — and <b>ch 0 and ch 5 carry that
+          same outline too</b>, because a passthrough provider is already OpenAI-shaped and there is nothing
+          on those two channels to translate. The four in between each carry an outline of their own: that
+          is the translation, and it happens inside the body.</p>
       </div>
-      <figcaption class="cap">Six channels, one bus, exactly one of them dialed — and what dials it is a
-        <b>resolved route</b>, arriving on the core's select input rather than on the data path. Everything
-        your app holds is the single connection at the top: the request token and the response token are
-        the same outline, because the translation happens inside, on the far side of the core. Streaming
-        included — <code>"stream":true</code> returns byte-identical OpenAI SSE no matter which channel
-        answered. The two passthrough channels carry your app's own outline back, because an OpenAI-shaped
-        upstream needs no translation at all.</figcaption>
+      <figcaption class="cap">Six channels arrive at the core's input edge; exactly one of them is
+        dialed, and what dials it is a <b>resolved route</b> entering on the select line rather than
+        anywhere on the data path. Everything your app holds is the one connection leaving the output
+        edge: the request token and the response token there are the same outline, because the
+        translation happens inside the body. Streaming included — <code>"stream":true</code> returns
+        byte-identical OpenAI SSE no matter which channel answered.</figcaption>
     </figure>
 
     <!-- The full endpoint surface: every route the gateway serves, not just the

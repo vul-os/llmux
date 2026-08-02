@@ -97,6 +97,10 @@ document.documentElement.setAttribute('data-theme',s==='light'||s==='dark'?s:(ma
   --pad:28px;
   --header-h:60px;
   --tab-h:54px;                /* the mobile document-index tab */
+  /* The document index rail. On desktop it is a FIXED chassis rail bolted to
+     the far left edge of the viewport — not a grid cell inside the centred
+     wrapper — so --rail-w is the offset every other desktop block clears. */
+  --rail-w:272px;
   --ease:cubic-bezier(.16,1,.3,1);
 
   /* Reading measure. Deliberately px, not ch: `ch` is the width of "0", and
@@ -282,24 +286,61 @@ img{max-width:100%;display:block}
 [data-theme="light"] #themeBtn .sun{display:block}
 [data-theme="light"] #themeBtn .moon{display:none}
 @media (max-width:860px){.secnav{display:none}}
+/* From 1024 the index rail is bolted to the left edge of the VIEWPORT, so the
+   chrome above it lines up with the rail instead of with a centred wrapper,
+   and the rail's surface and its right hairline carry on up through the
+   header: one chassis, not a bar floating across a rail. Every other property
+   — hairline, mono tabs, square buttons, the brand, the Vulos button — is the
+   landing's, unchanged. */
+@media (min-width:1024px){
+  .site-header{background:linear-gradient(90deg,var(--panel) 0 var(--rail-w),var(--canvas) var(--rail-w) 100%)}
+  .site-header>.wrap{max-width:none;margin:0;padding-inline:20px var(--pad)}
+  .site-header::after{content:"";position:absolute;left:calc(var(--rail-w) - 1px);top:0;bottom:0;
+    width:1px;background:var(--line-2)}
+}
 
 /* ═══ Shell ══════════════════════════════════════════════════════════════
-   Single column by default (phone / tablet). Two columns from 1024, three
-   from 1240 where an ON THIS PAGE rail fits without stealing from the
-   measure. */
+   Below 1024 this is one plain column and the index is a bottom sheet, so the
+   reader meets prose immediately.
+
+   From 1024 the index leaves the flow entirely: `.rail` becomes
+   `position:fixed` against the LEFT EDGE OF THE VIEWPORT (see the rail block
+   further down), so it is genuinely pinned rather than a sticky cell sitting
+   98px in behind a centred 1300px wrapper. What is left here is therefore no
+   longer a three-column grid — it is the document, plus an ON THIS PAGE rail
+   from 1300 — laid out in the space to the RIGHT of the fixed rail. That space
+   is claimed with padding-inline, not with `margin:0 auto`, because the shell
+   must start where the rail ends at every width above the breakpoint. */
 /* padding-BLOCK, never the `padding` shorthand. This element is `wrap
    docs-shell`, and .wrap supplies the horizontal gutter — a shorthand here
    resets that to 0 and every heading, paragraph and table sits flush against
    both screen edges below 1024px, where no grid column is left to fake an
-   inset. That has now shipped twice; the shorthand is the whole bug. */
+   inset. That has now shipped twice; the shorthand is the whole bug.
+   `padding-inline` below is the deliberate, axis-explicit replacement for that
+   gutter on desktop; it is never the shorthand. */
 .docs-shell{padding-block:0 40px}
 .docs-main{min-width:0}
 @media (min-width:1024px){
-  .docs-shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:46px;
-    align-items:start;padding-block:34px 90px}
+  .docs-shell{
+    max-width:none;margin:0;
+    padding-inline:calc(var(--rail-w) + 46px) var(--pad);
+    padding-block:34px 90px;
+    display:grid;grid-template-columns:minmax(0,880px);gap:52px;align-items:start;
+  }
+  /* The footer runs under the same rail, so it clears it by the same amount
+     and stays aligned with the document column rather than hiding behind the
+     chassis. */
+  .site-footer>.wrap{max-width:none;margin:0;
+    padding-inline:calc(var(--rail-w) + 46px) var(--pad)}
 }
-@media (min-width:1240px){
-  .docs-shell{grid-template-columns:246px minmax(0,1fr) 214px;gap:44px}
+/* The third column earns its keep from 1300 up: at 1440 the document still
+   gets 812px — wider than the 660px measure, so nothing is taken from the
+   prose — and these documents are long enough (the API reference alone runs
+   past forty headings) that "where am I inside this page" is a real second
+   question. Below 1300 it would start eating the measure, so it folds away and
+   the document takes the whole span. */
+@media (min-width:1300px){
+  .docs-shell{grid-template-columns:minmax(0,860px) 236px}
 }
 
 /* ═══ The document index ═════════════════════════════════════════════════
@@ -335,8 +376,18 @@ img{max-width:100%;display:block}
 .nav-item .ix{font-family:var(--mono);font-size:11px;letter-spacing:.03em;color:var(--faint);transition:color .16s}
 .nav-item:hover{color:var(--ink);background:var(--panel);border-left-color:var(--line-3)}
 .nav-item:hover .ix{color:var(--teal-ink)}
-.nav-item[aria-current="page"]{color:var(--ink);font-weight:600;background:var(--panel);border-left-color:var(--teal)}
+.nav-item[aria-current="page"]{color:var(--ink);font-weight:600;background:var(--sunk);border-left-color:var(--teal-edge)}
 .nav-item[aria-current="page"] .ix{color:var(--teal-ink);font-weight:600}
+/* How far into this document the reader is, drawn on the document's own edge.
+   The dim teal rule is the whole document; the bright bar filling down it is
+   how much of it is behind you. It is the same answer the ON THIS PAGE rail
+   gives with `.here`, kept where the eye already is — on the entry that says
+   which document you are in — and it survives at 1024, where that rail is
+   folded away and nothing else reports depth. */
+.nav-item .pg{position:absolute;left:-1px;top:0;width:2px;height:0;background:transparent}
+/* max() so the bar never vanishes at the top of a document: at 0% read it is
+   still a visible teal cap saying "this one, and you are at its start". */
+.nav-item[aria-current="page"] .pg{height:max(12px,var(--rd,0%));background:var(--teal);transition:height .1s linear}
 /* The tap: this channel joins the bus. */
 .nav-item[aria-current="page"]::before{
   content:"";position:absolute;left:-29.5px;top:50%;margin-top:-4px;width:7px;height:7px;
@@ -373,14 +424,33 @@ img{max-width:100%;display:block}
 .sr-item mark{background:var(--teal-wash);color:var(--teal-ink);padding:0 1px}
 .sr-empty{padding:10px;color:var(--muted);font-size:13.5px}
 
-/* ── Index: desktop column ── */
+/* ── Index: the desktop chassis rail ──────────────────────────────────────
+   FIXED to the far left edge of the viewport, floor to ceiling under the
+   header, and it does not move when the document scrolls. Not sticky: sticky
+   still belongs to the flow, so it inherits the centred wrapper's inset and
+   drifts by whatever the difference between its flow position and its stuck
+   position happens to be. Fixed has no flow position to drift from.
+
+   It reads as a rail and not as a floating card: its own panel surface, one
+   hairline down its right edge, square corners, mono labels. */
 @media (min-width:1024px){
-  .rail{position:sticky;top:calc(var(--header-h) + 24px);max-height:calc(100vh - var(--header-h) - 48px);
-    overflow-y:auto;overscroll-behavior:contain;
-    scrollbar-width:thin;scrollbar-color:var(--line-3) transparent}
-  .rail::-webkit-scrollbar{width:8px}
-  .rail::-webkit-scrollbar-track{background:transparent}
-  .rail::-webkit-scrollbar-thumb{background:var(--line-3)}
+  .rail{
+    position:fixed;left:0;top:var(--header-h);bottom:0;z-index:70;
+    width:var(--rail-w);display:flex;flex-direction:column;
+    background:var(--panel);border-right:1px solid var(--line-2);
+  }
+  .rail-body{
+    flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;
+    padding:0 20px 28px;
+    scrollbar-width:thin;scrollbar-color:var(--line-3) transparent;
+  }
+  .rail-body::-webkit-scrollbar{width:8px}
+  .rail-body::-webkit-scrollbar-track{background:transparent}
+  .rail-body::-webkit-scrollbar-thumb{background:var(--line-3)}
+  /* Search stays reachable at any scroll depth inside a 13-entry index. */
+  .rail-search{position:sticky;top:0;z-index:2;background:var(--panel);
+    margin:0 0 14px;padding:16px 0 12px}
+  .rail-eyebrow{margin:16px 0 10px}
 }
 
 /* ── Index: phone & tablet ────────────────────────────────────────────────
@@ -1003,7 +1073,6 @@ img{max-width:100%;display:block}
   </aside>
 </div>
 
-<footer class="site-footer"><div class="wrap"><a class="vulos-foot" href="https://vulos.org" target="_blank" rel="noopener"><img src="./assets/vulos-logo.png" alt="" width="18" height="18"><span>Part of <strong>Vulos</strong> — open, self-hostable software</span></a></div></footer>
 
 <div class="scrim" id="navScrim" hidden></div>
 <button class="index-tab" id="navToggle" type="button" aria-expanded="false" aria-controls="docsNav">
@@ -1073,6 +1142,7 @@ function buildIndexNav(){
             '<span class="gl">'+esc(g.label)+'</span><span class="gr"></span></div><ul class="nav-list">';
     members.forEach(({d,i})=>{
       html += '<li><a class="nav-item" data-slug="'+d.slug+'" href="#'+d.slug+'">'+
+              '<span class="pg" aria-hidden="true"></span>'+
               '<span class="ix">'+pad2(i+1)+'</span><span class="nm">'+esc(d.title)+'</span></a></li>';
     });
     html += '</ul></div>';
@@ -1092,6 +1162,15 @@ function setActive(slug){
   const ix  = document.getElementById('navIndex');
   if (doc && cur) cur.textContent = doc.title;
   if (doc && ix)  ix.textContent = pad2(i+1)+'/'+pad2(DOCS.length);
+  // A 13-entry index can outrun a short viewport, so make sure the entry that
+  // says which document you are in is one of the ones actually on screen.
+  const active = navBody.querySelector('a[aria-current="page"]');
+  const body = document.getElementById('railBody');
+  if (active && body && body.scrollHeight > body.clientHeight + 2){
+    const nb = body.getBoundingClientRect(), ab = active.getBoundingClientRect();
+    if (ab.top < nb.top + 60) body.scrollTop -= (nb.top + 60 - ab.top);
+    else if (ab.bottom > nb.bottom - 12) body.scrollTop += (ab.bottom - nb.bottom + 12);
+  }
 }
 
 // slugify mirrors GitHub's heading-anchor algorithm closely enough that the
@@ -1659,11 +1738,25 @@ function buildToc(slug){
   }
 }
 
+// How deep into THIS document the reader is, written onto the index entry for
+// it as --rd. Deliberately measured off the page's own scroll range rather
+// than off the article box: what a reader means by "how much is left" is how
+// much further the page will move, which is exactly this. Clamped, and 100%
+// at the very bottom so it never stalls at 98% on a short document.
+function updateDepth(){
+  const cur = navBody.querySelector('a[aria-current="page"] .pg');
+  if (!cur) return;
+  const span = document.documentElement.scrollHeight - window.innerHeight;
+  const p = span <= 0 ? 1 : Math.min(1, Math.max(0, window.scrollY / span));
+  cur.style.setProperty('--rd', (p * 100).toFixed(1) + '%');
+}
+
 // Scrollspy: mark the heading whose section the reader is actually in, and
 // keep that marker inside the rail's own scroll region.
 let spyTicking = false;
 function updateSpy(){
   spyTicking = false;
+  updateDepth();
   if (!tocHeadings.length) return;
   const line = 110;
   // -1 until the first section actually crosses the line: at the top of a
@@ -2007,5 +2100,6 @@ load(current());
   });
 })();
 </script>
+<footer class="site-footer"><div class="wrap"><a class="vulos-foot" href="https://vulos.org" target="_blank" rel="noopener"><img src="./assets/vulos-logo.png" alt="" width="18" height="18"><span>Part of <strong>Vulos</strong> — open, self-hostable software</span></a></div></footer>
 </body>
 </html>
