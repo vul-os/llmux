@@ -1,5 +1,11 @@
 # Build artifacts
 /dist/
+# Node SDK: test/fixture TS build byproducts (index.js + index.d.ts ARE
+# committed — they're the actual published package entry point/types).
+/sdks/node/fixtures/fake-llmux.js
+/sdks/node/fixtures/fake-llmux.d.ts
+/sdks/node/test/sidecar.test.js
+/sdks/node/test/sidecar.test.d.ts
 # Bundled binaries placed into language packages for local dev / CI release
 /sdks/python/llmux/bin/
 /sdks/node/bin/

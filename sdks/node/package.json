@@ -6,15 +6,39 @@
   "types": "index.d.ts",
   "license": "MIT",
   "homepage": "https://llmux.to",
-  "keywords": ["llm", "gateway", "openai", "anthropic", "gemini", "proxy", "litellm"],
-  "files": ["index.js", "index.d.ts", "bin/"],
+  "keywords": [
+    "llm",
+    "gateway",
+    "openai",
+    "anthropic",
+    "gemini",
+    "proxy",
+    "litellm"
+  ],
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "bin/"
+  ],
   "peerDependencies": {
     "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
-    "openai": { "optional": true }
+    "openai": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=16"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run build",
+    "test": "node --test test/sidecar.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "typescript": "^7.0.2"
   }
 }

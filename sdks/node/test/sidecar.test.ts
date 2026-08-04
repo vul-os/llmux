@@ -1,18 +1,20 @@
 "use strict";
 // Tests for the llmux Node sidecar launcher.
-// Run from sdks/node:  node --test
+// Run from sdks/node:  npm test   (builds the TS sources, then runs this
+// against the compiled output — see package.json).
 //
 // Covers: binary resolution, URL formatting, health-poll readiness/timeout,
 // singleton/lazy start, cleanup, and an integration test gated on the real
 // binary (LLMUX_BINARY or the bundled bin/llmux).
 
-const { test } = require("node:test");
-const assert = require("node:assert");
-const path = require("node:path");
-const fs = require("node:fs");
-const os = require("node:os");
-const net = require("node:net");
-const http = require("node:http");
+import { test } from "node:test";
+import assert from "node:assert";
+import path from "node:path";
+import fs from "node:fs";
+import os from "node:os";
+import net from "node:net";
+import http from "node:http";
+import type * as Llmux from "../index";
 
 const PKG = path.join(__dirname, "..");
 const INDEX = path.join(PKG, "index.js");
@@ -20,13 +22,13 @@ const FAKE = path.join(PKG, "fixtures", "fake-llmux.js");
 const NODE = process.execPath;
 
 // Load a *fresh* copy of the singleton module so tests don't share state.
-function freshLlmux() {
+function freshLlmux(): typeof Llmux {
   delete require.cache[require.resolve(INDEX)];
   return require(INDEX);
 }
 
 // Write an executable wrapper that runs the fake fixture under `node`.
-function makeFakeBinary(extraEnv = {}) {
+function makeFakeBinary(extraEnv: Record<string, string> = {}): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "llmux-fake-"));
   const wrapper = path.join(dir, "llmux");
   const exports = Object.entries(extraEnv)
@@ -40,11 +42,11 @@ function makeFakeBinary(extraEnv = {}) {
   return wrapper;
 }
 
-function portOf(base) {
-  return parseInt(base.split(":").pop(), 10);
+function portOf(base: string): number {
+  return parseInt(base.split(":").pop() as string, 10);
 }
 
-function portOpen(port) {
+function portOpen(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const s = net.connect(port, "127.0.0.1");
     s.setTimeout(500);
@@ -60,7 +62,7 @@ function portOpen(port) {
   });
 }
 
-async function waitPortClosed(port, timeoutMs) {
+async function waitPortClosed(port: number, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     if (!(await portOpen(port))) return true;
@@ -69,7 +71,7 @@ async function waitPortClosed(port, timeoutMs) {
   return !(await portOpen(port));
 }
 
-function httpGet(url) {
+function httpGet(url: string): Promise<number | undefined> {
   return new Promise((resolve, reject) => {
     const req = http.get(url, (res) => {
       res.resume();
@@ -209,7 +211,7 @@ test(
   { skip: realBin ? false : "real llmux binary not available" },
   async () => {
     const llmux = freshLlmux();
-    process.env.LLMUX_BINARY = realBin;
+    process.env.LLMUX_BINARY = realBin as string;
     try {
       const base = await llmux.start({ timeoutMs: 15000 });
       assert.match(base, /^http:\/\/127\.0\.0\.1:\d+$/);

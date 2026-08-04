@@ -4,7 +4,8 @@
 // doesn't execute it as a test). Honors LLMUX_ADDR, serves GET /health -> 200.
 //   FAKE_HEALTH_STATUS  status for /health (default 200)
 //   FAKE_NEVER_LISTEN   if "1", never binds (simulates a hung start)
-const http = require("http");
+import * as http from "http";
+
 process.on("SIGTERM", () => process.exit(0));
 if (process.env.FAKE_NEVER_LISTEN === "1") {
   setTimeout(() => process.exit(0), 30000);
