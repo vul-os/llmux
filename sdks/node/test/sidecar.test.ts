@@ -23,7 +23,7 @@ const NODE = process.execPath;
 
 // Load a *fresh* copy of the singleton module so tests don't share state.
 function freshLlmux(): typeof Llmux {
-  delete require.cache[require.resolve(INDEX)];
+  Reflect.deleteProperty(require.cache, require.resolve(INDEX));
   // A static ES import can't be reloaded per test; this dynamic require is
   // paired with the require.cache delete above specifically to get a fresh
   // module instance between tests, and the result is cast to the module's
@@ -59,7 +59,7 @@ function portOpen(port: number): Promise<boolean> {
       s.destroy();
       resolve(true);
     });
-    s.on("error", () => resolve(false));
+    s.on("error", () => { resolve(false); });
     s.on("timeout", () => {
       s.destroy();
       resolve(false);
@@ -104,7 +104,7 @@ void test("LLMUX_BINARY override is the binary that gets spawned", async () => {
 
 void test("a bogus LLMUX_BINARY surfaces a clear failure (not silent bundled use)", async () => {
   const llmux = freshLlmux();
-  process.env.LLMUX_BINARY = path.join(os.tmpdir(), "nope-" + Date.now());
+  process.env.LLMUX_BINARY = path.join(os.tmpdir(), "nope-" + Date.now().toString());
   try {
     await assert.rejects(() => llmux.start({ timeoutMs: 800 }));
   } finally {

@@ -54,7 +54,7 @@ function freePort(): Promise<number> {
       // We just bound to a loopback host:port (not a pipe), so address()
       // is always an AddressInfo here, never a string or null.
       const port = (srv.address() as net.AddressInfo).port;
-      srv.close(() => resolve(port));
+      srv.close(() => { resolve(port); });
     });
   });
 }
@@ -65,13 +65,13 @@ function waitHealthy(base: string, timeoutMs: number): Promise<void> {
     const tick = () => {
       const req = http.get(base + "/health", (res) => {
         res.resume();
-        if (res.statusCode === 200) return resolve();
+        if (res.statusCode === 200) { resolve(); return; }
         retry();
       });
       req.on("error", retry);
     };
     const retry = () => {
-      if (Date.now() > deadline) return reject(new Error("llmux did not become healthy in time"));
+      if (Date.now() > deadline) { reject(new Error("llmux did not become healthy in time")); return; }
       setTimeout(tick, 50);
     };
     tick();
@@ -82,7 +82,7 @@ function waitHealthy(base: string, timeoutMs: number): Promise<void> {
 export async function start(opts: StartOptions = {}): Promise<string> {
   if (_proc && _proc.exitCode === null) return _base as string;
   const port = opts.port || (await freePort());
-  const addr = `127.0.0.1:${port}`;
+  const addr = `127.0.0.1:${String(port)}`;
   const env = Object.assign({}, process.env, { LLMUX_ADDR: addr });
   if (opts.config) env.LLMUX_CONFIG = opts.config;
   Object.assign(env, opts.env || {});

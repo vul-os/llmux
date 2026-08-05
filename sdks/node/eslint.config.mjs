@@ -13,7 +13,7 @@ export default defineConfig([
   // 220-error TS migration pass green elsewhere in the fleet.
   {
     files: ["index.ts", "fixtures/**/*.ts", "test/**/*.ts"],
-    extends: [js.configs.recommended, ...tseslint.configs.recommendedTypeChecked],
+    extends: [js.configs.recommended, ...tseslint.configs.strictTypeChecked],
     languageOptions: {
       parserOptions: {
         projectService: true,
