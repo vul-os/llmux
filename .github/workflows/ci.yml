@@ -95,6 +95,39 @@ jobs:
       - name: Test
         run: go test -race -cover -timeout 180s ./...
 
+  # sdks/node is the only package.json in the tree with a `typescript`
+  # dependency. Go build/test above never touch it — without this job the TS
+  # SDK's type-aware ESLint config (strictTypeChecked) and `tsc --noEmit`
+  # never actually ran in CI, so a real type error or a de-fanged lint config
+  # would still go green.
+  node-sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/node
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: sdks/node/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint (type-aware ESLint)
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Prove the lint config is actually type-aware, not just named that way
+        run: npm run check:lint-config
+
+      - name: Build
+        run: npm run build
+
   # Optional live-provider smoke (real keys via repo secrets). Skips gracefully
   # if secrets are absent.
   live:
