@@ -21,4 +21,20 @@ export default defineConfig([
       },
     },
   },
+  // check-lint-config.mjs is ".mjs", matched by no `files` glob above (which
+  // only covers index.ts/fixtures/test *.ts) — it was enumerated in
+  // `eslint .`'s file count but had zero rules applied to it (confirmed via
+  // --print-config showing 0 resolved rules, and an injected unused-var
+  // probe that went unflagged before this block existed). It runs under
+  // Node only. `globals` isn't a dependency here, so its only two ambient
+  // identifiers (console, process) are declared directly rather than
+  // pulling in a new package for a two-name list.
+  {
+    files: ["scripts/check-lint-config.mjs"],
+    extends: [js.configs.recommended],
+    languageOptions: {
+      globals: { console: "readonly", process: "readonly" },
+      sourceType: "module",
+    },
+  },
 ]);
