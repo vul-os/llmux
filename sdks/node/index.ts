@@ -144,13 +144,27 @@ function pickOpenAIConstructor(mod: unknown): new (opts: Record<string, unknown>
 
 /** Construct an `openai` client pointed at the local gateway. */
 export async function OpenAI(opts: { apiKey?: string; [k: string]: unknown } = {}): Promise<unknown> {
+  // FIXED DEFECT (previously reported, not fixed): opts used to be spread
+  // last, so a caller-supplied opts.baseURL silently overrode the gateway
+  // URL below and traffic went straight to the provider with no warning —
+  // defeating the whole point of this helper. Reject it outright instead of
+  // silently dropping or silently honoring it, and do so before the dynamic
+  // require() so this check doesn't depend on "openai" being installed.
+  if ("baseURL" in opts) {
+    throw new Error(
+      'llmux.OpenAI() always routes through the local llmux gateway, so a caller-supplied "baseURL" is not allowed ' +
+        "(it would silently bypass the gateway). To talk to a provider directly, construct your own `openai` client " +
+        'instead of using this helper, e.g. `new (require("openai").OpenAI)({ baseURL: ... })`.'
+    );
+  }
   // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional peer dep resolved dynamically at runtime; not a static import target (see comment above)
   const openaiModule: unknown = require("openai");
   const Ctor = pickOpenAIConstructor(openaiModule);
   const baseUrl = await openaiBaseURL();
-  // KNOWN DEFECT (reported, not fixed): ...opts is spread last, so a
-  // caller-supplied opts.baseURL silently overrides baseUrl above.
-  return new Ctor({ baseURL: baseUrl, apiKey: opts.apiKey || "llmux-local", ...opts });
+  // opts is spread first now, so nothing in it can clobber the gateway
+  // baseURL or the default apiKey set below (apiKey remains intentionally
+  // overridable: opts.apiKey, when supplied, is exactly what wins here).
+  return new Ctor({ ...opts, baseURL: baseUrl, apiKey: opts.apiKey || "llmux-local" });
 }
 
 process.on("exit", stop);
