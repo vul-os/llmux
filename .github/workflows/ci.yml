@@ -128,6 +128,39 @@ jobs:
       - name: Build
         run: npm run build
 
+  # sdks/rust is a real crate (Cargo.toml + src/ + tests/) that neither the Go
+  # build/test above nor the Node SDK job touches — without this job `cargo
+  # build`, `cargo test`, and `cargo clippy -D warnings` never actually ran in
+  # CI, so a broken build or a real clippy lint would still go green. Built
+  # with --all-features so the optional `async-openai` codepath (normally
+  # invisible to a default-features build) is actually compiled and linted
+  # too, not just declared in Cargo.toml. `cargo fmt` is deliberately not a
+  # gate here.
+  rust-sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdks/rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@1.94.0
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: sdks/rust
+
+      - name: Build
+        run: cargo build --all-features
+
+      - name: Test
+        run: cargo test --all-features
+
+      - name: Clippy
+        run: cargo clippy --all-features -- -D warnings
+
   # Optional live-provider smoke (real keys via repo secrets). Skips gracefully
   # if secrets are absent.
   live:
