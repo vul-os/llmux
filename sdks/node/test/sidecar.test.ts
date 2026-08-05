@@ -23,8 +23,13 @@ const NODE = process.execPath;
 
 // Load a *fresh* copy of the singleton module so tests don't share state.
 function freshLlmux(): typeof Llmux {
-  delete require.cache[require.resolve(INDEX)];
-  return require(INDEX);
+  Reflect.deleteProperty(require.cache, require.resolve(INDEX));
+  // A static ES import can't be reloaded per test; this dynamic require is
+  // paired with the require.cache delete above specifically to get a fresh
+  // module instance between tests, and the result is cast to the module's
+  // real type rather than left as `any`.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- dynamic reload, not a static import target
+  return require(INDEX) as typeof Llmux;
 }
 
 // Write an executable wrapper that runs the fake fixture under `node`.
@@ -54,7 +59,7 @@ function portOpen(port: number): Promise<boolean> {
       s.destroy();
       resolve(true);
     });
-    s.on("error", () => resolve(false));
+    s.on("error", () => { resolve(false); });
     s.on("timeout", () => {
       s.destroy();
       resolve(false);
@@ -83,7 +88,7 @@ function httpGet(url: string): Promise<number | undefined> {
 
 // --- binary resolution -----------------------------------------------------
 
-test("LLMUX_BINARY override is the binary that gets spawned", async () => {
+void test("LLMUX_BINARY override is the binary that gets spawned", async () => {
   // Point the override at our fake and confirm the sidecar actually came up
   // through it (health 200), proving the override path was used.
   const llmux = freshLlmux();
@@ -97,9 +102,9 @@ test("LLMUX_BINARY override is the binary that gets spawned", async () => {
   }
 });
 
-test("a bogus LLMUX_BINARY surfaces a clear failure (not silent bundled use)", async () => {
+void test("a bogus LLMUX_BINARY surfaces a clear failure (not silent bundled use)", async () => {
   const llmux = freshLlmux();
-  process.env.LLMUX_BINARY = path.join(os.tmpdir(), "nope-" + Date.now());
+  process.env.LLMUX_BINARY = path.join(os.tmpdir(), "nope-" + Date.now().toString());
   try {
     await assert.rejects(() => llmux.start({ timeoutMs: 800 }));
   } finally {
@@ -110,7 +115,7 @@ test("a bogus LLMUX_BINARY surfaces a clear failure (not silent bundled use)", a
 
 // --- URL formatting --------------------------------------------------------
 
-test("openaiBaseURL == baseURL + /v1, base is http://127.0.0.1:<port>", async () => {
+void test("openaiBaseURL == baseURL + /v1, base is http://127.0.0.1:<port>", async () => {
   const llmux = freshLlmux();
   process.env.LLMUX_BINARY = makeFakeBinary();
   try {
@@ -127,7 +132,7 @@ test("openaiBaseURL == baseURL + /v1, base is http://127.0.0.1:<port>", async ()
 
 // --- health-poll logic -----------------------------------------------------
 
-test("becomes ready when /health returns 200", async () => {
+void test("becomes ready when /health returns 200", async () => {
   const llmux = freshLlmux();
   process.env.LLMUX_BINARY = makeFakeBinary();
   try {
@@ -139,7 +144,7 @@ test("becomes ready when /health returns 200", async () => {
   }
 });
 
-test("times out when /health never returns 200", async () => {
+void test("times out when /health never returns 200", async () => {
   const llmux = freshLlmux();
   process.env.LLMUX_BINARY = makeFakeBinary({ FAKE_HEALTH_STATUS: "503" });
   try {
@@ -153,7 +158,7 @@ test("times out when /health never returns 200", async () => {
   }
 });
 
-test("times out when the server never listens", async () => {
+void test("times out when the server never listens", async () => {
   const llmux = freshLlmux();
   process.env.LLMUX_BINARY = makeFakeBinary({ FAKE_NEVER_LISTEN: "1" });
   try {
@@ -166,7 +171,7 @@ test("times out when the server never listens", async () => {
 
 // --- singleton / lazy start ------------------------------------------------
 
-test("start twice returns same base and does not respawn", async () => {
+void test("start twice returns same base and does not respawn", async () => {
   const llmux = freshLlmux();
   process.env.LLMUX_BINARY = makeFakeBinary();
   try {
@@ -183,7 +188,7 @@ test("start twice returns same base and does not respawn", async () => {
 
 // --- cleanup ---------------------------------------------------------------
 
-test("stop() kills the child and frees the port", async () => {
+void test("stop() kills the child and frees the port", async () => {
   const llmux = freshLlmux();
   process.env.LLMUX_BINARY = makeFakeBinary();
   try {
@@ -206,7 +211,7 @@ const realBin =
     ? path.join(PKG, "bin", "llmux")
     : null);
 
-test(
+void test(
   "integration: real binary serves health and hands back base_url",
   { skip: realBin ? false : "real llmux binary not available" },
   async () => {

@@ -34,11 +34,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "pretest": "npm run build",
     "test": "node --test test/sidecar.test.js"
   },
   "devDependencies": {
+    "@eslint/js": "10.0.1",
     "@types/node": "^26.1.2",
-    "typescript": "^7.0.2"
+    "eslint": "10.8.0",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.66.0"
   }
 }

@@ -54,7 +54,7 @@ function freePort(): Promise<number> {
       // We just bound to a loopback host:port (not a pipe), so address()
       // is always an AddressInfo here, never a string or null.
       const port = (srv.address() as net.AddressInfo).port;
-      srv.close(() => resolve(port));
+      srv.close(() => { resolve(port); });
     });
   });
 }
@@ -65,13 +65,13 @@ function waitHealthy(base: string, timeoutMs: number): Promise<void> {
     const tick = () => {
       const req = http.get(base + "/health", (res) => {
         res.resume();
-        if (res.statusCode === 200) return resolve();
+        if (res.statusCode === 200) { resolve(); return; }
         retry();
       });
       req.on("error", retry);
     };
     const retry = () => {
-      if (Date.now() > deadline) return reject(new Error("llmux did not become healthy in time"));
+      if (Date.now() > deadline) { reject(new Error("llmux did not become healthy in time")); return; }
       setTimeout(tick, 50);
     };
     tick();
@@ -82,7 +82,7 @@ function waitHealthy(base: string, timeoutMs: number): Promise<void> {
 export async function start(opts: StartOptions = {}): Promise<string> {
   if (_proc && _proc.exitCode === null) return _base as string;
   const port = opts.port || (await freePort());
-  const addr = `127.0.0.1:${port}`;
+  const addr = `127.0.0.1:${String(port)}`;
   const env = Object.assign({}, process.env, { LLMUX_ADDR: addr });
   if (opts.config) env.LLMUX_CONFIG = opts.config;
   Object.assign(env, opts.env || {});
@@ -93,13 +93,21 @@ export async function start(opts: StartOptions = {}): Promise<string> {
   // as a rejected start() rather than an uncaught 'error' event.
   let spawnError: Error | null = null;
   _proc.on("error", (e) => { spawnError = e; });
+  // spawnError is reassigned inside the "error" listener closure above; read
+  // it through a function with an explicit return type rather than the raw
+  // variable, since TS's control-flow analysis can't see into the closure
+  // and would otherwise (wrongly) treat every read as still `null`.
+  const currentSpawnError = (): Error | null => spawnError;
   _base = `http://${addr}`;
   try {
-    if (spawnError) throw spawnError;
+    const startError = currentSpawnError();
+    if (startError) throw startError;
     await waitHealthy(_base, opts.timeoutMs || 10000);
   } catch (e) {
     stop();
-    throw spawnError || e;
+    const failError = currentSpawnError();
+    if (failError) throw failError;
+    throw e instanceof Error ? e : new Error(String(e));
   }
   return _base;
 }
@@ -121,13 +129,27 @@ export function stop(): void {
   _proc = null;
 }
 
+// "openai" is an optional peer dependency (see package.json), not installed
+// as a devDependency here, so it has no first-party types available to
+// import against — its export shape is genuinely unknown to us. Narrow it
+// structurally instead of asserting `any`.
+function pickOpenAIConstructor(mod: unknown): new (opts: Record<string, unknown>) => unknown {
+  const record = typeof mod === "object" && mod !== null ? (mod as Record<string, unknown>) : {};
+  const candidate = record.OpenAI ?? record.default ?? mod;
+  if (typeof candidate !== "function") {
+    throw new TypeError('the "openai" package did not export a usable constructor');
+  }
+  return candidate as new (opts: Record<string, unknown>) => unknown;
+}
+
 /** Construct an `openai` client pointed at the local gateway. */
 export async function OpenAI(opts: { apiKey?: string; [k: string]: unknown } = {}): Promise<unknown> {
-  // "openai" is an optional peer dependency (see package.json) with no
-  // first-party types available here; its export shape is unknown to us.
-  const OpenAILib: any = require("openai");
-  const Ctor = OpenAILib.OpenAI || OpenAILib.default || OpenAILib;
+  // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional peer dep resolved dynamically at runtime; not a static import target (see comment above)
+  const openaiModule: unknown = require("openai");
+  const Ctor = pickOpenAIConstructor(openaiModule);
   const baseUrl = await openaiBaseURL();
+  // KNOWN DEFECT (reported, not fixed): ...opts is spread last, so a
+  // caller-supplied opts.baseURL silently overrides baseUrl above.
   return new Ctor({ baseURL: baseUrl, apiKey: opts.apiKey || "llmux-local", ...opts });
 }
 
