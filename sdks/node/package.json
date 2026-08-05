@@ -35,6 +35,7 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "check:lint-config": "node scripts/check-lint-config.mjs",
     "pretest": "npm run build",
     "test": "node --test test/sidecar.test.js"
   },
