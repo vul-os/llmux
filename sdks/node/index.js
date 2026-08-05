@@ -115,15 +115,24 @@ async function start(opts = {}) {
     // as a rejected start() rather than an uncaught 'error' event.
     let spawnError = null;
     _proc.on("error", (e) => { spawnError = e; });
+    // spawnError is reassigned inside the "error" listener closure above; read
+    // it through a function with an explicit return type rather than the raw
+    // variable, since TS's control-flow analysis can't see into the closure
+    // and would otherwise (wrongly) treat every read as still `null`.
+    const currentSpawnError = () => spawnError;
     _base = `http://${addr}`;
     try {
-        if (spawnError)
-            throw spawnError;
+        const startError = currentSpawnError();
+        if (startError)
+            throw startError;
         await waitHealthy(_base, opts.timeoutMs || 10000);
     }
     catch (e) {
         stop();
-        throw spawnError || e;
+        const failError = currentSpawnError();
+        if (failError)
+            throw failError;
+        throw e instanceof Error ? e : new Error(String(e));
     }
     return _base;
 }
@@ -143,13 +152,26 @@ function stop() {
         _proc.kill();
     _proc = null;
 }
+// "openai" is an optional peer dependency (see package.json), not installed
+// as a devDependency here, so it has no first-party types available to
+// import against — its export shape is genuinely unknown to us. Narrow it
+// structurally instead of asserting `any`.
+function pickOpenAIConstructor(mod) {
+    const record = typeof mod === "object" && mod !== null ? mod : {};
+    const candidate = record.OpenAI ?? record.default ?? mod;
+    if (typeof candidate !== "function") {
+        throw new TypeError('the "openai" package did not export a usable constructor');
+    }
+    return candidate;
+}
 /** Construct an `openai` client pointed at the local gateway. */
 async function OpenAI(opts = {}) {
-    // "openai" is an optional peer dependency (see package.json) with no
-    // first-party types available here; its export shape is unknown to us.
-    const OpenAILib = require("openai");
-    const Ctor = OpenAILib.OpenAI || OpenAILib.default || OpenAILib;
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- optional peer dep resolved dynamically at runtime; not a static import target (see comment above)
+    const openaiModule = require("openai");
+    const Ctor = pickOpenAIConstructor(openaiModule);
     const baseUrl = await openaiBaseURL();
+    // KNOWN DEFECT (reported, not fixed): ...opts is spread last, so a
+    // caller-supplied opts.baseURL silently overrides baseUrl above.
     return new Ctor({ baseURL: baseUrl, apiKey: opts.apiKey || "llmux-local", ...opts });
 }
 process.on("exit", stop);
