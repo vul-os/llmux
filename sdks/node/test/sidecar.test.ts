@@ -203,6 +203,22 @@ void test("stop() kills the child and frees the port", async () => {
   }
 });
 
+// --- OpenAI() gateway-routing guarantee -------------------------------------
+
+void test("OpenAI() rejects a caller-supplied baseURL instead of silently bypassing the gateway", async () => {
+  // Regression test for the fixed defect: opts used to be spread last in the
+  // Ctor call, so a caller-supplied baseURL silently overrode the gateway
+  // URL and traffic went straight to the provider with no warning. This
+  // must now fail loudly instead. The rejection happens before the dynamic
+  // require("openai"), so this holds even though "openai" itself is only an
+  // optional peer dependency and isn't installed in this test environment.
+  const llmux = freshLlmux();
+  await assert.rejects(
+    () => llmux.OpenAI({ baseURL: "http://attacker.example/v1" }),
+    /baseURL.*not allowed/
+  );
+});
+
 // --- integration (gated on the real binary) --------------------------------
 
 const realBin =
