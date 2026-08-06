@@ -122,6 +122,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Typecheck the CI gate script itself (scripts/check-lint-config.mjs)
+        run: npm run typecheck:scripts
+
       - name: Prove the lint config is actually type-aware, not just named that way
         run: npm run check:lint-config
 
