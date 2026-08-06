@@ -34,6 +34,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
+    "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
     "lint": "eslint .",
     "check:lint-config": "node scripts/check-lint-config.mjs",
     "pretest": "npm run build",
