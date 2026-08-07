@@ -372,6 +372,16 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .chead .cr{flex:1;height:1px;background:var(--line-2);min-width:14px}
 .chead .cm{color:var(--faint);flex:none}
 @media (max-width:620px){.chead .cm{display:none}}
+/* The section label is `flex:none` and set in wide-tracked uppercase, so on a
+   narrow screen it simply refused to shrink — 246px of label in a 320px
+   viewport, dragging the rule beside it off the edge and scrolling the whole
+   page sideways. Below 520 it is allowed to wrap onto a second line and the
+   tracking eases off; nothing is hidden, so no label text is lost. */
+@media (max-width:520px){
+  .chead{flex-wrap:wrap;row-gap:6px;gap:10px;letter-spacing:.1em}
+  .chead .cl{flex:1 1 auto;min-width:0;white-space:normal}
+  .chead .cr{flex:1 1 40px}
+}
 
 /* ═══ HERO ════════════════════════════════════════════════════════════════ */
 .band.hero{padding:56px 0 0;border-bottom:1px solid var(--line)}
@@ -1334,6 +1344,11 @@ html.js .rv.in{opacity:1;transform:none}
 @media (max-width:1140px){.secnav{display:none}}
 @media (max-width:1080px){:root{--pad:24px}}
 @media (max-width:520px){:root{--pad:18px}}
+/* At 320 the header actions measure 55 + 44 + 44 + 44 with 6px gaps = 205,
+   which with the brand and the padding runs 32px past the edge and scrolls the
+   whole page sideways. The GitHub link goes: the repository is linked from the
+   footer as well, so it is the only one of these that is duplicated. */
+@media (max-width:380px){.hdr-act .hbtn[href^="http"]{display:none}}
 
   /* ── Vulos suite chrome — identical on every product landing ───────────────
      Two elements, and only two: a logo-only home button in the top bar, and
