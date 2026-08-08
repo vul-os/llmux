@@ -10,7 +10,10 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-09
+
 ### Added
+
 - **Signed, checksummed releases — and a verifier that fails closed.** Nothing
   in the release pipeline previously vouched for the bytes it published. The
   release workflow now stages every asset into `release/`, emits a `SHA256SUMS`
@@ -62,7 +65,37 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   `TestSiteDocsInSync` fails on drift; this also fixed 24 dead links that could
   never have resolved in the shipped bundle.
 
+- **Sovereignty gate** — inference runs on your box by default. A default-deny
+  egress policy (`core/sovereign`) gates every dispatch path (unary + streaming
+  chat, embeddings, the semantic-cache embedder, and all modality/forward
+  routes) before any network call. Off-box providers are blocked unless
+  explicitly opted in per provider (`allow_egress`, `allow_brokered`, or
+  `"tier": "sovereign"`). Evolved into a 4-tier "where your AI runs" model
+  (local / sovereign / brokered / external); fails closed; permitted off-box
+  calls are logged with their tier; `/health` and the startup log disclose the
+  posture. Documented in README, `docs/architecture.md`,
+  `docs/configuration.md`, and `SECURITY.md`.
+- **Postgres seam standardized** on a shared `DATABASE_URL` (or
+  `VULOS_DATABASE_URL`) with a dedicated `llmux` schema, so llmux can share one
+  Postgres instance (e.g. a single Neon database) with the rest of the suite
+  without colliding with other products' tables.
+- **Audio endpoints** — `/v1/audio/transcriptions` and
+  `/v1/audio/translations` (multipart), metered and gated by the sovereignty
+  policy like every other route.
+- **Durable CP usage spooling** — usage records are written to an optional
+  on-disk spool before being handed to the fast-path retry queue, and a
+  background reconciler re-delivers anything the control plane hasn't
+  acknowledged. Closes the gap where an extended CP outage, a full retry
+  queue, or a process crash could silently drop a billing record.
+- Comprehensive product manual: `docs/GETTING-STARTED.md`,
+  `docs/ADMIN-GUIDE.md`, `docs/TROUBLESHOOTING.md`.
+- Third-party license notices: bundled `@license` banners are preserved in the
+  web build and a third-party notices page is generated and surfaced.
+- Web frontend test layer: Playwright E2E (boot guard, dashboard, docs) and
+  Vitest unit/component tests, including an adversarial-security test pass.
+
 ### Changed
+
 - **Gated integration tests now skip loudly**: a run without Postgres/Redis
   prints which tests were skipped *and which properties went unverified*, the
   gated corpus size is checked against the source, and CI sets
@@ -73,7 +106,25 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   copyable description of the pattern. The price-catalog sync is on by default
   and is now disclosed as such in the README and `docs/configuration.md`.
 
+- Relabeled the "sovereign" and "brokered" tiers to be honest about what
+  they are: operator-declared, unverified endpoints — not a Vulos-operated or
+  Vulos-vetted guarantee. Enforcement and tier keys are unchanged.
+- README and docs made self-contained (dropped the "Part of VulOS" suite-map
+  banner in favor of a plain logo footer) and de-genericized: stale
+  `@vulos.net` references purged, the mail connector's `[ai]` block reframed as
+  the connector's own `[ai]` block, sibling products named correctly (Diwan and
+  lilmail), and a stale mail link dropped.
+- Documented previously-implicit behavior: modality routes are
+  passthrough-only (translating adapters return 501), `model_not_priced`
+  fail-closed budgeting, and the `/health` auth surface reconciled between
+  `api.md` and `architecture.md`.
+- Go toolchain bumped to go1.25.12; web tooling upgraded (Vite 5→8,
+  `@vitejs/plugin-react` 4→6) to clear reachable stdlib and dev-tooling
+  advisories.
+- Removed the unused `requestIDFrom` server helper.
+
 ### Removed
+
 - **The React/Vite admin SPA and the entire Node toolchain that built it.**
   The embedded dashboard at `/ui` is now `web/ui.html` — one hand-written
   467-line file, inline `<style>`/`<script>`, vanilla JS, no imports, no CDN.
@@ -98,6 +149,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   is now `fmt-check` + `verify-selftest`.
 
 ### Fixed
+
 - **The brand mark never propagated past `brand/logo.svg`.** The "fill the mux
   body solid" decision only ever touched `brand/logo.svg` itself — every
   downstream copy (`web/public/favicon.svg`, `web/public/llmux.svg`,
@@ -132,57 +184,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
   MIT-only license — none of which exist. Replaced with an accurate statement:
   the directory is empty and reserved.
 
-## [0.2.0] - 2026-07-17
-
-### Added
-- **Sovereignty gate** — inference runs on your box by default. A default-deny
-  egress policy (`core/sovereign`) gates every dispatch path (unary + streaming
-  chat, embeddings, the semantic-cache embedder, and all modality/forward
-  routes) before any network call. Off-box providers are blocked unless
-  explicitly opted in per provider (`allow_egress`, `allow_brokered`, or
-  `"tier": "sovereign"`). Evolved into a 4-tier "where your AI runs" model
-  (local / sovereign / brokered / external); fails closed; permitted off-box
-  calls are logged with their tier; `/health` and the startup log disclose the
-  posture. Documented in README, `docs/architecture.md`,
-  `docs/configuration.md`, and `SECURITY.md`.
-- **Postgres seam standardized** on a shared `DATABASE_URL` (or
-  `VULOS_DATABASE_URL`) with a dedicated `llmux` schema, so llmux can share one
-  Postgres instance (e.g. a single Neon database) with the rest of the suite
-  without colliding with other products' tables.
-- **Audio endpoints** — `/v1/audio/transcriptions` and
-  `/v1/audio/translations` (multipart), metered and gated by the sovereignty
-  policy like every other route.
-- **Durable CP usage spooling** — usage records are written to an optional
-  on-disk spool before being handed to the fast-path retry queue, and a
-  background reconciler re-delivers anything the control plane hasn't
-  acknowledged. Closes the gap where an extended CP outage, a full retry
-  queue, or a process crash could silently drop a billing record.
-- Comprehensive product manual: `docs/GETTING-STARTED.md`,
-  `docs/ADMIN-GUIDE.md`, `docs/TROUBLESHOOTING.md`.
-- Third-party license notices: bundled `@license` banners are preserved in the
-  web build and a third-party notices page is generated and surfaced.
-- Web frontend test layer: Playwright E2E (boot guard, dashboard, docs) and
-  Vitest unit/component tests, including an adversarial-security test pass.
-
-### Changed
-- Relabeled the "sovereign" and "brokered" tiers to be honest about what
-  they are: operator-declared, unverified endpoints — not a Vulos-operated or
-  Vulos-vetted guarantee. Enforcement and tier keys are unchanged.
-- README and docs made self-contained (dropped the "Part of VulOS" suite-map
-  banner in favor of a plain logo footer) and de-genericized: stale
-  `@vulos.net` references purged, the mail connector's `[ai]` block reframed as
-  the connector's own `[ai]` block, sibling products named correctly (Diwan and
-  lilmail), and a stale mail link dropped.
-- Documented previously-implicit behavior: modality routes are
-  passthrough-only (translating adapters return 501), `model_not_priced`
-  fail-closed budgeting, and the `/health` auth surface reconciled between
-  `api.md` and `architecture.md`.
-- Go toolchain bumped to go1.25.12; web tooling upgraded (Vite 5→8,
-  `@vitejs/plugin-react` 4→6) to clear reachable stdlib and dev-tooling
-  advisories.
-- Removed the unused `requestIDFrom` server helper.
-
-### Fixed
 - **Virtual-key tokens hashed at rest** in Postgres and Redis (SHA-256), so a
   Postgres dump or a Redis `SCAN`/`MONITOR` can no longer harvest live bearer
   credentials.
@@ -213,6 +214,6 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.2.0...HEAD
-[0.2.0]: https://github.com/vul-os/llmux/compare/v0.1.0...v0.2.0
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/vul-os/llmux/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vul-os/llmux/releases/tag/v0.1.0
