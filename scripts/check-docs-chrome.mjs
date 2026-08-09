@@ -25,6 +25,7 @@
 //   [docs-rail]    assertion 2 — sidebar pinned, shell packed left
 //   [no-outbound]  assertion 3 — no outbound origins under site/
 //   [fence-lang]   assertion 4 — every fence language is registered in hljs
+//   [version]      assertion 5 — the landing's version badge equals VERSION
 //
 // ── Relationship to the suite gate ────────────────────────────────────────
 // vulos-cloud/scripts/check-suite-chrome.mjs is the RATIFIED cross-repo gate
@@ -119,6 +120,8 @@ const counts = {
   untaggedFences: 0,
   languages: new Set(),
   hljsLanguages: 0,
+  versionBadges: 0,
+  version: '?',
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -623,6 +626,52 @@ if (counts.fences > 0 && counts.taggedFences === 0) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// Assertion 5 — the landing's version badge equals VERSION.
+//
+// The landing said v0.1.1 while VERSION said 0.1.2 and the release notes, the
+// README and the C ABI's own version probe all said 0.1.2. Nobody noticed,
+// because a version badge is the kind of string every reviewer's eye treats as
+// furniture. It is the cheapest possible check and it caught a live defect the
+// first time it ran.
+//
+// The badge is matched as a standalone `v<semver>` token in the landing's top
+// rail. If the rail stops carrying one, that is a [coverage] failure, not a
+// pass — otherwise deleting the badge would "fix" this check.
+// ══════════════════════════════════════════════════════════════════════════
+const VERSION_FILE = path.join(root, 'VERSION');
+const INDEX_HTML = path.join(root, 'site', 'index.html');
+const versionRaw = readText(VERSION_FILE);
+const indexHtml = readText(INDEX_HTML);
+if (versionRaw === null) {
+  fail('coverage', `could not read ${rel(VERSION_FILE)} — the version-badge check verified NOTHING`);
+} else if (indexHtml === null) {
+  fail('coverage', `could not read ${rel(INDEX_HTML)} — the version-badge check verified NOTHING`);
+} else {
+  const want = versionRaw.trim();
+  if (!/^\d+\.\d+\.\d+/.test(want)) {
+    fail('coverage', `${rel(VERSION_FILE)} does not look like a version (${JSON.stringify(want.slice(0, 40))}) — the version-badge check verified NOTHING`);
+  } else {
+    const railRe = /<div class="toprail[^"]*"[^>]*>([\s\S]*?)<\/div>/i;
+    const rail = railRe.exec(indexHtml);
+    if (!rail) {
+      fail('coverage', `no .toprail block in ${rel(INDEX_HTML)} — the version-badge check verified NOTHING`);
+    } else {
+      const badges = [...rail[1].matchAll(/>\s*v(\d+\.\d+\.\d+[^<\s]*)\s*</gi)].map((m) => m[1]);
+      if (badges.length === 0) {
+        fail('coverage', `the .toprail in ${rel(INDEX_HTML)} carries no v<semver> badge — the version-badge check verified NOTHING (deleting the badge is not a fix)`);
+      }
+      for (const got of badges) {
+        if (got !== want) {
+          fail('version', `${rel(INDEX_HTML)} advertises v${got} but ${rel(VERSION_FILE)} says ${want} — the landing is showing the wrong release`);
+        }
+      }
+      counts.versionBadges = badges.length;
+      counts.version = want;
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // Report
 // ══════════════════════════════════════════════════════════════════════════
 const langList = [...counts.languages].sort();
@@ -633,7 +682,8 @@ const summary =
   `${counts.mdDocs} markdown docs, ` +
   `${counts.fences} code fences (${counts.taggedFences} tagged, ${counts.untaggedFences} untagged) ` +
   `across ${langList.length} languages [${langList.join(' ')}] ` +
-  `against ${counts.hljsLanguages} hljs languages`;
+  `against ${counts.hljsLanguages} hljs languages, ` +
+  `${counts.versionBadges} version badge${counts.versionBadges === 1 ? '' : 's'} against VERSION ${counts.version}`;
 
 process.stdout.write(`check-docs-chrome: root=${root}\n`);
 process.stdout.write(`check-docs-chrome: ${summary}\n`);

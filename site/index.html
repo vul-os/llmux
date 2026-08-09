@@ -679,7 +679,16 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .d-bx.sunk{background:var(--sunk);border-color:var(--line-3)}
 .d-bx.on{border-color:var(--teal-edge);background:var(--teal-wash)}
 .d-bx.off{border-color:var(--rust-edge);background:var(--rust-wash)}
-.d-bx.ghost{opacity:.45}
+/* The ghosted box says "never contacted", and it has to say it legibly. At
+   opacity .45 the GROUP opacity faded the text toward the band along with the
+   chrome, and the composite — not either token — landed under AA: measured off
+   rendered pixels, .d-t was 4.32:1 dark / 4.26:1 light and .d-s was 2.77:1 /
+   2.74:1, against a 4.5:1 floor (13.4px semibold and 12.2px are both NORMAL
+   text; bold only earns the 3:1 floor at 18.66px and up).
+   .7 is the smallest value that clears it: .d-t 9.01 dark / 8.65 light, .d-s
+   5.00 / 4.84, all measured from real pixels. The box still reads as ghosted
+   against its live sibling, which renders at 11.58:1. */
+.d-bx.ghost{opacity:.7}
 
 .d-t{display:block;font-size:13.4px;font-weight:600;line-height:1.35;letter-spacing:-.01em;color:var(--ink)}
 .d-s{display:block;margin-top:5px;font-size:12.2px;line-height:1.5;color:var(--muted)}
@@ -1383,11 +1392,12 @@ html.js .rv.in{opacity:1;transform:none}
     </a>
     <nav class="secnav" aria-label="Channels">
       <a href="#wire">01 · Wire</a>
-      <a href="#gate">02 · Gate</a>
-      <a href="#routes">03 · Routes</a>
-      <a href="#controls">04 · Controls</a>
-      <a href="#panel">05 · Panel</a>
-      <a href="#start">06 · Start</a>
+      <a href="#library">02 · Library</a>
+      <a href="#gate">03 · Gate</a>
+      <a href="#routes">04 · Routes</a>
+      <a href="#controls">05 · Controls</a>
+      <a href="#panel">06 · Panel</a>
+      <a href="#start">07 · Start</a>
     </nav>
     <span class="spacer"></span>
     <div class="hdr-act">
@@ -1416,7 +1426,9 @@ html.js .rv.in{opacity:1;transform:none}
       <span>MIT or Apache-2.0</span>
       <span>no accounts · bearer tokens only</span>
       <span>no telemetry</span>
-      <span>v0.1.1</span>
+      <!-- Must equal VERSION at the repo root. It said v0.1.1 while VERSION
+           said 0.1.2 — the landing was advertising the previous release. -->
+      <span>v0.1.2</span>
     </div>
 
     <div class="hero-grid">
@@ -1785,20 +1797,141 @@ html.js .rv.in{opacity:1;transform:none}
         <span>PHP</span><span>Java</span><span>C#</span><span>Rust</span><span>C++</span><span>C</span>
         <span>Swift</span><span>Kotlin</span><span>Elixir</span><span>R</span><span>Dart</span>
       </div>
-      <p class="aside">Go can also embed the gateway <b style="color:var(--muted)">in-process</b> with no
-        child process at all; Python, Node, Ruby, PHP, Rust, Java, .NET and Elixir can run it as a local
-        sidecar instead of a standalone service.
+      <p class="aside">Every one of those talks to llmux over HTTP. It does not have to be a server on
+        the far end of that socket — see the next channel.
         <a href="./docs.html#client-examples" style="color:var(--teal-ink);font-weight:600">See every example →</a></p>
     </div>
   </div>
 </section>
 
-<!-- ══════ CH 02 · THE GATE — the darkest band in both themes ════════════ -->
+<!-- ══════ CH 02 · THE LIBRARY ═══════════════════════════════════════════
+     The wire chapter above answers "how do I call it". This one answers "what
+     is on the other end", and the honest answer is: not necessarily a process.
+     The snippet is the argument — an import and a call, with no listener, no
+     port and no child to supervise — so it is the first thing in the band and
+     the prose comes after it.
+
+     The numbers under it are measured (ffi/bench, 1000 requests each) and they
+     say the OPPOSITE of what a performance pitch would say. They are on the
+     page anyway: someone choosing in-process for the microseconds is choosing
+     it for the one reason that does not survive contact with a real model, and
+     they will find that out either here or in production. -->
+<section class="band alt" id="library">
+  <div class="wrap">
+    <span class="bus" aria-hidden="true"></span>
+
+    <div class="chead rv"><span class="ch">CH·02</span><span class="cl">The library</span>
+      <span class="cr"></span><span class="cm">core/gateway · in your process</span></div>
+
+    <h2 class="sec rv">Or don't run a server at all.</h2>
+    <p class="lead rv">llmux is a <b>library first</b>. <code>core/gateway</code> is the whole dispatch
+      path — routing, retries, failover, the sovereignty gate, BYOK, caching, pricing and metering —
+      with no HTTP surface of its own. <code>core/server</code> is one shell over it, and not the only
+      possible one. Import the library and there is no listener, no port, no loopback surface to secure
+      and no second process to supervise.</p>
+
+    <div class="split rv" style="margin-top:40px">
+      <div>
+        <div class="code">
+          <div class="code-bar"><i></i><span class="path">in-process · Go</span></div>
+          <pre><code><span class="ln"><span class="cb-var">gw</span><span class="cb-p">,</span> <span class="cb-var">err</span> <span class="cb-op">:=</span> <span class="cb-var">gateway</span><span class="cb-p">.</span><span class="cb-f">New</span><span class="cb-p">(</span><span class="cb-var">cfg</span><span class="cb-p">)</span></span>
+<span class="ln"><span class="cb-k">defer</span> <span class="cb-var">gw</span><span class="cb-p">.</span><span class="cb-f">Close</span><span class="cb-p">()</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">res</span><span class="cb-p">,</span> <span class="cb-var">err</span> <span class="cb-op">:=</span> <span class="cb-var">gw</span><span class="cb-p">.</span><span class="cb-f">Chat</span><span class="cb-p">(</span><span class="cb-var">ctx</span><span class="cb-p">,</span> <span class="cb-op">&amp;</span><span class="cb-var">openai</span><span class="cb-p">.</span><span class="cb-f">ChatCompletionRequest</span><span class="cb-p">{</span></span>
+<span class="ln">    <span class="cb-pr">Model</span><span class="cb-p">:</span>    <span class="cb-s">"gpt-4o-mini"</span><span class="cb-p">,</span></span>
+<span class="ln">    <span class="cb-pr">Messages</span><span class="cb-p">:</span> <span class="cb-p">[]</span><span class="cb-var">openai</span><span class="cb-p">.</span><span class="cb-f">Message</span><span class="cb-p">{{</span><span class="cb-pr">Role</span><span class="cb-p">:</span> <span class="cb-s">"user"</span><span class="cb-p">,</span></span>
+<span class="ln">        <span class="cb-pr">Content</span><span class="cb-p">:</span> <span class="cb-var">openai</span><span class="cb-p">.</span><span class="cb-f">Str</span><span class="cb-p">(</span><span class="cb-s">"hi"</span><span class="cb-p">)}},</span></span>
+<span class="ln"><span class="cb-p">})</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">res</span><span class="cb-p">.</span><span class="cb-pr">Provider</span>   <span class="cb-c">// who actually served, after failover</span></span>
+<span class="ln"><span class="cb-var">res</span><span class="cb-p">.</span><span class="cb-pr">CacheHit</span>   <span class="cb-c">// facts the HTTP shell has no field for</span></span></code></pre>
+        </div>
+        <p class="aside">The provider call is the only socket this program opens.
+          <code>gateway.New</code> starts no goroutines and, unless you configured a Postgres DSN, opens
+          nothing at all.</p>
+      </div>
+      <div>
+        <div class="code">
+          <div class="code-bar"><i></i><span class="path">in-process · any language · C ABI</span></div>
+          <pre><code><span class="ln"><span class="cb-var">uint64_t</span> <span class="cb-var">h</span> <span class="cb-op">=</span> <span class="cb-f">llmux_new</span><span class="cb-p">(</span><span class="cb-n">NULL</span><span class="cb-p">,</span> <span class="cb-op">&amp;</span><span class="cb-var">err</span><span class="cb-p">);</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">char</span><span class="cb-op">*</span> <span class="cb-var">out</span> <span class="cb-op">=</span> <span class="cb-f">llmux_call</span><span class="cb-p">(</span><span class="cb-var">h</span><span class="cb-p">,</span> <span class="cb-s">"chat"</span><span class="cb-p">,</span> <span class="cb-var">req</span><span class="cb-p">,</span> <span class="cb-op">&amp;</span><span class="cb-var">err</span><span class="cb-p">);</span></span>
+<span class="ln"><span class="cb-f">puts</span><span class="cb-p">(</span><span class="cb-var">out</span><span class="cb-p">);</span></span>
+<span class="ln"><span class="cb-f">llmux_free</span><span class="cb-p">(</span><span class="cb-var">out</span><span class="cb-p">);</span>          <span class="cb-c">/* never free() */</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-f">llmux_stream</span><span class="cb-p">(</span><span class="cb-var">h</span><span class="cb-p">,</span> <span class="cb-s">"chat"</span><span class="cb-p">,</span> <span class="cb-var">req</span><span class="cb-p">,</span> <span class="cb-var">on_chunk</span><span class="cb-p">,</span> <span class="cb-n">NULL</span><span class="cb-p">,</span> <span class="cb-op">&amp;</span><span class="cb-var">err</span><span class="cb-p">);</span></span>
+<span class="ln"><span class="cb-f">llmux_close</span><span class="cb-p">(</span><span class="cb-var">h</span><span class="cb-p">);</span>            <span class="cb-c">/* idempotent */</span></span></code></pre>
+        </div>
+        <p class="aside">Six functions, JSON in and JSON out — the <em>same</em> JSON the HTTP API uses, so
+          a body that works against <code>/v1/chat/completions</code> works here unchanged.</p>
+      </div>
+    </div>
+
+    <!-- Four modes, and what each one costs. The "you pay" column is the point
+         of the table: a mode with an empty cost column is a sales page. -->
+    <div class="rv" style="margin-top:44px">
+      <div class="chead"><span class="ch">Modes</span><span class="cl">Four ways to run it</span>
+        <span class="cr"></span><span class="cm">none of them is the default answer</span></div>
+      <div class="tscroll">
+        <table class="spec">
+          <thead><tr><th>Mode</th><th>What it is</th><th>You get</th><th>You pay</th></tr></thead>
+          <tbody>
+            <tr><td class="m" data-h="Mode">Server</td><td data-h="What it is"><code>llmux serve</code>, shared by many clients</td><td data-h="You get">Virtual keys, budgets, rate limits, the console, one place to change routing for a fleet</td><td data-h="You pay">A service to run, a port to secure, an HTTP hop</td></tr>
+            <tr><td class="m" data-h="Mode">Sidecar</td><td data-h="What it is">The same binary, spawned and supervised by a language package</td><td data-h="You get">All of the above, with no server to operate; native streaming in every language</td><td data-h="You pay">A child process, a loopback port</td></tr>
+            <tr><td class="m" data-h="Mode">Go library</td><td data-h="What it is"><code>import core/gateway</code></td><td data-h="You get">No process, no port, no socket — plus per-request facts the HTTP shell flattens away</td><td data-h="You pay">You are inside the trust boundary: auth is a call you make</td></tr>
+            <tr><td class="m" data-h="Mode">C&nbsp;ABI</td><td data-h="What it is"><code>dlopen libllmux</code> from any language</td><td data-h="You get">The library's benefits from a non-Go host</td><td data-h="You pay">The Go runtime in your process, ~12–17&nbsp;MB, no fork-safety, and real platform gaps</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="triptych rv">
+      <div>
+        <span class="n">Measured</span>
+        <b>Latency is not the reason</b>
+        <p>The boundary itself is <b style="color:var(--muted)">~4&nbsp;µs</b> in-process against
+          <b style="color:var(--muted)">~47&nbsp;µs</b> over loopback HTTP. Inside a real chat call:
+          ~80–92&nbsp;µs against ~102–109&nbsp;µs. Against a model that takes hundreds of milliseconds,
+          that saving is a rounding error, and anyone embedding <em>for the microseconds</em> is
+          optimising the wrong thing.</p>
+      </div>
+      <div>
+        <span class="n">Honest</span>
+        <b>Where the library does not exist</b>
+        <p>Prebuilt shared libraries: <b style="color:var(--muted)">darwin/arm64</b> and
+          <b style="color:var(--muted)">linux/arm64</b>. linux/amd64 is built in CI only.
+          <b style="color:var(--muted)">windows/amd64 and darwin/amd64 have never been built by
+          anyone.</b> If you ship there, the sidecar is the path, and choosing it is a supported
+          outcome rather than a fallback.</p>
+      </div>
+      <div>
+        <span class="n">Zero</span>
+        <b>The console is not in your binary</b>
+        <p>Only <code>core/server</code> imports <code>web/</code>, so a host importing
+          <code>core/gateway</code> alone links <b style="color:var(--muted)">zero console bytes</b> —
+          build tag or no build tag. Two gateways in one process never interfere either: no
+          package-level state, no package logger.</p>
+      </div>
+    </div>
+
+    <p class="aside rv" style="margin-top:26px">Two things <code>gateway.New</code> does regardless, said
+      here rather than left to be discovered: it <b style="color:var(--muted)">connects and migrates
+      eagerly</b> when a Postgres DSN is configured, and it reads <code>os.Getenv</code> for any provider
+      configured with <code>api_key_env</code>. And <code>Authorize</code> returns a
+      <code>release</code> function that is never nil and <b style="color:var(--muted)">must always be
+      called</b> — skip it and a budget reservation leaks.
+      <a href="./docs.html#choosing-a-mode" style="color:var(--teal-ink);font-weight:600">Choose a mode →</a>
+      <a href="./docs.html#embedding" style="color:var(--teal-ink);font-weight:600;margin-left:14px">Embed in Go →</a>
+      <a href="./docs.html#c-abi" style="color:var(--teal-ink);font-weight:600;margin-left:14px">The C ABI →</a></p>
+  </div>
+</section>
+
+<!-- ══════ CH 03 · THE GATE — the darkest band in both themes ════════════ -->
 <section class="band ink" id="gate">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·02</span><span class="cl">The gate</span>
+    <div class="chead rv"><span class="ch">CH·03</span><span class="cl">The gate</span>
       <span class="cr"></span><span class="cm">default deny</span></div>
 
     <h2 class="sec rv">A default-deny gate runs before every dispatch.</h2>
@@ -1976,12 +2109,12 @@ html.js .rv.in{opacity:1;transform:none}
   </div>
 </section>
 
-<!-- ══════ CH 03 · THE ROUTES ════════════════════════════════════════════ -->
+<!-- ══════ CH 04 · THE ROUTES ════════════════════════════════════════════ -->
 <section class="band alt" id="routes">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·03</span><span class="cl">The routes</span>
+    <div class="chead rv"><span class="ch">CH·04</span><span class="cl">The routes</span>
       <span class="cr"></span><span class="cm">six provider types</span></div>
 
     <h2 class="sec rv">Native translation where it earns its keep, passthrough for everything else.</h2>
@@ -2106,12 +2239,12 @@ html.js .rv.in{opacity:1;transform:none}
   </div>
 </section>
 
-<!-- ══════ CH 04 · THE CONTROLS ══════════════════════════════════════════ -->
+<!-- ══════ CH 05 · THE CONTROLS ══════════════════════════════════════════ -->
 <section class="band" id="controls">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·04</span><span class="cl">The controls</span>
+    <div class="chead rv"><span class="ch">CH·05</span><span class="cl">The controls</span>
       <span class="cr"></span><span class="cm">budgets · keys · cache · cost</span></div>
 
     <h2 class="sec rv">The controls a fleet of applications actually needs — built in, not bolted on.</h2>
@@ -2240,12 +2373,12 @@ html.js .rv.in{opacity:1;transform:none}
   </div>
 </section>
 
-<!-- ══════ CH 05 · THE PANEL ═════════════════════════════════════════════ -->
+<!-- ══════ CH 06 · THE PANEL ═════════════════════════════════════════════ -->
 <section class="band alt" id="panel">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·05</span><span class="cl">The panel</span>
+    <div class="chead rv"><span class="ch">CH·06</span><span class="cl">The panel</span>
       <span class="cr"></span><span class="cm">3,690 requests · real capture</span></div>
 
     <h2 class="sec rv">One binary, one UI. No separate service to run.</h2>
@@ -2332,12 +2465,12 @@ html.js .rv.in{opacity:1;transform:none}
   </div>
 </section>
 
-<!-- ══════ CH 06 · THE START ═════════════════════════════════════════════ -->
+<!-- ══════ CH 07 · THE START ═════════════════════════════════════════════ -->
 <section class="band" id="start">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·06</span><span class="cl">The start</span>
+    <div class="chead rv"><span class="ch">CH·07</span><span class="cl">The start</span>
       <span class="cr"></span><span class="cm">go 1.25+, nothing else</span></div>
 
     <h2 class="sec rv">Build it, point a key at it, call it. No account to create.</h2>

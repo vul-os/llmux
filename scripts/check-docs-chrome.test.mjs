@@ -31,8 +31,15 @@ const work = fs.mkdtempSync(path.join(os.tmpdir(), 'check-docs-chrome-'));
 // ── build the throwaway copy ──────────────────────────────────────────────
 fs.cpSync(path.join(REPO, 'site'), path.join(work, 'site'), { recursive: true });
 fs.cpSync(path.join(REPO, 'docs'), path.join(work, 'docs'), { recursive: true });
+// VERSION is a repo-root file, not part of site/ or docs/, but assertion 5
+// compares the landing badge against it — so the copy needs it too, or that
+// assertion would report [coverage] on every run and its mutation would prove
+// nothing about the real check.
+fs.cpSync(path.join(REPO, 'VERSION'), path.join(work, 'VERSION'));
 
 const COPY_DOCS_HTML = path.join(work, 'site', 'docs.html');
+const COPY_INDEX_HTML = path.join(work, 'site', 'index.html');
+const COPY_VERSION = path.join(work, 'VERSION');
 
 function runGate() {
   const r = spawnSync(process.execPath, [GATE, '--root', work], { encoding: 'utf8' });
@@ -175,6 +182,22 @@ const mutations = [
     name: 'coverage floor — truncate site/docs.html so the chrome checks have no subject',
     expect: 'coverage',
     apply: () => editFile(COPY_DOCS_HTML, () => '<!doctype html><title>x</title>\n'),
+  },
+  {
+    name: 'assertion 5 — bump VERSION so the landing badge is one release behind',
+    expect: 'version',
+    apply: () => editFile(COPY_VERSION, () => '9.9.9\n'),
+  },
+  {
+    // Deleting the badge must NOT be a way to satisfy the version check.
+    name: 'coverage floor — delete the version badge from the landing top rail',
+    expect: 'coverage',
+    apply: () =>
+      editFile(COPY_INDEX_HTML, (s2) => {
+        const out = s2.replace(/>\s*v\d+\.\d+\.\d+[^<\s]*\s*</i, '><');
+        if (out === s2) throw new Error('no version badge found to delete — this mutation would prove nothing');
+        return out;
+      }),
   },
 ];
 

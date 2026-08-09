@@ -392,7 +392,7 @@ img{max-width:100%;display:block}
 .nav-grp-h[aria-expanded="false"] .gt{transform:rotate(-90deg)}
 /* The count only appears once the group is shut — open, the entries are their
    own count; shut, "4" is the whole information the header can still carry. */
-.nav-grp-h .gc{flex:none;font-size:10.5px;letter-spacing:.06em;color:var(--faint);display:none}
+.nav-grp-h .gc{flex:none;font-size:11px;letter-spacing:.06em;color:var(--faint);display:none}
 .nav-grp-h[aria-expanded="false"] .gc{display:inline}
 .nav-list{list-style:none;margin:0;padding:0}
 .nav-grp.shut .nav-list{display:none}
@@ -437,7 +437,7 @@ img{max-width:100%;display:block}
   color:var(--muted);font-size:12.9px;line-height:1.35;
   transition:color .16s,border-color .16s,background .16s;
 }
-.nav-sub a .sx{font-family:var(--mono);font-size:10px;color:var(--faint);flex:none;transition:color .16s}
+.nav-sub a .sx{font-family:var(--mono);font-size:11px;color:var(--faint);flex:none;transition:color .16s}
 .nav-sub a:hover{color:var(--ink);border-left-color:var(--line-3);background:var(--panel)}
 .nav-sub a.here{color:var(--ink);border-left-color:var(--teal);font-weight:600}
 .nav-sub a.here .sx{color:var(--teal-ink)}
@@ -448,12 +448,21 @@ img{max-width:100%;display:block}
 .nav-sub-more{
   display:block;width:100%;margin:2px 0 0;padding:7px 9px 7px 11px;min-height:34px;
   background:none;border:0;border-left:1px solid transparent;text-align:left;cursor:pointer;
-  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+  font-family:var(--mono);font-size:11px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
 }
 .nav-sub-more:hover{color:var(--teal-ink)}
 @media (max-width:1023px){
   .nav-sub a{min-height:44px;font-size:14.5px}
   .nav-sub-more{min-height:44px}
+}
+/* …and it stands down the moment the ON THIS PAGE rail appears. Rendered at
+   1440 they were two identical twelve-item lists 900px apart, and the nested
+   copy pushed the REST of the index — the thing the left rail is for — a
+   screen and a half down. The rail is also strictly the better surface where
+   it exists: it carries h3s, this does not. Same breakpoint and same reasoning
+   as the in-document CONTENTS ledger below, which stands down here too. */
+@media (min-width:1240px){
+  .nav-sub,.nav-sub-more{display:none}
 }
 
 /* ── Index search — the index is built lazily from the same markdown the
