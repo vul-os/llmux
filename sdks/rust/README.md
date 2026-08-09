@@ -164,7 +164,8 @@ privileged.
 Applies to the **direct** mode only. The sidecar has none of these.
 
 1. **The Go runtime lives in your process** — its GC, its scheduler, and its
-   handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE` and `SIGPROF`. A Rust program that
+   handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPIPE` and `SIGURG` (measured;
+   `SIGPROF` is *not* touched). A Rust program that
    installs its own (a crash reporter, a sampling profiler, a sanitizer build)
    can conflict. Go chains to a pre-existing handler in most cases; "most" is the
    honest word.

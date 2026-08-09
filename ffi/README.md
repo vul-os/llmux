@@ -128,7 +128,7 @@ That said, it is still a callback into your host from inside a Go call frame:
 
 1. **The Go runtime lives in your process.** Its garbage collector, its
    scheduler, and its signal handlers. Go installs handlers for `SIGSEGV`,
-   `SIGBUS`, `SIGFPE`, `SIGPROF` and others. A host with its own handling — a
+   `SIGBUS`, `SIGFPE`, `SIGPIPE` and `SIGURG`. A host with its own handling — a
    JVM, some Python profilers, sanitizers, crash reporters — can conflict with
    it. Go chains to a pre-existing handler in most cases, but "most" is the
    honest word.

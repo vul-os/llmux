@@ -10,6 +10,29 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-08-10
+
+### Fixed
+
+- **v0.1.3 shipped a library that misreported its own version.** `VERSION` was
+  bumped to 0.1.3 and `ffi/abi.go` was left at 0.1.2, so `llmux_abi_version()`
+  answered `0.1.2` from a 0.1.3 build — breaking the stale-library detection
+  that symbol exists to provide, in the direction that calls a current library
+  old. `make test-ffi` was red on `main` from the moment 0.1.3 was tagged.
+
+  Every check run before tagging was green, because **`ffi/` is a separate Go
+  module and `go test ./...` at the root cannot reach it.**
+  `TestFFIABIVersionTracksTheVERSIONFile` now runs in the root module and reads
+  `ffi/abi.go` as text, since importing across that boundary is precisely what
+  is impossible. openrate shipped the identical defect in the same release, from
+  the same cause, and now carries the same guard.
+- **`ffi/README.md` and `sdks/rust/README.md` claimed Go installs a `SIGPROF`
+  handler.** It does not. `sdks/java/signal-probe.sh` measures the five that are
+  replaced — `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG` — and confirms
+  JFR profiling is unaffected (428 execution samples collected with the library
+  loaded). Documenting a hazard that does not exist invites defensive code
+  around a non-problem.
+
 ## [0.1.3] - 2026-08-09
 
 Additive. Nothing that compiled against v0.1.2 changes behaviour; the breaking
@@ -344,7 +367,8 @@ section before upgrading anyway.
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/vul-os/llmux/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/vul-os/llmux/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/vul-os/llmux/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/vul-os/llmux/compare/v0.1.0...v0.1.1
