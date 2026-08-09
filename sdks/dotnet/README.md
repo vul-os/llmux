@@ -186,7 +186,7 @@ Not a footnote. Full detail in [`ffi/README.md`](../../ffi/README.md).
    in the runtime, and `Process.Start` uses `fork`+`exec`. The concrete victims
    are a P/Invoke to bare `fork(2)`, and any supervisor that forks the process
    after the library has loaded.
-3. **12–17 MB of shared library** — 12,769,346 bytes on darwin/arm64.
+3. **12–17 MB of shared library** — 12,787,504 bytes on darwin/arm64.
 4. **Platform coverage is the dealbreaker for .NET.** See below.
 5. **Latency is not the reason to embed.** ~4 µs in-process versus ~46 µs over
    loopback for the boundary itself; ~80–92 µs versus ~102–109 µs for a real
@@ -199,7 +199,7 @@ Not a footnote. Full detail in [`ffi/README.md`](../../ffi/README.md).
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested. 12,769,346 bytes. The examples here were run on it. |
+| darwin/arm64 | built and smoke-tested. 12,787,504 bytes. The examples here were run on it. |
 | linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes. |
 | linux/amd64 | built and tested in CI only. |
 | **windows/amd64** | **not built. No `llmux.dll` exists. Nobody has produced one.** |

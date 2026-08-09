@@ -120,7 +120,7 @@ result, including cancelling mid-stream by returning `:stop`.
 
 **7. Nobody has to write, build, sign and ship C for eight platforms.** A NIF
 would need a compiler on the user's machine or a precompiled artifact per
-target, and today `libllmux` itself exists for **darwin/arm64** (12,769,346
+target, and today `libllmux` itself exists for **darwin/arm64** (12,787,504
 bytes) and **linux/arm64** (17,348,392 bytes) only; linux/amd64 is built in CI
 and never locally, and **windows/amd64 and darwin/amd64 have never been built at
 all**. Most BEAM deployments are linux/amd64. The `llmux` binary the sidecar

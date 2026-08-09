@@ -284,7 +284,7 @@ Not footnotes. All of these are properties of `-buildmode=c-shared`, and
    and forks workers. The rule is the same as everywhere else — **load the
    library after the fork, in the worker, never in the master.**
 
-3. **The library is 12–17 MB.** Measured: 12,769,346 bytes on darwin/arm64,
+3. **The library is 12–17 MB.** Measured: 12,787,504 bytes on darwin/arm64,
    17,348,392 bytes on linux/arm64.
 
 4. **Prebuilt libraries exist for darwin/arm64 and linux/arm64 only.**

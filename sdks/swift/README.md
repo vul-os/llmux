@@ -226,7 +226,7 @@ llmux's:
 
 | target | status | Swift? |
 | --- | --- | --- |
-| darwin/arm64 | built, smoke-tested (32/32 C checks), 12,769,346 bytes | **yes — this is the tested combination** |
+| darwin/arm64 | built, smoke-tested (32/32 C checks), 12,787,504 bytes | **yes — this is the tested combination** |
 | linux/arm64 | built and smoke-tested in a `golang:1.25` container, 17,348,392 bytes | should work; not tried here |
 | linux/amd64 | CI only, never built locally | untested from Swift |
 | darwin/amd64 | **not built** | **direct mode unavailable** |

@@ -163,7 +163,7 @@ to pull without a second stack. `stream()` is the honest shape of the ABI;
    a clean bill of health for a process that will hang on the first chat
    completion. "It worked when I tried it" is not evidence here.
 
-3. **The shared library is 12–17 MB.** Measured: 12,769,346 bytes on
+3. **The shared library is 12–17 MB.** Measured: 12,787,504 bytes on
    darwin/arm64, 17,348,392 bytes on linux/arm64.
 
 4. **Prebuilt libraries exist for two platforms.** For **llmux**:

@@ -114,7 +114,7 @@ treatment is in [`sdks/java/README.md`](../java/README.md#the-costs-of-the-direc
    `ProcessBuilder` / `Runtime.exec` are safe because they `posix_spawn` or
    `fork`+`exec`. The victims are a JNI/FFM call to bare `fork(2)`, and any
    supervisor that forks the JVM after the library is loaded.
-3. **12–17 MB of shared library** — 12,769,346 bytes on darwin/arm64.
+3. **12–17 MB of shared library** — 12,787,504 bytes on darwin/arm64.
 4. **Two platforms, and neither is Windows.** See below.
 5. **Latency is not the reason.** ~4 µs in-process versus ~46 µs over loopback
    for the boundary; ~80–92 µs versus ~102–109 µs for a chat call — noise
@@ -126,7 +126,7 @@ treatment is in [`sdks/java/README.md`](../java/README.md#the-costs-of-the-direc
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested. 12,769,346 bytes. Everything here was run on it. |
+| darwin/arm64 | built and smoke-tested. 12,787,504 bytes. Everything here was run on it. |
 | linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes. |
 | linux/amd64 | CI only. |
 | **windows/amd64** | **not built. No DLL exists.** |

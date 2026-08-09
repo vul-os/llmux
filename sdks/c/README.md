@@ -128,7 +128,7 @@ marshalling layer, no runtime to attach, no GIL. Prefer it, **unless**:
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested (32/32 checks). 12,769,346 bytes |
+| darwin/arm64 | built and smoke-tested (32/32 checks). 12,787,504 bytes |
 | linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes |
 | linux/amd64 | built in CI only; not produced on a development machine |
 | windows/amd64 | **not built. No DLL exists.** `build-ffi.sh` will attempt it with mingw or zig; nobody has run that |

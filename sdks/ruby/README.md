@@ -178,7 +178,7 @@ Concrete victims in Ruby, and the fix in each:
 
 ### Platforms
 
-Prebuilt `libllmux` exists for **darwin/arm64** (12,769,346 bytes, C smoke test
+Prebuilt `libllmux` exists for **darwin/arm64** (12,787,504 bytes, C smoke test
 32/32) and **linux/arm64** (17,348,392 bytes, same test in a `golang:1.25`
 container). **linux/amd64** is built in CI only and has never been produced on a
 developer machine here. **windows/amd64 and darwin/amd64 do not exist — no
