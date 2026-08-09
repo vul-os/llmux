@@ -578,7 +578,7 @@ func TestApplyEnv_SocketAndBadSyncInterval(t *testing.T) {
 	t.Setenv("LLMUX_SYNC_INTERVAL_MIN", "not-a-number")
 
 	c := Default()
-	c.applyEnv()
+	c.applyEnv(operatorEnv())
 
 	if c.Server.SocketPath != "/tmp/llmux.sock" {
 		t.Errorf("SocketPath = %q", c.Server.SocketPath)

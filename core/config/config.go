@@ -1,7 +1,10 @@
 // Package config loads llmux configuration from a JSON file and environment
 // variables. It is dependency-free (stdlib only) so the core always builds.
 //
-// Resolution order (later wins): built-in defaults -> config file -> env vars.
+// Resolution order for the sidecar (Load): built-in defaults -> config file ->
+// env vars, later wins. For embedders (FromJSON) the caller's document wins over
+// the environment and the host's un-namespaced DSN variables are ignored — see
+// envPolicy for why the two differ.
 package config
 
 import (
@@ -29,12 +32,25 @@ type Config struct {
 	// Postgres DSN. When set, keys/spend/budgets live in Postgres (correct
 	// across replicas) instead of in-memory/file.
 	//
-	// The DSN is resolved (later wins) from: this field -> env LLMUX_POSTGRES
-	// (legacy, product-specific fallback) -> env DATABASE_URL -> env
-	// VULOS_DATABASE_URL (the shared Neon DSN; preferred for cloud
-	// consolidation). When the shared DSN is used, all llmux tables live under a
-	// dedicated schema (PostgresSchema, default "llmux") so llmux can share one
-	// database with the other Vulos products without name collisions.
+	// Setting it is not free: the Postgres key store connects and MIGRATES
+	// eagerly at gateway.New (CREATE SCHEMA / CREATE TABLE), so this is the one
+	// field that turns an otherwise inert construction into remote I/O.
+	//
+	// How the DSN is resolved depends on who is asking (see envPolicy):
+	//
+	//   Load / `llmux serve`, an operator's config file — later wins:
+	//     this field -> LLMUX_POSTGRES -> DATABASE_URL -> VULOS_DATABASE_URL
+	//     (the shared Neon DSN; preferred for cloud consolidation).
+	//
+	//   FromJSON / library and C-ABI embedders — the document wins:
+	//     this field, else LLMUX_POSTGRES. DATABASE_URL and VULOS_DATABASE_URL
+	//     are the HOST application's variables and are not read: a library must
+	//     not migrate someone else's production database because it was loaded
+	//     into their process.
+	//
+	// When Postgres is in use, all llmux tables live under a dedicated schema
+	// (PostgresSchema, default "llmux") so llmux can share one database with the
+	// other Vulos products without name collisions.
 	Postgres string `json:"postgres"`
 	// PostgresSchema is the Postgres schema that holds llmux's tables. It lets
 	// llmux share one database (e.g. a single Neon database) with other products.
@@ -423,7 +439,7 @@ func Load(path string) (*Config, error) {
 			return nil, fmt.Errorf("read config %s: %w", path, err)
 		}
 	}
-	c, err := FromJSON(data)
+	c, err := fromJSON(data, operatorEnv())
 	if err != nil {
 		if path != "" {
 			return nil, fmt.Errorf("config %s: %w", path, err)
@@ -435,7 +451,7 @@ func Load(path string) (*Config, error) {
 
 // FromJSON builds the configuration from defaults, the given JSON document
 // (empty or nil is allowed and means "defaults only"), then environment
-// overrides — the exact sequence Load performs, without the file.
+// overrides.
 //
 // It exists because not every host has a config FILE. The C-ABI layer in ffi/
 // receives its configuration as a JSON string across the boundary, and an
@@ -443,7 +459,24 @@ func Load(path string) (*Config, error) {
 // defaults merged, env applied, validated — rather than a bare json.Unmarshal
 // into a zero Config, which would silently drop every default (no retries, no
 // cache bound, no auto-detected local backend) and skip Validate entirely.
+//
+// It is NOT identical to Load, and the difference is who owns the environment.
+// This is the LIBRARY entry point: the caller is an application that embedded
+// llmux, and the process environment is that application's, not llmux's. So it
+// resolves under embeddedEnv (see envPolicy):
+//
+//   - a value the document states explicitly WINS over the environment, and
+//   - the un-namespaced shared DSNs (DATABASE_URL, VULOS_DATABASE_URL) are not
+//     read at all.
+//
+// Load, which an operator invokes with a config file they wrote for the llmux
+// sidecar, keeps the historical operatorEnv rules (env last, all three DSN
+// variables honoured). See envPolicy for the full reasoning.
 func FromJSON(data []byte) (*Config, error) {
+	return fromJSON(data, embeddedEnv())
+}
+
+func fromJSON(data []byte, pol envPolicy) (*Config, error) {
 	c := Default()
 	if len(bytes.TrimSpace(data)) > 0 {
 		// A document may omit providers; only overwrite slices it provides.
@@ -452,13 +485,114 @@ func FromJSON(data []byte) (*Config, error) {
 			return nil, fmt.Errorf("parse config: %w", err)
 		}
 		c.merge(fileCfg)
+		if pol.documentWins {
+			set, err := statedKeys(data)
+			if err != nil {
+				return nil, err
+			}
+			pol.stated = set
+		}
 	}
-	c.applyEnv()
+	c.applyEnv(pol)
 	c.applyDefaults()
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
 	return c, nil
+}
+
+// ---------------------------------------------------------------------------
+// Environment policy
+// ---------------------------------------------------------------------------
+
+// envPolicy says how much of the process environment a given caller's
+// configuration is allowed to absorb.
+//
+// The two policies exist because "the environment" means two different things
+// depending on who called.
+//
+// operatorEnv is the sidecar: `llmux serve` reading a file the operator wrote,
+// in a process the operator started, whose variables the operator set for
+// llmux. Env-overrides-file is a deliberate deployment pattern there (one image,
+// per-environment variables) and it stays exactly as it always was.
+//
+// embeddedEnv is library mode: libllmux inside a Rails, Django or JVM process,
+// or core/gateway inside another Go binary. The host's environment was set for
+// the HOST. Two consequences:
+//
+//  1. The caller's document is the only thing llmux was actually handed, so a
+//     value stated in it wins over any variable. Previously applyEnv ran AFTER
+//     the merge and overwrote it unconditionally.
+//  2. DATABASE_URL and VULOS_DATABASE_URL are not llmux's names. They are the
+//     host application's own DSN, or the deployment's, and llmux happens to
+//     read them. In a Rails app with DATABASE_URL set, llmux_new used to adopt
+//     the app's production database and CREATE SCHEMA/CREATE TABLE in it (the
+//     Postgres key store connects and migrates eagerly), while llmux.h promised
+//     the gateway was inert "unless your configuration names a Postgres DSN".
+//     A library does not get to reinterpret the host's variables as an
+//     instruction to migrate their database, so the un-namespaced names are
+//     ignored here. LLMUX_POSTGRES is namespaced and unambiguous — setting it
+//     can only have been meant for llmux — so it is still honoured, and an
+//     embedder can always state "postgres" in the document.
+type envPolicy struct {
+	// documentWins makes a value stated in the caller's JSON document beat the
+	// environment. When false, env is applied last (the historical order).
+	documentWins bool
+	// sharedDSN allows DATABASE_URL / VULOS_DATABASE_URL to name the Postgres
+	// DSN. When false only LLMUX_POSTGRES can.
+	sharedDSN bool
+	// stated holds the dotted JSON paths the caller's document set explicitly
+	// (e.g. "postgres", "server.addr", "cp.cp_url"). Only consulted when
+	// documentWins.
+	stated map[string]bool
+}
+
+// operatorEnv is the policy for `llmux serve` reading an operator's config file.
+func operatorEnv() envPolicy { return envPolicy{documentWins: false, sharedDSN: true} }
+
+// embeddedEnv is the policy for a host that embedded llmux and handed it a
+// configuration document.
+func embeddedEnv() envPolicy { return envPolicy{documentWins: true, sharedDSN: false} }
+
+// locked reports whether the caller's document stated this key, in which case
+// the environment must not overwrite it.
+func (p envPolicy) locked(key string) bool {
+	return p.documentWins && p.stated[key]
+}
+
+// statedKeys returns the dotted paths of the leaves the document set. Only the
+// leaves applyEnv can touch matter, so it decodes one level of the four nested
+// blocks env reaches into (server, pricing, cp, byok) and treats everything
+// else as a top-level key.
+//
+// It reads the RAW document rather than inspecting the decoded Config because
+// the two are not the same question: a decoded `"postgres": ""` and an absent
+// "postgres" are both the empty string, and only the raw form can tell "the
+// caller said nothing, fill it from the environment" from "the caller said
+// explicitly: no database".
+func statedKeys(data []byte) (map[string]bool, error) {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		return nil, fmt.Errorf("parse config: %w", err)
+	}
+	out := make(map[string]bool, len(top))
+	nested := map[string]bool{"server": true, "pricing": true, "cp": true, "byok": true}
+	for k, v := range top {
+		out[k] = true
+		if !nested[k] {
+			continue
+		}
+		var sub map[string]json.RawMessage
+		if err := json.Unmarshal(v, &sub); err != nil {
+			// A non-object where an object belongs is the outer Unmarshal's
+			// problem to report; here it just means no stated leaves.
+			continue
+		}
+		for sk := range sub {
+			out[k+"."+sk] = true
+		}
+	}
+	return out, nil
 }
 
 // applyDefaults fills in convenience defaults after config + env are resolved.
@@ -589,90 +723,80 @@ func (c *Config) mergeBYOK(o *Config) {
 	}
 }
 
-func (c *Config) applyEnv() {
-	if v := os.Getenv("LLMUX_ADDR"); v != "" {
-		c.Server.Addr = v
+func (c *Config) applyEnv(pol envPolicy) {
+	// env applies a variable unless the caller's document already stated that
+	// key. See envPolicy: under operatorEnv nothing is locked and this is the
+	// historical env-wins behaviour.
+	env := func(key, name string, set func(string)) {
+		if pol.locked(key) {
+			return
+		}
+		if v := os.Getenv(name); v != "" {
+			set(v)
+		}
 	}
-	if v := os.Getenv("LLMUX_SOCKET"); v != "" {
-		c.Server.SocketPath = v
-	}
-	if v := os.Getenv("LLMUX_MASTER_KEY"); v != "" {
-		c.Server.MasterKey = v
-	}
-	if v := os.Getenv("LLMUX_INSECURE_KEYLESS"); v != "" {
+
+	env("server.addr", "LLMUX_ADDR", func(v string) { c.Server.Addr = v })
+	env("server.socket_path", "LLMUX_SOCKET", func(v string) { c.Server.SocketPath = v })
+	env("server.master_key", "LLMUX_MASTER_KEY", func(v string) { c.Server.MasterKey = v })
+	env("server.insecure_keyless", "LLMUX_INSECURE_KEYLESS", func(v string) {
 		c.Server.InsecureKeyless = v == "1" || strings.EqualFold(v, "true")
+	})
+	env("log_level", "LLMUX_LOG_LEVEL", func(v string) { c.LogLevel = v })
+	env("usage_log_path", "LLMUX_USAGE_LOG", func(v string) { c.UsageLogPath = v })
+
+	// Postgres DSN resolution (later wins). LLMUX_POSTGRES is the namespaced
+	// variable and is always honoured — nobody sets it by accident. DATABASE_URL
+	// is the standard shared DSN; VULOS_DATABASE_URL is the Vulos-specific shared
+	// DSN and wins over both so a deployment can point llmux at a different
+	// database than a generic DATABASE_URL when needed. Any shared DSN is
+	// preferred over LLMUX_POSTGRES (cloud consolidation onto one Neon database).
+	//
+	// The two shared names are read only under operatorEnv. In library mode they
+	// belong to the host application, and adopting them means running
+	// CREATE SCHEMA / CREATE TABLE inside someone else's production database
+	// because they loaded a shared library. See envPolicy.
+	env("postgres", "LLMUX_POSTGRES", func(v string) { c.Postgres = v })
+	if pol.sharedDSN {
+		env("postgres", "DATABASE_URL", func(v string) { c.Postgres = v })
+		env("postgres", "VULOS_DATABASE_URL", func(v string) { c.Postgres = v })
 	}
-	if v := os.Getenv("LLMUX_LOG_LEVEL"); v != "" {
-		c.LogLevel = v
-	}
-	if v := os.Getenv("LLMUX_USAGE_LOG"); v != "" {
-		c.UsageLogPath = v
-	}
-	// Postgres DSN resolution (later wins). LLMUX_POSTGRES is the legacy,
-	// product-specific var and remains a working fallback. DATABASE_URL is the
-	// standard shared DSN; VULOS_DATABASE_URL is the Vulos-specific shared DSN
-	// and wins over both so a deployment can point llmux at a different database
-	// than a generic DATABASE_URL when needed. Any shared DSN is preferred over
-	// LLMUX_POSTGRES (cloud consolidation onto one Neon database).
-	if v := os.Getenv("LLMUX_POSTGRES"); v != "" {
-		c.Postgres = v
-	}
-	if v := os.Getenv("DATABASE_URL"); v != "" {
-		c.Postgres = v
-	}
-	if v := os.Getenv("VULOS_DATABASE_URL"); v != "" {
-		c.Postgres = v
-	}
-	if v := os.Getenv("LLMUX_POSTGRES_SCHEMA"); v != "" {
-		c.PostgresSchema = v
-	}
+	env("postgres_schema", "LLMUX_POSTGRES_SCHEMA", func(v string) { c.PostgresSchema = v })
 	// Whenever Postgres is in play, default the schema to "llmux" so tables live
 	// in a dedicated namespace and never collide with other products sharing the
 	// database.
 	if c.Postgres != "" && c.PostgresSchema == "" {
 		c.PostgresSchema = "llmux"
 	}
-	if v := os.Getenv("LLMUX_REDIS"); v != "" {
-		c.Redis = v
-	}
-	if v := os.Getenv("LLMUX_SYNC_INTERVAL_MIN"); v != "" {
+	env("redis", "LLMUX_REDIS", func(v string) { c.Redis = v })
+	env("pricing.sync_interval_minutes", "LLMUX_SYNC_INTERVAL_MIN", func(v string) {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.Pricing.SyncIntervalMinutes = n
 		}
-	}
-	if v := os.Getenv("LLMUX_CP_URL"); v != "" {
-		c.CP.URL = v
-	}
-	if v := os.Getenv("LLMUX_CP_SECRET"); v != "" {
-		c.CP.SharedSecret = v
-	}
-	if v := os.Getenv("LLMUX_CP_RPM"); v != "" {
+	})
+	env("cp.cp_url", "LLMUX_CP_URL", func(v string) { c.CP.URL = v })
+	env("cp.cp_shared_secret", "LLMUX_CP_SECRET", func(v string) { c.CP.SharedSecret = v })
+	env("cp.cp_rpm", "LLMUX_CP_RPM", func(v string) {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.CP.RPM = n
 		}
-	}
-	if v := os.Getenv("LLMUX_CP_ENTITLEMENT_TTL_SECONDS"); v != "" {
+	})
+	env("cp.cp_entitlement_ttl_seconds", "LLMUX_CP_ENTITLEMENT_TTL_SECONDS", func(v string) {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.CP.EntitlementTTLSeconds = n
 		}
-	}
-	if v := os.Getenv("LLMUX_CP_DEGRADED_FAIL_OPEN"); v != "" {
+	})
+	env("cp.cp_degraded_fail_open", "LLMUX_CP_DEGRADED_FAIL_OPEN", func(v string) {
 		c.CP.DegradedFailOpen = v == "1" || strings.EqualFold(v, "true")
-	}
-	if v := os.Getenv("LLMUX_CP_DEGRADED_RPM"); v != "" {
+	})
+	env("cp.cp_degraded_rpm", "LLMUX_CP_DEGRADED_RPM", func(v string) {
 		if n, err := strconv.Atoi(v); err == nil {
 			c.CP.DegradedRPM = n
 		}
-	}
-	if v := os.Getenv("LLMUX_CP_USAGE_SPOOL_PATH"); v != "" {
-		c.CP.UsageSpoolPath = v
-	}
-	if v := os.Getenv("LLMUX_BYOK_KEK"); v != "" {
-		c.BYOK.KEK = v
-	}
-	if v := os.Getenv("LLMUX_BYOK_STORE"); v != "" {
-		c.BYOK.StorePath = v
-	}
+	})
+	env("cp.cp_usage_spool_path", "LLMUX_CP_USAGE_SPOOL_PATH", func(v string) { c.CP.UsageSpoolPath = v })
+	env("byok.kek", "LLMUX_BYOK_KEK", func(v string) { c.BYOK.KEK = v })
+	env("byok.store_path", "LLMUX_BYOK_STORE", func(v string) { c.BYOK.StorePath = v })
 }
 
 // Validate checks the configuration for internal consistency.

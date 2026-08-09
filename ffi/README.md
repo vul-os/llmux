@@ -81,8 +81,24 @@ background traffic they did not ask for. If you want that, run the sidecar.
 
 **Configuration.** `config_json` is an llmux configuration document — the same
 JSON `llmux serve` reads from `llmux.json`. `NULL` or `""` means built-in
-defaults plus the environment (auto-detected providers, `LLMUX_*` overrides),
-exactly as a missing config file does.
+defaults plus the `LLMUX_`-namespaced environment (auto-detected providers,
+`LLMUX_*` overrides).
+
+**Your document wins over the environment.** A field your document states is
+never overwritten by an environment variable — including one you set to `""` or
+`0`, which is a statement and not a gap. Variables fill in only what the
+document is silent about. The sidecar resolves the other way round (env last),
+and the difference is deliberate: there the operator owns the file *and* the
+environment, here the environment belongs to your application and llmux is a
+guest in it.
+
+**`DATABASE_URL` and `VULOS_DATABASE_URL` are ignored in library mode.** They
+are your application's variables. `cfg.postgres` is the one field that turns an
+inert construction into remote I/O — the Postgres key store connects and runs
+`CREATE SCHEMA` / `CREATE TABLE` immediately — so adopting a DSN llmux was never
+handed would mean migrating your production database because you loaded a shared
+library. `LLMUX_POSTGRES` is namespaced, unambiguous and still honoured; to use
+a database from a host that sets `DATABASE_URL`, put the DSN in your document.
 
 **Authentication.** There is none on this boundary, by design. Virtual keys,
 budgets and per-key model allow-lists are enforced by the HTTP shell's auth

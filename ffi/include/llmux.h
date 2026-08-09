@@ -74,13 +74,28 @@ const char* llmux_abi_version(void);
  *
  * config_json is an llmux configuration document — the same JSON `llmux serve`
  * reads from llmux.json. NULL or "" means built-in defaults plus the
- * environment (auto-detected providers, LLMUX_* overrides), exactly as a
- * missing config file does.
+ * LLMUX_-namespaced environment (auto-detected providers, LLMUX_* overrides).
  *
- * The gateway is INERT: creating it starts no goroutines and — unless your
- * configuration names a Postgres DSN, which connects and migrates eagerly —
- * opens no sockets. There is no background price-catalog sync and no spend
- * flusher in library mode. Nothing happens until you call.
+ * YOUR DOCUMENT WINS OVER THE ENVIRONMENT. A field your document states is
+ * never overwritten by an environment variable — including a field you set to
+ * "" or 0, which is a statement, not a gap. Variables fill in only what your
+ * document is silent about. (The `llmux serve` sidecar resolves the other way
+ * round, env last: there the operator owns both the file and the environment.
+ * Here the environment belongs to your application, not to llmux.)
+ *
+ * FOR THE SAME REASON, THIS LIBRARY IGNORES DATABASE_URL AND VULOS_DATABASE_URL.
+ * Those are your application's variables — llmux has no claim on them, and
+ * adopting one would mean connecting to your database and running
+ * CREATE SCHEMA / CREATE TABLE in it because you loaded a shared library.
+ * LLMUX_POSTGRES is namespaced and unambiguous, so it is still honoured; to
+ * point llmux at a database from a host that sets DATABASE_URL, put the DSN in
+ * your document (or copy it into LLMUX_POSTGRES).
+ *
+ * The gateway is INERT: creating it starts no goroutines and — unless YOUR
+ * configuration names a Postgres DSN, which connects and migrates eagerly (see
+ * llmux_cancel and postgres_connect_timeout_seconds for how long that can
+ * block) — opens no sockets. There is no background price-catalog sync and no
+ * spend flusher in library mode. Nothing happens until you call.
  */
 uint64_t llmux_new(const char* config_json, char** err);
 
