@@ -79,3 +79,13 @@ coverage.html
 
 # Release staging directory (built in CI; the SHA256SUMS manifest covers it)
 /release/
+
+# C-ABI layer: build artifacts. `go build ./...` inside ffi/ drops the main
+# package's binary in the module root, and the shared library / generated
+# header go to dist/ffi (already ignored above).
+/ffi/llmux-ffi
+/ffi/*.so
+/ffi/*.dylib
+/ffi/*.dll
+/ffi/*.h
+!/ffi/include/*.h
