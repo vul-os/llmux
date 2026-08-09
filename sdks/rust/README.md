@@ -24,8 +24,9 @@ fake in `ffi/fakeupstream`:
 ./sdks/rust/examples/run.sh sidecar
 ```
 
-Real output — darwin/arm64 (Apple silicon), rustc 1.97.1, Go 1.25.12, llmux
-0.1.2, `libllmux.dylib` 12,769,346 bytes:
+Real output — darwin/arm64 (Apple silicon), rustc 1.97.1, Go 1.25.12, captured
+against llmux 0.1.2, whose `libllmux.dylib` was 12,769,346 bytes (today's
+darwin/arm64 build is 12,787,504):
 
 ```
 ==> direct (in-process, C ABI)

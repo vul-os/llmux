@@ -53,6 +53,17 @@ make vet        # static analysis
 make cover      # coverage summary
 ```
 
+`make test` does **not** reach the C ABI or the embeddability guards: `ffi/` and
+`embedtest/` are separate Go modules, and `go test ./...` at the root cannot
+cross a module boundary. That gap shipped a library which misreported its own
+version in 0.1.3. Run them explicitly, or run the lot:
+
+```bash
+make test-ffi    # the C-ABI unit tests plus the C smoke test
+make test-embed  # the embeddability guards
+make gates       # every artifact gate CI runs, the two above included
+```
+
 Integration tests against Postgres/Redis activate when `LLMUX_TEST_POSTGRES` /
 `LLMUX_TEST_REDIS` are set. Provider conformance fixtures and the live smoke
 suite (`make record`, `make smoke`) require real provider keys. Full details in

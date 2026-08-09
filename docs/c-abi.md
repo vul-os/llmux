@@ -66,7 +66,16 @@ want it. The message is **not** JSON — do not parse it.
 they are never reused. Calling with a closed or invented handle is a clean error
 string, not a segfault in your process. `llmux_close` is idempotent.
 
-**Threading.** A handle is safe to use from several threads at once.
+**`llmux_stream` requires a non-NULL callback.** The latitude `err` gets does not
+extend to `cb`: a NULL callback returns `-1` and sets `*err` to
+`llmux: llmux_stream requires a non-NULL chunk callback`, because a stream with
+nowhere to put its chunks is a bug rather than a way to discard them.
+
+**Threading.** A handle is safe to use from several threads at once — and
+`llmux_close` is the deliberate way to interrupt one. Closing cancels the
+instance's context, which **aborts any `llmux_stream` still running on that
+handle from another thread**; that call returns as if the consumer had stopped
+it. If you close while a stream is live, that is what you get.
 
 **No authentication on this boundary, by design.** Virtual keys, budgets and
 per-key model allow-lists are enforced by the HTTP shell's auth middleware. An

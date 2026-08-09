@@ -24,7 +24,7 @@ Everything below was executed on this machine, not inferred:
 | macOS | **15.7.3** (build 24G419), Apple silicon |
 | Xcode | **not installed** — Command Line Tools only. See [Testing](#testing) |
 | Package | SwiftPM, tools-version 5.9, platform floor macOS 13 |
-| llmux | 0.1.2, `libllmux.dylib` 12,769,346 bytes |
+| llmux | 0.1.2 at capture time, whose `libllmux.dylib` was 12,769,346 bytes. Today's darwin/arm64 build is 12,787,504 — see [Platforms](#platforms) |
 
 ## Run the examples
 
