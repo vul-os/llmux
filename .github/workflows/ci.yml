@@ -172,6 +172,82 @@ jobs:
           fi
           echo "go-test-gate correctly refused a run in which zero tests executed"
 
+  # ffi/ is the C-ABI shared library: the same gateway, loadable in-process by
+  # any language that can dlopen. It is a SEPARATE Go module (path
+  # github.com/vul-os/llmux-ffi, deliberately outside the library's
+  # import-path prefix — see ffi/doc.go), so neither `go test ./...` nor the
+  # embeddability job above descends into it, and it needs cgo, which the
+  # pure-Go jobs above deliberately do not use.
+  #
+  # The C smoke test is the load-bearing step. Every Go test in ffi/ would pass
+  # just as happily with a missing //export, a renamed symbol, or a header that
+  # no longer matches the library; only a program that dlopens the built
+  # artifact and calls it through ffi/include/llmux.h can catch that.
+  ffi:
+    name: C ABI (ffi module)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: ShellCheck the ffi scripts
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          bash -n scripts/build-ffi.sh scripts/ffi-ctest.sh
+          shellcheck scripts/build-ffi.sh scripts/ffi-ctest.sh
+
+      - name: Vet the ffi module
+        run: go vet ./...
+        working-directory: ffi
+
+      # Gated, not plain `go test`: ffi/ is a nested module, and `go test` exits
+      # 0 when every package reports [no test files] — the exact false green a
+      # nested module invites. --require names the guards whose disappearance
+      # must be a red build: the version probe that makes a stale .so
+      # detectable, the import-path wall that keeps the C ABI honest about
+      # using only the public API, and the streaming behaviour that is the
+      # whole reason this layer exists.
+      - name: ABI unit tests (gated)
+        run: |
+          ./scripts/go-test-gate.sh --dir ffi --min 14 \
+            --require TestABIVersionMatchesThePackageVersion \
+            --require TestFFIUsesOnlyThePublicAPI \
+            --require TestUnknownHandleIsACleanError \
+            --require TestCloseIsIdempotentAndHandlesAreNotReused \
+            --require TestChatCallReturnsTheHTTPAPIsJSON \
+            --require TestStreamDeliversChunksThatReassembleTheAnswer \
+            --require TestStreamAbortFromTheCallbackIsNotAnError \
+            --require TestTwoHandlesAreIndependent \
+            -- -count=1 ./...
+
+      # Builds libllmux.so, starts the fake upstream, compiles ctest/smoke.c
+      # against the stable header and runs it. The C test asserts how many of
+      # its own checks executed, so an early exit is a failure rather than a
+      # short green run.
+      - name: C smoke test (dlopen the built library)
+        run: ./scripts/ffi-ctest.sh
+
+      # The C ABI must not leak cgo into the main module. The `ci` job builds
+      # with the runner's default (CGO_ENABLED=1); this proves the pure-Go
+      # build is still pure — the property embedtest/ and every non-cgo
+      # consumer depend on.
+      - name: The main module still builds with cgo OFF
+        run: |
+          CGO_ENABLED=0 go build ./...
+          CGO_ENABLED=0 go vet ./...
+          CGO_ENABLED=0 go build -tags noui ./...
+
+      # Honest reporting, in CI's own log: which targets a Linux runner can
+      # actually produce. Not a gate — the host build above already is one.
+      - name: Report which shared-library targets this runner can build
+        run: ./scripts/build-ffi.sh --all || true
+
   # sdks/node is the only package.json in the tree with a `typescript`
   # dependency. Go build/test above never touch it — without this job the TS
   # SDK's type-aware ESLint config (strictTypeChecked) and `tsc --noEmit`

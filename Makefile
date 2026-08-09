@@ -1,4 +1,4 @@
-.PHONY: build site-docs test test-embed cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
+.PHONY: build site-docs test test-embed test-ffi ffi ffi-bench cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
@@ -34,6 +34,30 @@ test-embed: ## Run the embeddability guards (separate module, gated)
 		--require TestBothBuildStatesServeTheDocumentedUIResponse \
 		-- -count=1 ./...
 
+# ffi/ is the C-ABI shared library and, like embedtest, a separate Go module —
+# so `test` above never reaches it either. It also needs cgo, which is why it is
+# not folded into `test`.
+test-ffi: ## Run the C-ABI unit tests (separate module, gated) AND the C smoke test
+	./scripts/go-test-gate.sh --dir ffi --min 14 \
+		--require TestABIVersionMatchesThePackageVersion \
+		--require TestFFIUsesOnlyThePublicAPI \
+		--require TestUnknownHandleIsACleanError \
+		--require TestCloseIsIdempotentAndHandlesAreNotReused \
+		--require TestChatCallReturnsTheHTTPAPIsJSON \
+		--require TestStreamDeliversChunksThatReassembleTheAnswer \
+		--require TestStreamAbortFromTheCallbackIsNotAnError \
+		--require TestTwoHandlesAreIndependent \
+		-- -count=1 ./...
+	./scripts/ffi-ctest.sh
+
+ffi: ## Build the C-ABI shared library for this host into dist/ffi
+	./scripts/build-ffi.sh
+
+ffi-bench: ffi ## Measure in-process (C ABI) vs loopback HTTP latency
+	@os=$$(go env GOOS); arch=$$(go env GOARCH); \
+	case "$$os" in windows) lib=llmux.dll ;; darwin) lib=libllmux.dylib ;; *) lib=libllmux.so ;; esac; \
+	cd ffi && go run ./bench -lib "../dist/ffi/$${os}_$${arch}/$${lib}"
+
 cover: ## Coverage summary (set LLMUX_TEST_POSTGRES/LLMUX_TEST_REDIS to include integration)
 	go test -cover ./...
 
@@ -63,7 +87,7 @@ verify-selftest: ## Prove scripts/verify.sh still REFUSES every broken-release s
 # The artifact-level gates, in the order CI runs them. `test` is separate
 # because it needs no Node; these are the ones that catch a green build
 # shipping a wrong artifact — or shipping a right artifact nobody can check.
-gates: fmt-check verify-selftest test-embed ## Run the artifact gates (gofmt scope + release-verifier matrix + embeddability)
+gates: fmt-check verify-selftest test-embed test-ffi ## Run the artifact gates (gofmt scope + release-verifier matrix + embeddability + C ABI)
 
 run: build ## Build and run on :4000
 	$(BIN)
