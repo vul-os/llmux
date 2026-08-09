@@ -1,4 +1,10 @@
-"""llmux — the LLM multiplexer, embedded locally.
+"""llmux — the LLM multiplexer, in your Python process or beside it.
+
+Two modes, one wire contract. The JSON is the same in both; only the transport
+differs.
+
+SIDECAR (the default, and the right default for most Python) — the gateway runs
+as a local child process and your existing OpenAI client points at it:
 
     import llmux
     client = llmux.OpenAI()          # spawns the gateway, returns an OpenAI client
@@ -7,11 +13,28 @@
         messages=[{"role": "user", "content": "hi"}],
     )
 
-No server to run: the gateway starts as a local child process and your existing
-OpenAI client points at it. Set provider keys via the usual env vars
-(OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY, ...).
+DIRECT — libllmux loaded into this interpreter with ctypes. No second process,
+no port, no loopback socket:
+
+    from llmux import Gateway
+
+    with Gateway() as gw:
+        r = gw.chat({"model": "gpt-4o-mini",
+                     "messages": [{"role": "user", "content": "hi"}]})
+
+Direct mode puts the Go runtime inside your interpreter and is NOT fork-safe.
+Read README.md — "Which mode" and "The costs" — before choosing it. Set provider
+keys via the usual env vars (OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY,
+...) for either mode.
 """
 
+from ._direct import (
+    Gateway,
+    LLMuxLibraryError,
+    abi_version,
+    library_path,
+    load_library,
+)
 from ._sidecar import (
     LLMuxError,
     base_url,
@@ -21,10 +44,15 @@ from ._sidecar import (
 )
 
 __all__ = [
-    "LLMuxError",
-    "OpenAI",
     "AsyncOpenAI",
+    "Gateway",
+    "LLMuxError",
+    "LLMuxLibraryError",
+    "OpenAI",
+    "abi_version",
     "base_url",
+    "library_path",
+    "load_library",
     "openai_base_url",
     "start",
     "stop",
