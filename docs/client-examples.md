@@ -295,13 +295,17 @@ unchanged. A client disconnect cancels the in-flight upstream request.
 
 ## Embed it locally — no separate server to run
 
-Beyond talking to a gateway over HTTP, the same binary can run **as a local
-dependency** instead of a standalone service. Thin per-language packages live
-in [`sdks/`](https://github.com/vul-os/llmux/blob/main/sdks) in the repo:
+llmux is a **library first**: `core/gateway` is the whole dispatch path —
+routing, retries, failover, the sovereignty gate, BYOK, caching, pricing and
+metering — with no HTTP surface of its own. `core/server` (the OpenAI-compatible
+HTTP API plus the embedded admin console) is one shell over that library, for
+when you want a standalone service instead of, or alongside, an embedded
+dependency. Thin per-language packages live in
+[`sdks/`](https://github.com/vul-os/llmux/blob/main/sdks) in the repo:
 
 | Language | Mechanism |
 |---|---|
-| Go (`sdks/go/llmux`) | Runs the gateway **in-process** — imports `core/server` directly, no subprocess |
+| Go (`sdks/go/llmux`, or `core/gateway` directly) | Runs the gateway **in-process** — no listener, no port, no HTTP hop. `llmux.Start()`, which spawns a loopback HTTP sidecar, is kept only for handing an OpenAI-compatible HTTP client a `base_url`; it is deprecated in favor of the direct path. |
 | Python, Node, Ruby, PHP, Rust, Java, .NET, Elixir (`sdks/<lang>`) | Spawn the built `llmux` binary as a local sidecar on `127.0.0.1:<free port>`, wait for `/health`, then hand you a `base_url` |
 
 Every spawning package follows the same contract: resolve the binary
@@ -312,21 +316,90 @@ such as `OPENAI_API_KEY` pass straight through), poll `/health`, then expose
 Streaming works natively in every language because each just reads its own
 local socket.
 
-**Go** — embed in-process, no child process at all:
+**Go — the real embedding path: `gateway.New`, no listener at all.**
+`sdks/go/llmux.New` is a thin wrapper over `core/gateway.New`; call either one
+directly:
 
 ```go
-import "github.com/vul-os/llmux/sdks/go/llmux"
+import (
+    "github.com/vul-os/llmux/core/openai"
+    "github.com/vul-os/llmux/sdks/go/llmux"
+)
 
-local, err := llmux.Start(llmux.Options{}) // auto-detects providers from env; ephemeral port
+gw, err := llmux.New(llmux.Options{}) // Options.Config nil ⇒ config.Default() (auto-detects providers from env)
+if err != nil {
+    log.Fatal(err)
+}
+defer gw.Close()
+
+res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{
+    Model:    "gpt-4o-mini",
+    Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}},
+})
+// res.Response is the OpenAI-shaped completion; res.Provider is who actually
+// served (after failover); res.BYOK and res.CacheHit report how.
+```
+
+`gateway.New` starts **no goroutines** and — with the one exception below —
+opens **no sockets**: no price-catalog sync, no spend flusher, no Redis ping.
+Call `gw.Run(ctx)` (or `gw.Start(ctx)`) to opt into that background work; a
+caller that never does gets zero background traffic. Two things `New` does
+regardless, stated plainly rather than left to be discovered:
+
+- If `cfg.Postgres` is set, `New` builds the Postgres key store, which
+  **connects and migrates eagerly** — an explicitly opted-into remote
+  dependency. With no DSN configured (every default and library configuration),
+  `New` opens nothing.
+- `New` reads `os.Getenv` for any configured provider whose credential is given
+  as `api_key_env` (e.g. `"api_key_env": "OPENAI_API_KEY"`) — that is
+  config-directed, not auto-detected: it only happens for env-var names you put
+  in the config (or that `config.Default()`'s auto-detection wrote there), never
+  for arbitrary environment variables.
+
+If you build your own auth layer on top of `gw.Chat`/`gw.ChatStream`/`gw.Embed`,
+route every call through `gw.Authorize(ctx, token)` first — it is the same path
+`core/server`'s HTTP middleware uses, so an embedding host never gets a laxer
+check than a network client. It returns `(ctx, release func(), error)`;
+`release` is **never nil** and **must always be called**, even on error, or a
+budget-gate reservation leaks:
+
+```go
+ctx, release, err := gw.Authorize(ctx, token)
+defer release()
+if err != nil {
+    // ErrUnauthorized, or *gateway.AuthError with .RateLimited / .Denied
+    return err
+}
+res, err := gw.Chat(ctx, req)
+```
+
+Importing `core/gateway` never links the admin console: only `core/server`
+imports `web/` (the embedded `ui.html`), so a `core/gateway`-only host has zero
+UI bytes in it regardless of build tags. If you embed `core/server` instead
+(for its HTTP surface) and want the console gone too, see
+[noui and Options.UI](operations.md#building-without-the-console-noui) —
+measured binary-size deltas included.
+
+`llmux.Start()` remains for the case where you need to hand an
+OpenAI-compatible **HTTP client** a base URL rather than dispatching in-process:
+
+```go
+local, err := llmux.Start(llmux.Options{}) // deprecated loopback shim; ephemeral port
 if err != nil {
     log.Fatal(err)
 }
 defer local.Close()
 
-// point any OpenAI-compatible Go client at the embedded gateway
+// point any OpenAI-compatible Go client at the loopback gateway
 cfg := openai.DefaultConfig("llmux-local")        // github.com/sashabaranov/go-openai
 cfg.BaseURL = local.OpenAIBaseURL()               // → http://127.0.0.1:<port>/v1
 ```
+
+Unlike `llmux.New`, `Start` costs a real port, an HTTP listener and a JSON
+round-trip per call — it binds a loopback TCP address and polls `/health` until
+the sidecar answers. That is the right tool only when the caller genuinely needs
+an HTTP client pointed at a `base_url`; everything else should call `llmux.New`
+(or `core/gateway.New` directly) instead.
 
 **Python** — spawns the binary as a sidecar (source: `sdks/python`):
 
@@ -360,6 +433,7 @@ for the exact binary-resolution path per language, the full package list
 
 ## Related
 
+- [Architecture → llmux as a library](./architecture.md#llmux-as-a-library) — the full `core/gateway` surface, `Authorize`/`release`, and the two things `New` does on its own
 - [Getting started](./GETTING-STARTED.md) — deploy the gateway and connect providers
 - [Model routing and selection](./ADMIN-GUIDE.md#model-routing-and-selection) — how the `model` string resolves
 - [API reference](./api.md) — every endpoint, header, and error code
