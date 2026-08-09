@@ -26,15 +26,16 @@ type Provider struct {
 	baseURL string
 	apiKey  string
 	headers map[string]string
+	opts    provider.Options
 }
 
 // New builds a Gemini provider from config.
-func New(c config.ProviderConfig) *Provider {
+func New(c config.ProviderConfig, opts provider.Options) *Provider {
 	base := strings.TrimRight(c.BaseURL, "/")
 	if base == "" {
 		base = "https://generativelanguage.googleapis.com/v1beta"
 	}
-	return &Provider{name: c.Name, baseURL: base, apiKey: c.ResolveKey(), headers: c.Headers}
+	return &Provider{name: c.Name, baseURL: base, apiKey: c.ResolveKey(), headers: c.Headers, opts: opts}
 }
 
 // Name implements Provider.
@@ -98,7 +99,7 @@ func (p *Provider) errorFromResponse(ctx context.Context, resp *http.Response) *
 // ChatCompletion implements Provider.
 func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest, target string, raw json.RawMessage) (*openai.ChatCompletionResponse, error) {
 	body, _ := json.Marshal(toGemini(req))
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, p.endpoint(target, "generateContent", false), body)
+	resp, err := p.post(ctx, p.opts.Client(), p.endpoint(target, "generateContent", false), body)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +110,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var gr generateResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&gr); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&gr); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return fromGemini(&gr, req.Model, genID(), time.Now().Unix()), nil
@@ -141,7 +142,7 @@ func (p *Provider) embedSingle(ctx context.Context, req *openai.EmbeddingRequest
 	body, _ := json.Marshal(embedContentRequest{
 		Content: embedContentPayload{Parts: []part{{Text: text}}},
 	})
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, p.endpoint(target, "embedContent", false), body)
+	resp, err := p.post(ctx, p.opts.Client(), p.endpoint(target, "embedContent", false), body)
 	if err != nil {
 		return nil, err
 	}
@@ -151,7 +152,7 @@ func (p *Provider) embedSingle(ctx context.Context, req *openai.EmbeddingRequest
 	defer resp.Body.Close()
 
 	var er embedContentResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&er); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&er); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return &openai.EmbeddingResponse{
@@ -173,7 +174,7 @@ func (p *Provider) embedBatch(ctx context.Context, req *openai.EmbeddingRequest,
 		}
 	}
 	body, _ := json.Marshal(batchEmbedRequest{Requests: reqs})
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, p.endpoint(target, "batchEmbedContents", false), body)
+	resp, err := p.post(ctx, p.opts.Client(), p.endpoint(target, "batchEmbedContents", false), body)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +184,7 @@ func (p *Provider) embedBatch(ctx context.Context, req *openai.EmbeddingRequest,
 	defer resp.Body.Close()
 
 	var br batchEmbedResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&br); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&br); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	data := make([]openai.EmbeddingData, len(br.Embeddings))
@@ -196,7 +197,7 @@ func (p *Provider) embedBatch(ctx context.Context, req *openai.EmbeddingRequest,
 // ChatCompletionStream implements Provider.
 func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCompletionRequest, target string, raw json.RawMessage, yield provider.ChunkFunc) error {
 	body, _ := json.Marshal(toGemini(req))
-	resp, err := p.post(ctx, provider.StreamHTTPClient, p.endpoint(target, "streamGenerateContent", true), body)
+	resp, err := p.post(ctx, p.opts.Stream(), p.endpoint(target, "streamGenerateContent", true), body)
 	if err != nil {
 		return err
 	}

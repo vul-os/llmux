@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 func TestBuild_EachType(t *testing.T) {
@@ -15,7 +16,7 @@ func TestBuild_EachType(t *testing.T) {
 		{Name: "bed", Type: config.TypeBedrock},
 	}
 
-	reg, err := Build(cfgs)
+	reg, err := Build(cfgs, provider.Options{}, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -43,7 +44,7 @@ func TestBuild_UnknownTypeSkipped(t *testing.T) {
 		{Name: "empty", Type: config.ProviderType("")},
 	}
 
-	reg, err := Build(cfgs)
+	reg, err := Build(cfgs, provider.Options{}, nil)
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
@@ -66,13 +67,13 @@ func TestBuild_DuplicateNames(t *testing.T) {
 		{Name: "dup", Type: config.TypePassthrough},
 		{Name: "dup", Type: config.TypeAnthropic},
 	}
-	if _, err := Build(cfgs); err == nil {
+	if _, err := Build(cfgs, provider.Options{}, nil); err == nil {
 		t.Fatal("expected error for duplicate provider names")
 	}
 }
 
 func TestBuild_Empty(t *testing.T) {
-	reg, err := Build(nil)
+	reg, err := Build(nil, provider.Options{}, nil)
 	if err != nil {
 		t.Fatalf("Build(nil): %v", err)
 	}

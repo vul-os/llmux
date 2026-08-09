@@ -114,12 +114,69 @@ func noRedirect(_ *http.Request, _ []*http.Request) error {
 	return http.ErrUseLastResponse
 }
 
-// DefaultHTTPClient is the shared client for upstream calls. Streaming uses no
-// overall timeout (handled via context); non-streaming callers may set their own.
-// Redirects are blocked (see noRedirect) to prevent redirect-based SSRF.
-var DefaultHTTPClient = &http.Client{Timeout: 600 * time.Second, CheckRedirect: noRedirect}
+// Options are the per-gateway knobs every adapter needs. They were package-level
+// variables (DefaultHTTPClient, StreamHTTPClient, MaxResponseBytes, DropParams)
+// until two gateways in one process could silently corrupt each other's settings:
+// server.New MUTATED the globals, so the second gateway's config won for both.
+// Options are now constructed per gateway and threaded into each adapter's New.
+//
+// The zero value is usable: nil clients fall back to freshly built defaults (see
+// Client/Stream), MaxResponseBytes 0 means unlimited, and a nil DropParams drops
+// nothing.
+type Options struct {
+	// MaxResponseBytes bounds non-streaming upstream response bodies. 0 = unlimited.
+	MaxResponseBytes int64
+	// DropParams lists request body fields to strip before forwarding to
+	// OpenAI-shaped upstreams (the `drop_params` config). This is the gateway's
+	// drop-unsupported-params lever: operators drop params a given fleet rejects
+	// (e.g. logit_bias on some hosts) instead of surfacing upstream 400s.
+	DropParams []string
+	// HTTPClient performs non-streaming upstream calls. nil = the default client.
+	HTTPClient *http.Client
+	// StreamClient performs streaming upstream calls. nil = the default streaming
+	// client (no client-level timeout; cancellation via context).
+	StreamClient *http.Client
+}
 
-// StreamHTTPClient has no client-level timeout so long streams aren't cut off;
-// cancellation is driven by the request context.
-// Redirects are blocked (see noRedirect) to prevent redirect-based SSRF.
-var StreamHTTPClient = &http.Client{CheckRedirect: noRedirect}
+// NewOptions returns Options with freshly built HTTP clients, so each gateway
+// owns its own connection pools and transport settings.
+func NewOptions() Options {
+	return Options{HTTPClient: NewHTTPClient(), StreamClient: NewStreamHTTPClient()}
+}
+
+// NewHTTPClient builds the client for non-streaming upstream calls. Redirects
+// are blocked (see noRedirect) to prevent redirect-based SSRF.
+func NewHTTPClient() *http.Client {
+	return &http.Client{Timeout: 600 * time.Second, CheckRedirect: noRedirect}
+}
+
+// NewStreamHTTPClient builds the streaming client. It has no client-level
+// timeout so long streams aren't cut off; cancellation is driven by the request
+// context. Redirects are blocked (see noRedirect) to prevent redirect-based SSRF.
+func NewStreamHTTPClient() *http.Client {
+	return &http.Client{CheckRedirect: noRedirect}
+}
+
+// defaultClients are the process-wide fallbacks used only when Options carries
+// no client of its own (the zero value, e.g. in a hand-built adapter or a test).
+// They are never mutated from config — that is what Options is for.
+var (
+	defaultClient       = NewHTTPClient()
+	defaultStreamClient = NewStreamHTTPClient()
+)
+
+// Client returns the client for non-streaming calls.
+func (o Options) Client() *http.Client {
+	if o.HTTPClient != nil {
+		return o.HTTPClient
+	}
+	return defaultClient
+}
+
+// Stream returns the client for streaming calls.
+func (o Options) Stream() *http.Client {
+	if o.StreamClient != nil {
+		return o.StreamClient
+	}
+	return defaultStreamClient
+}

@@ -36,15 +36,16 @@ type Provider struct {
 	baseURL string
 	apiKey  string
 	headers map[string]string
+	opts    provider.Options
 }
 
 // New builds a Cohere provider from config.
-func New(c config.ProviderConfig) *Provider {
+func New(c config.ProviderConfig, opts provider.Options) *Provider {
 	base := strings.TrimRight(c.BaseURL, "/")
 	if base == "" {
 		base = "https://api.cohere.com/v2"
 	}
-	return &Provider{name: c.Name, baseURL: base, apiKey: c.ResolveKey(), headers: c.Headers}
+	return &Provider{name: c.Name, baseURL: base, apiKey: c.ResolveKey(), headers: c.Headers, opts: opts}
 }
 
 // Name implements Provider.
@@ -117,7 +118,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	creq.Stream = false
 	body, _ := json.Marshal(creq)
 
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, body)
+	resp, err := p.post(ctx, p.opts.Client(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +129,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var cr chatResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&cr); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&cr); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return fromCohere(&cr, req.Model), nil
@@ -161,7 +162,7 @@ func (p *Provider) Embeddings(ctx context.Context, req *openai.EmbeddingRequest,
 		return nil, provider.NewTransportError(p.name, err)
 	}
 	p.setHeaders(hreq)
-	resp, err := provider.DefaultHTTPClient.Do(hreq)
+	resp, err := p.opts.Client().Do(hreq)
 	if err != nil {
 		return nil, provider.NewTransportError(p.name, err)
 	}
@@ -171,7 +172,7 @@ func (p *Provider) Embeddings(ctx context.Context, req *openai.EmbeddingRequest,
 	defer resp.Body.Close()
 
 	var er embedResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&er); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&er); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	data := make([]openai.EmbeddingData, len(er.Embeddings.Float))
@@ -190,7 +191,7 @@ func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCom
 	creq.Stream = true
 	body, _ := json.Marshal(creq)
 
-	resp, err := p.post(ctx, provider.StreamHTTPClient, body)
+	resp, err := p.post(ctx, p.opts.Stream(), body)
 	if err != nil {
 		return err
 	}

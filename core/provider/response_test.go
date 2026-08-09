@@ -83,14 +83,12 @@ func TestNilSinkSafety(t *testing.T) {
 }
 
 func TestBodyUnlimited(t *testing.T) {
-	orig := MaxResponseBytes
-	defer func() { MaxResponseBytes = orig }()
-	MaxResponseBytes = 0
+	opts := Options{MaxResponseBytes: 0}
 
 	payload := strings.Repeat("x", 1000)
 	resp := &http.Response{Body: io.NopCloser(strings.NewReader(payload))}
 
-	got, err := io.ReadAll(Body(resp))
+	got, err := io.ReadAll(opts.Body(resp))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,18 +98,16 @@ func TestBodyUnlimited(t *testing.T) {
 }
 
 func TestBodyTruncated(t *testing.T) {
-	orig := MaxResponseBytes
-	defer func() { MaxResponseBytes = orig }()
-	MaxResponseBytes = 16
+	opts := Options{MaxResponseBytes: 16}
 
 	payload := strings.Repeat("y", 1000)
 	resp := &http.Response{Body: io.NopCloser(strings.NewReader(payload))}
 
-	got, err := io.ReadAll(Body(resp))
+	got, err := io.ReadAll(opts.Body(resp))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if int64(len(got)) != MaxResponseBytes {
-		t.Fatalf("read %d bytes, want %d (capped)", len(got), MaxResponseBytes)
+	if int64(len(got)) != opts.MaxResponseBytes {
+		t.Fatalf("read %d bytes, want %d (capped)", len(got), opts.MaxResponseBytes)
 	}
 }

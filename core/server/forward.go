@@ -83,7 +83,7 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 	}
 
 	// Rewrite the model field to the upstream target name.
-	body := rewriteModelField(raw, t.Model)
+	body := rewriteModelField(raw, t.Model, s.popts)
 
 	// BYOK vs central for the routed provider: inject the account's own key when
 	// set, and mark the forward unmetered.
@@ -147,8 +147,8 @@ func extractModel(raw []byte) string {
 }
 
 // rewriteModelField sets the "model" field in a JSON body to target (single pass).
-func rewriteModelField(raw []byte, target string) []byte {
-	return provider.SetJSONFields(raw, map[string]any{"model": target})
+func rewriteModelField(raw []byte, target string, opts provider.Options) []byte {
+	return opts.SetJSONFields(raw, map[string]any{"model": target})
 }
 
 // maxMeterTapBytes bounds how much of a forwarded response we retain to parse

@@ -12,15 +12,13 @@ import (
 	"github.com/vul-os/llmux/core/provider/anthropic"
 )
 
-// install points the provider HTTP clients at tr and returns a restore func.
-func install(tr http.RoundTripper) func() {
-	oldD := provider.DefaultHTTPClient.Transport
-	oldS := provider.StreamHTTPClient.Transport
-	provider.DefaultHTTPClient.Transport = tr
-	provider.StreamHTTPClient.Transport = tr
-	return func() {
-		provider.DefaultHTTPClient.Transport = oldD
-		provider.StreamHTTPClient.Transport = oldS
+// optsFor returns adapter options whose HTTP clients route through tr. The
+// clients are per-adapter (provider.Options), so the harness no longer has to
+// mutate — and restore — process-wide state to install a RoundTripper.
+func optsFor(tr http.RoundTripper) provider.Options {
+	return provider.Options{
+		HTTPClient:   &http.Client{Transport: tr},
+		StreamClient: &http.Client{Transport: tr},
 	}
 }
 
@@ -37,15 +35,13 @@ func TestRecordThenReplay(t *testing.T) {
 			"stop_reason":"end_turn","usage":{"input_tokens":3,"output_tokens":2}}`))
 	}))
 
-	p := anthropic.New(config.ProviderConfig{Name: "anthropic", BaseURL: mock.URL, APIKey: "k"})
+	cfg := config.ProviderConfig{Name: "anthropic", BaseURL: mock.URL, APIKey: "k"}
 	req := &openai.ChatCompletionRequest{Model: "claude", Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}}}
 
 	// --- Record ---
 	rec := &Transport{Mode: Record, Dir: dir, Real: http.DefaultTransport}
 	rec.SetCase("anthropic/chat_basic")
-	restore := install(rec)
-	resp, err := p.ChatCompletion(context.Background(), req, "claude-3", nil)
-	restore()
+	resp, err := anthropic.New(cfg, optsFor(rec)).ChatCompletion(context.Background(), req, "claude-3", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,9 +56,7 @@ func TestRecordThenReplay(t *testing.T) {
 	mock.Close()
 	rep := &Transport{Mode: Replay, Dir: dir}
 	rep.SetCase("anthropic/chat_basic")
-	restore = install(rep)
-	resp2, err := p.ChatCompletion(context.Background(), req, "claude-3", nil)
-	restore()
+	resp2, err := anthropic.New(cfg, optsFor(rep)).ChatCompletion(context.Background(), req, "claude-3", nil)
 	if err != nil {
 		t.Fatalf("replay failed (should serve from fixture): %v", err)
 	}
@@ -77,9 +71,7 @@ func TestRecordThenReplay(t *testing.T) {
 func TestReplayMissingFixtureSkips(t *testing.T) {
 	rep := &Transport{Mode: Replay, Dir: t.TempDir()}
 	rep.SetCase("nope/missing")
-	restore := install(rep)
-	defer restore()
-	p := anthropic.New(config.ProviderConfig{Name: "anthropic", BaseURL: "http://unused", APIKey: "k"})
+	p := anthropic.New(config.ProviderConfig{Name: "anthropic", BaseURL: "http://unused", APIKey: "k"}, optsFor(rep))
 	_, err := p.ChatCompletion(context.Background(),
 		&openai.ChatCompletionRequest{Model: "x", Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}}}, "x", nil)
 	// The provider wraps transport errors; ensure the underlying cause is ErrNoFixture-like

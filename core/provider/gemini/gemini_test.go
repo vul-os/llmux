@@ -15,7 +15,7 @@ import (
 )
 
 func newTestProvider(url string) *Provider {
-	return New(config.ProviderConfig{Name: "gemini", Type: config.TypeGemini, BaseURL: url, APIKey: "k"})
+	return New(config.ProviderConfig{Name: "gemini", Type: config.TypeGemini, BaseURL: url, APIKey: "k"}, provider.Options{})
 }
 
 func TestGeminiUnaryAndRequestTranslation(t *testing.T) {

@@ -33,12 +33,13 @@ type Provider struct {
 	apiKey     string
 	apiVersion string
 	headers    map[string]string
+	opts       provider.Options
 }
 
 // New builds an Azure OpenAI provider from config. BaseURL is the Azure
 // resource endpoint (e.g. https://myres.openai.azure.com). The api-version is
 // read from Headers["api-version"], falling back to a recent stable default.
-func New(c config.ProviderConfig) *Provider {
+func New(c config.ProviderConfig, opts provider.Options) *Provider {
 	ver := c.Headers["api-version"]
 	if ver == "" {
 		ver = defaultAPIVersion
@@ -49,6 +50,7 @@ func New(c config.ProviderConfig) *Provider {
 		apiKey:     c.ResolveKey(),
 		apiVersion: ver,
 		headers:    c.Headers,
+		opts:       opts,
 	}
 }
 
@@ -119,8 +121,8 @@ func (p *Provider) errorFromResponse(ctx context.Context, resp *http.Response) *
 
 // ChatCompletion implements Provider.
 func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest, target string, raw json.RawMessage) (*openai.ChatCompletionResponse, error) {
-	body := provider.SetJSONFields(raw, map[string]any{"model": target, "stream": false})
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, p.deploymentURL(target, "chat/completions"), body)
+	body := p.opts.SetJSONFields(raw, map[string]any{"model": target, "stream": false})
+	resp, err := p.post(ctx, p.opts.Client(), p.deploymentURL(target, "chat/completions"), body)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +133,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var out openai.ChatCompletionResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&out); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&out); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return &out, nil
@@ -139,9 +141,9 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 
 // ChatCompletionStream implements Provider.
 func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCompletionRequest, target string, raw json.RawMessage, yield provider.ChunkFunc) error {
-	body := provider.SetJSONFields(raw, map[string]any{"model": target, "stream": true})
+	body := p.opts.SetJSONFields(raw, map[string]any{"model": target, "stream": true})
 
-	resp, err := p.post(ctx, provider.StreamHTTPClient, p.deploymentURL(target, "chat/completions"), body)
+	resp, err := p.post(ctx, p.opts.Stream(), p.deploymentURL(target, "chat/completions"), body)
 	if err != nil {
 		return err
 	}
@@ -162,8 +164,8 @@ func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCom
 
 // Embeddings implements Provider.
 func (p *Provider) Embeddings(ctx context.Context, req *openai.EmbeddingRequest, target string, raw json.RawMessage) (*openai.EmbeddingResponse, error) {
-	body := provider.SetJSONFields(raw, map[string]any{"model": target})
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, p.deploymentURL(target, "embeddings"), body)
+	body := p.opts.SetJSONFields(raw, map[string]any{"model": target})
+	resp, err := p.post(ctx, p.opts.Client(), p.deploymentURL(target, "embeddings"), body)
 	if err != nil {
 		return nil, err
 	}
@@ -174,7 +176,7 @@ func (p *Provider) Embeddings(ctx context.Context, req *openai.EmbeddingRequest,
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var out openai.EmbeddingResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&out); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&out); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return &out, nil
@@ -209,7 +211,7 @@ func (p *Provider) Forward(ctx context.Context, fr provider.ForwardRequest) (*pr
 		}
 		req.Header.Set(k, v)
 	}
-	resp, err := provider.StreamHTTPClient.Do(req)
+	resp, err := p.opts.Stream().Do(req)
 	if err != nil {
 		return nil, provider.NewTransportError(p.name, err)
 	}

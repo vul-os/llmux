@@ -15,7 +15,7 @@ import (
 )
 
 func newP(url string) *Provider {
-	return New(config.ProviderConfig{Name: "p", Type: config.TypePassthrough, BaseURL: url, APIKey: "k"})
+	return New(config.ProviderConfig{Name: "p", Type: config.TypePassthrough, BaseURL: url, APIKey: "k"}, provider.Options{})
 }
 
 func basicReq() *openai.ChatCompletionRequest {
@@ -58,11 +58,11 @@ func TestResponseSizeLimit(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	old := provider.MaxResponseBytes
-	provider.MaxResponseBytes = 64 // truncate hard
-	defer func() { provider.MaxResponseBytes = old }()
+	// Per-gateway option (no global to save/restore): truncate hard.
+	p := New(config.ProviderConfig{Name: "p", BaseURL: srv.URL + "/v1", APIKey: "k"},
+		provider.Options{MaxResponseBytes: 64})
 
-	_, err := newP(srv.URL+"/v1").ChatCompletion(context.Background(), basicReq(), "m", []byte(`{"model":"m"}`))
+	_, err := p.ChatCompletion(context.Background(), basicReq(), "m", []byte(`{"model":"m"}`))
 	if err == nil {
 		t.Fatal("expected decode error from truncated (size-limited) body")
 	}

@@ -36,10 +36,11 @@ type Provider struct {
 	apiKey  string
 	version string
 	headers map[string]string
+	opts    provider.Options
 }
 
 // New builds an Anthropic provider from config.
-func New(c config.ProviderConfig) *Provider {
+func New(c config.ProviderConfig, opts provider.Options) *Provider {
 	base := strings.TrimRight(c.BaseURL, "/")
 	if base == "" {
 		base = "https://api.anthropic.com/v1"
@@ -48,7 +49,7 @@ func New(c config.ProviderConfig) *Provider {
 	if v := c.Headers["anthropic-version"]; v != "" {
 		version = v
 	}
-	return &Provider{name: c.Name, baseURL: base, apiKey: c.ResolveKey(), version: version, headers: c.Headers}
+	return &Provider{name: c.Name, baseURL: base, apiKey: c.ResolveKey(), version: version, headers: c.Headers, opts: opts}
 }
 
 // Name implements Provider.
@@ -111,7 +112,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	areq.Stream = false
 	body, _ := json.Marshal(areq)
 
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, body)
+	resp, err := p.post(ctx, p.opts.Client(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var ar messagesResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&ar); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&ar); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return fromAnthropic(&ar, req.Model), nil
@@ -143,7 +144,7 @@ func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCom
 	areq.Stream = true
 	body, _ := json.Marshal(areq)
 
-	resp, err := p.post(ctx, provider.StreamHTTPClient, body)
+	resp, err := p.post(ctx, p.opts.Stream(), body)
 	if err != nil {
 		return err
 	}

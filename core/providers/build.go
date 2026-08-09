@@ -4,7 +4,7 @@
 package providers
 
 import (
-	"log"
+	"log/slog"
 
 	"github.com/vul-os/llmux/core/config"
 	"github.com/vul-os/llmux/core/provider"
@@ -38,32 +38,40 @@ func Stability(t config.ProviderType) string {
 // type has no adapter yet are skipped with a warning rather than failing the
 // whole gateway. Experimental/beta adapters are logged so operators know what
 // is not yet live-verified.
-func Build(cfgs []config.ProviderConfig) (*provider.Registry, error) {
+//
+// opts are the per-gateway adapter options (response-size cap, drop_params, HTTP
+// clients). They are passed to every adapter rather than set as package globals,
+// so two gateways in one process never share or overwrite each other's settings.
+// log may be nil (nothing is logged).
+func Build(cfgs []config.ProviderConfig, opts provider.Options, log *slog.Logger) (*provider.Registry, error) {
 	reg := provider.NewRegistry()
 	for _, c := range cfgs {
 		var p provider.Provider
 		switch c.Type {
 		case config.TypePassthrough:
-			p = passthrough.New(c)
+			p = passthrough.New(c, opts)
 		case config.TypeAnthropic:
-			p = anthropic.New(c)
+			p = anthropic.New(c, opts)
 		case config.TypeGemini:
-			p = gemini.New(c)
+			p = gemini.New(c, opts)
 		case config.TypeCohere:
-			p = cohere.New(c)
+			p = cohere.New(c, opts)
 		case config.TypeBedrock:
-			p = bedrock.New(c)
+			p = bedrock.New(c, opts)
 		case config.TypeAzure:
-			p = azure.New(c)
+			p = azure.New(c, opts)
 		default:
-			log.Printf("llmux: skipping provider %q: no adapter for type %q yet", c.Name, c.Type)
+			if log != nil {
+				log.Warn("skipping provider: no adapter for type yet", "provider", c.Name, "type", string(c.Type))
+			}
 			continue
 		}
 		if err := reg.Register(p); err != nil {
 			return nil, err
 		}
-		if s := Stability(c.Type); s != "stable" {
-			log.Printf("llmux: provider %q (%s) is %s — not yet verified against the live API", c.Name, c.Type, s)
+		if s := Stability(c.Type); s != "stable" && log != nil {
+			log.Warn("provider is not yet verified against the live API",
+				"provider", c.Name, "type", string(c.Type), "stability", s)
 		}
 	}
 	return reg, nil

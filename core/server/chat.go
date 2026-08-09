@@ -133,7 +133,7 @@ func (s *Server) streamChat(w http.ResponseWriter, r *http.Request, req *openai.
 		req.StreamOptions = &openai.StreamOptions{}
 	}
 	req.StreamOptions.IncludeUsage = true
-	raw = provider.SetJSONFields(raw, map[string]any{"stream_options": map[string]any{"include_usage": true}})
+	raw = s.popts.SetJSONFields(raw, map[string]any{"stream_options": map[string]any{"include_usage": true}})
 
 	var sse *sseWriter
 	started := false

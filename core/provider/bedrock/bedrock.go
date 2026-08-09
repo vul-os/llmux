@@ -51,12 +51,13 @@ type Provider struct {
 	baseURL string
 	region  string
 	headers map[string]string
+	opts    provider.Options
 }
 
 // New builds a Bedrock provider from config. Region is taken from
 // Headers["region"] (default us-east-1); BaseURL defaults to the regional
 // bedrock-runtime endpoint.
-func New(c config.ProviderConfig) *Provider {
+func New(c config.ProviderConfig, opts provider.Options) *Provider {
 	region := c.Headers["region"]
 	if region == "" {
 		region = defaultRegion
@@ -65,7 +66,7 @@ func New(c config.ProviderConfig) *Provider {
 	if base == "" {
 		base = "https://bedrock-runtime." + region + ".amazonaws.com"
 	}
-	return &Provider{name: c.Name, baseURL: base, region: region, headers: c.Headers}
+	return &Provider{name: c.Name, baseURL: base, region: region, headers: c.Headers, opts: opts}
 }
 
 // Name implements Provider.
@@ -213,7 +214,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	}
 	body, _ := json.Marshal(toInvoke(req))
 
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, target, body)
+	resp, err := p.post(ctx, p.opts.Client(), target, body)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +225,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var ir invokeResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&ir); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&ir); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return fromInvoke(&ir, req.Model), nil
@@ -251,7 +252,7 @@ func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCom
 	}
 	body, _ := json.Marshal(toInvoke(req))
 
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, target, body)
+	resp, err := p.post(ctx, p.opts.Client(), target, body)
 	if err != nil {
 		return err
 	}
@@ -261,7 +262,7 @@ func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCom
 	defer resp.Body.Close()
 
 	var ir invokeResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&ir); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&ir); err != nil {
 		return provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 

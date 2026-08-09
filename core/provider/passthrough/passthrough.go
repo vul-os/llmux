@@ -24,15 +24,17 @@ type Provider struct {
 	baseURL string
 	apiKey  string
 	headers map[string]string
+	opts    provider.Options
 }
 
 // New builds a passthrough provider from config.
-func New(c config.ProviderConfig) *Provider {
+func New(c config.ProviderConfig, opts provider.Options) *Provider {
 	return &Provider{
 		name:    c.Name,
 		baseURL: strings.TrimRight(c.BaseURL, "/"),
 		apiKey:  c.ResolveKey(),
 		headers: c.Headers,
+		opts:    opts,
 	}
 }
 
@@ -83,8 +85,8 @@ func (p *Provider) errorFromResponse(ctx context.Context, resp *http.Response) *
 
 // ChatCompletion implements Provider.
 func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletionRequest, target string, raw json.RawMessage) (*openai.ChatCompletionResponse, error) {
-	body := provider.SetJSONFields(raw, map[string]any{"model": target, "stream": false})
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, "/chat/completions", body)
+	body := p.opts.SetJSONFields(raw, map[string]any{"model": target, "stream": false})
+	resp, err := p.post(ctx, p.opts.Client(), "/chat/completions", body)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +97,7 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var out openai.ChatCompletionResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&out); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&out); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return &out, nil
@@ -103,9 +105,9 @@ func (p *Provider) ChatCompletion(ctx context.Context, req *openai.ChatCompletio
 
 // ChatCompletionStream implements Provider.
 func (p *Provider) ChatCompletionStream(ctx context.Context, req *openai.ChatCompletionRequest, target string, raw json.RawMessage, yield provider.ChunkFunc) error {
-	body := provider.SetJSONFields(raw, map[string]any{"model": target, "stream": true})
+	body := p.opts.SetJSONFields(raw, map[string]any{"model": target, "stream": true})
 
-	resp, err := p.post(ctx, provider.StreamHTTPClient, "/chat/completions", body)
+	resp, err := p.post(ctx, p.opts.Stream(), "/chat/completions", body)
 	if err != nil {
 		return err
 	}
@@ -146,7 +148,7 @@ func (p *Provider) Forward(ctx context.Context, fr provider.ForwardRequest) (*pr
 	for k, v := range p.headers {
 		req.Header.Set(k, v)
 	}
-	resp, err := provider.StreamHTTPClient.Do(req)
+	resp, err := p.opts.Stream().Do(req)
 	if err != nil {
 		return nil, provider.NewTransportError(p.name, err)
 	}
@@ -155,8 +157,8 @@ func (p *Provider) Forward(ctx context.Context, fr provider.ForwardRequest) (*pr
 
 // Embeddings implements Provider.
 func (p *Provider) Embeddings(ctx context.Context, req *openai.EmbeddingRequest, target string, raw json.RawMessage) (*openai.EmbeddingResponse, error) {
-	body := provider.SetJSONFields(raw, map[string]any{"model": target})
-	resp, err := p.post(ctx, provider.DefaultHTTPClient, "/embeddings", body)
+	body := p.opts.SetJSONFields(raw, map[string]any{"model": target})
+	resp, err := p.post(ctx, p.opts.Client(), "/embeddings", body)
 	if err != nil {
 		return nil, err
 	}
@@ -167,7 +169,7 @@ func (p *Provider) Embeddings(ctx context.Context, req *openai.EmbeddingRequest,
 	provider.SinkFrom(ctx).Capture(resp.Header)
 
 	var out openai.EmbeddingResponse
-	if err := json.NewDecoder(provider.Body(resp)).Decode(&out); err != nil {
+	if err := json.NewDecoder(p.opts.Body(resp)).Decode(&out); err != nil {
 		return nil, provider.NewTransportError(p.name, fmt.Errorf("decode response: %w", err))
 	}
 	return &out, nil

@@ -22,7 +22,7 @@ func newProvider(t *testing.T, baseURL string, headers map[string]string) *Provi
 		BaseURL: baseURL,
 		APIKey:  "secret-key",
 		Headers: headers,
-	})
+	}, provider.Options{})
 }
 
 // assertAuth checks Azure-specific auth: api-key header set, no Authorization.

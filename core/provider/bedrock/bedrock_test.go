@@ -63,7 +63,7 @@ func newMock(t *testing.T, modelID string) (*Provider, *httptest.Server, chan []
 		Name:    "bedrock",
 		BaseURL: srv.URL,
 		Headers: map[string]string{"region": "us-east-1"},
-	})
+	}, provider.Options{})
 	return p, srv, bodyCh
 }
 
@@ -200,7 +200,7 @@ func TestInvokeURLEncodesARN(t *testing.T) {
 		Name:    "bedrock",
 		BaseURL: "https://bedrock-runtime.us-east-1.amazonaws.com",
 		Headers: map[string]string{"region": "us-east-1"},
-	})
+	}, provider.Options{})
 	const arn = "arn:aws:bedrock:us-east-1:123:inference-profile/us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 	got := p.invokeURL(arn)
 	const want = "https://bedrock-runtime.us-east-1.amazonaws.com/model/" +
@@ -255,7 +255,7 @@ func TestChatCompletionARNTarget(t *testing.T) {
 		Name:    "bedrock",
 		BaseURL: srv.URL,
 		Headers: map[string]string{"region": "us-east-1"},
-	})
+	}, provider.Options{})
 
 	resp, err := p.ChatCompletion(context.Background(), sampleRequest(), arn, nil)
 	if err != nil {
@@ -285,7 +285,7 @@ func TestNonAnthropicModelRejected(t *testing.T) {
 		Name:    "bedrock",
 		BaseURL: srv.URL,
 		Headers: map[string]string{"region": "us-east-1"},
-	})
+	}, provider.Options{})
 
 	assert400 := func(err error) {
 		t.Helper()
@@ -317,7 +317,7 @@ func TestNonAnthropicModelRejected(t *testing.T) {
 
 func TestEmbeddingsNotImplemented(t *testing.T) {
 	setFakeAWSEnv(t)
-	p := New(config.ProviderConfig{Name: "bedrock", Headers: map[string]string{"region": "us-east-1"}})
+	p := New(config.ProviderConfig{Name: "bedrock", Headers: map[string]string{"region": "us-east-1"}}, provider.Options{})
 	_, err := p.Embeddings(context.Background(), &openai.EmbeddingRequest{}, "x", nil)
 	if err == nil {
 		t.Fatal("expected error")
@@ -325,7 +325,7 @@ func TestEmbeddingsNotImplemented(t *testing.T) {
 }
 
 func TestDefaultBaseURL(t *testing.T) {
-	p := New(config.ProviderConfig{Name: "bedrock", Headers: map[string]string{"region": "eu-west-1"}})
+	p := New(config.ProviderConfig{Name: "bedrock", Headers: map[string]string{"region": "eu-west-1"}}, provider.Options{})
 	if p.baseURL != "https://bedrock-runtime.eu-west-1.amazonaws.com" {
 		t.Errorf("baseURL = %q", p.baseURL)
 	}
@@ -346,7 +346,7 @@ func makeResp(status int, body string, header http.Header) *http.Response {
 }
 
 func newErrProvider() *Provider {
-	return New(config.ProviderConfig{Name: "bedrock"})
+	return New(config.ProviderConfig{Name: "bedrock"}, provider.Options{})
 }
 
 func TestBedrockErrorCapitalMessage(t *testing.T) {

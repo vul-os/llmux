@@ -9,18 +9,23 @@ import (
 	"sync"
 )
 
-// DropParams lists request body fields to strip before forwarding to OpenAI-
-// shaped upstreams (the `drop_params` config). Set once at startup. This is the
-// gateway's drop-unsupported-params lever: operators drop params a given fleet
-// rejects (e.g. logit_bias on some hosts) instead of surfacing upstream 400s.
-var DropParams []string
-
 // SetJSONFields rewrites top-level fields of a JSON object body in a SINGLE
-// unmarshal/marshal pass, preserving every other field verbatim (and dropping
-// any keys in the global DropParams list). Used on the request hot path to swap
-// "model"/"stream" without re-parsing the whole body multiple times. Returns the
-// original bytes unchanged if they aren't a JSON object.
+// unmarshal/marshal pass, preserving every other field verbatim. Used on the
+// request hot path to swap "model"/"stream" without re-parsing the whole body
+// multiple times. Returns the original bytes unchanged if they aren't a JSON
+// object. It drops nothing — callers that must honor the gateway's drop_params
+// list use Options.SetJSONFields.
 func SetJSONFields(raw []byte, fields map[string]any) []byte {
+	return setJSONFields(raw, fields, nil)
+}
+
+// SetJSONFields rewrites top-level fields as SetJSONFields does, and also drops
+// every key in this gateway's DropParams list.
+func (o Options) SetJSONFields(raw []byte, fields map[string]any) []byte {
+	return setJSONFields(raw, fields, o.DropParams)
+}
+
+func setJSONFields(raw []byte, fields map[string]any, drop []string) []byte {
 	var m map[string]json.RawMessage
 	if len(raw) > 0 {
 		if err := json.Unmarshal(raw, &m); err != nil {
@@ -36,7 +41,7 @@ func SetJSONFields(raw []byte, fields map[string]any) []byte {
 		}
 		m[k] = b
 	}
-	for _, k := range DropParams {
+	for _, k := range drop {
 		delete(m, k)
 	}
 	out, err := json.Marshal(m)
@@ -107,14 +112,10 @@ func ParseDataURI(uri string) (mediaType, data string, isBase64, ok bool) {
 	return mediaType, data, isBase64, true
 }
 
-// MaxResponseBytes bounds upstream (non-streaming) response bodies. 0 = unlimited.
-// Set once at startup from config.
-var MaxResponseBytes int64 = 0
-
-// Body returns the response body, size-limited when MaxResponseBytes > 0.
-func Body(resp *http.Response) io.Reader {
-	if MaxResponseBytes > 0 {
-		return io.LimitReader(resp.Body, MaxResponseBytes)
+// Body returns the response body, size-limited when o.MaxResponseBytes > 0.
+func (o Options) Body(resp *http.Response) io.Reader {
+	if o.MaxResponseBytes > 0 {
+		return io.LimitReader(resp.Body, o.MaxResponseBytes)
 	}
 	return resp.Body
 }

@@ -14,7 +14,7 @@ import (
 )
 
 func newTestProvider(url string) *Provider {
-	return New(config.ProviderConfig{Name: "anthropic", Type: config.TypeAnthropic, BaseURL: url, APIKey: "k"})
+	return New(config.ProviderConfig{Name: "anthropic", Type: config.TypeAnthropic, BaseURL: url, APIKey: "k"}, provider.Options{})
 }
 
 func TestAnthropicUnaryAndRequestTranslation(t *testing.T) {

@@ -49,13 +49,24 @@ type Server struct {
 	stats            *usageStats
 	metrics          *Metrics
 	log              *slog.Logger
+	popts            provider.Options
 	semantic         bool
 	mux              *http.ServeMux
 }
 
 // New builds a Server from config.
 func New(cfg *config.Config) (*Server, error) {
-	reg, err := providers.Build(cfg.Providers)
+	logger := newLogger(cfg.LogLevel)
+	// Per-gateway adapter options. These used to be package-level variables in
+	// core/provider that server.New MUTATED, so two gateways in one process
+	// silently corrupted each other; they are now owned by this gateway alone.
+	popts := provider.NewOptions()
+	// Bound non-streaming upstream response bodies (0 = unlimited).
+	popts.MaxResponseBytes = cfg.MaxResponseBytes
+	// Strip configured params before forwarding to OpenAI-shaped upstreams.
+	popts.DropParams = cfg.DropParams
+
+	reg, err := providers.Build(cfg.Providers, popts, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -69,11 +80,6 @@ func New(cfg *config.Config) (*Server, error) {
 	sources := buildPricingSources(cfg)
 	// Apply manual overrides synchronously so they take effect before first sync.
 	applyOverrides(catalog, cfg)
-
-	// Bound non-streaming upstream response bodies (0 = unlimited).
-	provider.MaxResponseBytes = cfg.MaxResponseBytes
-	// Strip configured params before forwarding to OpenAI-shaped upstreams.
-	provider.DropParams = cfg.DropParams
 
 	// Optional shared Redis client (rate limiting + cache across replicas).
 	var rdb *redis.Client
@@ -133,8 +139,9 @@ func New(cfg *config.Config) (*Server, error) {
 		usage:          NopUsageLogger{},
 		stats:          newUsageStats(),
 		metrics:        NewMetrics(),
-		log:            newLogger(cfg.LogLevel),
+		log:            logger,
 		mux:            http.NewServeMux(),
+		popts:          popts,
 	}
 	ttl := time.Duration(cfg.Cache.TTLSeconds) * time.Second
 	switch {
