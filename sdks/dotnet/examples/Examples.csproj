@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Llmux.Examples</RootNamespace>
+    <AssemblyName>llmux-examples</AssemblyName>
+    <!--
+      Target net8.0 (the library's floor) but run on whatever runtime is
+      installed. Without this, a machine with only the .NET 10 runtime refuses
+      to start a net8.0 app — which is a packaging detail, not something an
+      example should make you solve before you can read it.
+    -->
+    <RollForward>LatestMajor</RollForward>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Llmux.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -5,6 +5,15 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
+    <!--
+      LlmuxDirect binds the C ABI with LibraryImport and passes the chunk
+      callback as a `delegate* unmanaged<…>` function pointer, which requires
+      unsafe. That is the AOT-friendly, allocation-free shape; the alternative
+      (Marshal.GetFunctionPointerForDelegate) needs no unsafe but adds a
+      delegate whose lifetime you must keep straight by hand.
+      The SIDECAR half (Llmux.cs) contains no unsafe code.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <PackageId>Llmux</PackageId>
     <Version>0.1.0</Version>
     <Description>The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.</Description>
@@ -24,10 +33,12 @@
     </ItemGroup>
   -->
 
-  <!-- Keep the test project out of the library compilation. -->
+  <!-- Keep the test and example projects out of the library compilation. -->
   <ItemGroup>
     <Compile Remove="tests/**/*.cs" />
     <None Remove="tests/**" />
+    <Compile Remove="examples/**/*.cs" />
+    <None Remove="examples/**" />
   </ItemGroup>
 
   <!-- Ship the bundled binary if present (gitignored in this repo). -->

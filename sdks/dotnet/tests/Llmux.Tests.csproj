@@ -6,6 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!--
+      Target net8.0 (the library's floor) but run on whatever runtime the
+      machine has. Without this, a host with only the .NET 10 runtime aborts the
+      run with "framework 'Microsoft.NETCore.App' version '8.0.0' not found",
+      which looks like a test failure and is a missing-runtime error.
+    -->
+    <RollForward>LatestMajor</RollForward>
   </PropertyGroup>
 
   <ItemGroup>
