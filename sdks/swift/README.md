@@ -7,9 +7,10 @@ Two modes, both supported, both with a runnable example.
 | **Direct** | `dlopen`s `libllmux` and runs the gateway **inside your process** | `LLMux.Gateway` |
 | **Sidecar** | spawns and supervises `llmux serve`, talks HTTP | `LLMux.Sidecar` |
 
-**Direct is the better default on darwin/arm64, and unavailable everywhere else
-Swift runs.** That sentence is the whole platform story; see
-[Platforms](#platforms).
+**Direct is the better default on darwin/arm64, the only combination tested from
+Swift.** A library also exists for linux/arm64, which should work but has not
+been tried from Swift; on Intel macOS, Windows and iOS there is no library at
+all, so direct mode does not exist there. See [Platforms](#platforms).
 
 ## Tested on
 

@@ -30,9 +30,11 @@ the sidecar, and the reason is in that language's README.
 | [php](php/) | ✓ `FFI` extension | ✓ | **sidecar** | callback |
 | [elixir](elixir/) | **none, deliberately** | ✓ | **sidecar** | n/a |
 
-## Why the sidecar is the default in six of them
+## Why the sidecar is the default in seven of them
 
-Each of these was measured, not assumed. The numbers are in the language READMEs.
+Three of the reasons below are measured runtime hazards, and the numbers are in
+the language READMEs. Two are not measurements and are marked as such: .NET's
+reason is platform coverage, and Elixir's is what a NIF is.
 
 - **Java / Kotlin.** Loading the library replaces five of HotSpot's signal
   handlers (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG`) and adds
@@ -42,19 +44,28 @@ Each of these was measured, not assumed. The numbers are in the language READMEs
   command**, and a library cannot add one to a process that already started.
   (`SIGPROF` is *not* touched: JFR profiling is unaffected. The commonly-cited
   hazard does not exist here — see [`java/signal-probe.sh`](java/signal-probe.sh).)
-- **Python / PHP / Ruby.** The Go runtime is **not fork-safe**. Measured in real
-  php-fpm: a worker that loaded the library in the master answers `models` in
-  0.1 ms and then never answers `chat` at all. Same shape after `os.fork()` in
-  Python. Note the trap — **`models` succeeds in a broken child**, so a health
-  check that only lists models is a false green for a process that will hang on
-  the first real request. Python's fix is the `spawn` start method; PHP-FPM and
-  Unicorn fork by design.
+- **Python / PHP** — and **Ruby**, which is the "depends" row for this same
+  reason. The Go runtime is **not fork-safe**. Measured in real php-fpm: a
+  worker that loaded the library in the master answers `models` in 0.1 ms and
+  then never answers `chat` at all. Same shape after `os.fork()` in Python. Note
+  the trap — **`models` succeeds in a broken child**, so a health check that only
+  lists models is a false green for a process that will hang on the first real
+  request. Python's fix is the `spawn` start method; PHP-FPM and Unicorn fork by
+  design. Ruby is a "depends" rather than a "sidecar" because whether it forks is
+  a deployment choice: Unicorn, Passenger and clustered Puma do, so use the
+  sidecar; single-mode Puma, Falcon, Sidekiq and CLI tools do not, and direct is
+  fine there. See [`ruby/README.md`](ruby/README.md).
 - **Node.** A Node thread that has entered a Go `c-shared` library never
   terminates, so neither `worker_threads` nor koffi's async pool can move
   streaming off the main thread — the process hangs at exit. Node direct mode is
   therefore synchronous and takes a callback rather than an async iterator.
   Buffering the whole answer and replaying it as fake chunks would be worse than
   an honest HTTP call.
+- **.NET.** Not a runtime hazard but a coverage one: **there is no Windows
+  shared library** — not "untested", not built by anyone, ever. .NET has a large
+  Windows install base, so for much of it the direct path does not exist. The
+  signal findings above were measured on the JVM and explicitly *not* on CoreCLR,
+  so they are suggestive rather than transferable.
 - **Elixir.** In-process would mean a NIF: it cannot be killed or
   `Task.await`-timed-out, a segfault takes the whole VM, and a dirty-IO NIF caps
   concurrency at the scheduler count. Every safe alternative reintroduces the
