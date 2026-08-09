@@ -24,11 +24,12 @@ func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {
 	}
 	// Pre-flight failures (missing model, key allow-list, unknown model,
 	// unmeterable-on-a-budgeted-key) each map to their own status.
-	if _, err := s.gw.Prepare(r.Context(), req.Model); err != nil {
+	res, err := s.gw.Prepare(r.Context(), req.Model)
+	if err != nil {
 		writePrepareError(w, req.Model, err)
 		return
 	}
-	resp, err := s.gw.EmbedRaw(r.Context(), &req, raw)
+	resp, err := s.gw.EmbedRoute(r.Context(), &req, raw, res)
 	if err != nil {
 		s.writeProviderError(w, err)
 		return

@@ -6,8 +6,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vul-os/llmux/core/openai"
 	"github.com/redis/go-redis/v9"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // testRedis is the Redis integration gate. It records the outcome (see

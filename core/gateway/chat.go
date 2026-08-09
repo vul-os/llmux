@@ -114,6 +114,13 @@ func (g *Gateway) Prepare(ctx context.Context, model string) (router.Resolution,
 	return g.prepare(ctx, model, false)
 }
 
+// ChatRoute is ChatRaw with an already-resolved route, so the HTTP shell (which
+// must call Prepare itself to map each pre-flight failure onto its own status
+// code) does not resolve and re-check the same request twice.
+func (g *Gateway) ChatRoute(ctx context.Context, req *openai.ChatCompletionRequest, raw []byte, res router.Resolution) (*Result, error) {
+	return g.unaryChat(ctx, req, raw, res)
+}
+
 // unaryChat is the non-streaming dispatch body: cache lookup, upstream deadline,
 // header sink, dispatch with retry/failover, cost attribution, metering, and a
 // single serialization reused by the cache and the caller.

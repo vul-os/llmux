@@ -95,6 +95,17 @@ jobs:
       - name: Test
         run: go test -race -cover -timeout 180s ./...
 
+      # The admin console is optional: `-tags noui` drops the go:embed and
+      # core/server mounts a JSON stub instead. Only ONE tag state is exercised
+      # by the steps above, so without this the untagged build could rot for a
+      # release cycle before anyone noticed. Build, vet and test it — a build
+      # alone would not catch the stub answering the wrong status.
+      - name: Build/vet/test without the admin console (-tags noui)
+        run: |
+          go build -tags noui ./...
+          go vet -tags noui ./...
+          go test -tags noui -timeout 180s ./...
+
   # sdks/node is the only package.json in the tree with a `typescript`
   # dependency. Go build/test above never touch it — without this job the TS
   # SDK's type-aware ESLint config (strictTypeChecked) and `tsc --noEmit`

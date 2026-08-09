@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/router"
 )
 
 // Embed performs an embeddings request in-process: routing, the unmeterable
@@ -27,6 +28,14 @@ func (g *Gateway) EmbedRaw(ctx context.Context, req *openai.EmbeddingRequest, ra
 	if err != nil {
 		return nil, err
 	}
+	return g.EmbedRoute(ctx, req, raw, res)
+}
+
+// EmbedRoute is EmbedRaw with an already-resolved route, so the HTTP shell
+// (which calls Prepare itself to map each pre-flight failure onto its own
+// status code) does not resolve and re-check the same request twice.
+func (g *Gateway) EmbedRoute(ctx context.Context, req *openai.EmbeddingRequest, raw []byte, res router.Resolution) (*openai.EmbeddingResponse, error) {
+	var err error
 	if len(raw) == 0 {
 		if raw, err = json.Marshal(req); err != nil {
 			return nil, err

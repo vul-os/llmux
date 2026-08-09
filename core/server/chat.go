@@ -41,7 +41,7 @@ func (s *Server) handleChat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out, err := s.gw.ChatRaw(r.Context(), &req, raw)
+	out, err := s.gw.ChatRoute(r.Context(), &req, raw, res)
 	if err != nil {
 		if out != nil {
 			relayHeaders(w, out.Headers) // relay rate-limit/retry-after headers even on error
