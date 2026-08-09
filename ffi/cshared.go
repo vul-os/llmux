@@ -54,20 +54,48 @@ func goStr(s *C.char) string {
 	return C.GoString(s)
 }
 
+// Every //export below ends with a `defer` that recovers. That is the second
+// half of the panic backstop: abi.go's entry points already recover (see
+// `recovered` there), which is where every panic this library can actually
+// produce is caught and where the behaviour is tested. The defers here cover
+// the remaining sliver — a panic raised in the cgo marshalling itself, between
+// the //export frame and the Go entry point: C.GoString on a pointer that is
+// not NUL-terminated, C.CString on a Go string containing a NUL byte (it
+// panics), an allocation failure. A panic that escapes an //export function is
+// not a Go panic anyone can catch; it is a runtime fatal error that ends the
+// host process.
+//
+// TestEveryExportHasAPanicBackstop reads this file and fails if an //export
+// function is added without one.
+
 // Returns the version of llmux this library was built from, as a static string
 // the caller must not free. A host compares it against the version it generated
 // its bindings for; a mismatch means a stale library is earlier on the load
 // path than the one that was installed.
 //
 //export llmux_abi_version
-func llmux_abi_version() *C.char { return abiVersionC }
+func llmux_abi_version() (v *C.char) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			_ = rec
+			v = nil
+		}
+	}()
+	return abiVersionC
+}
 
 // Builds a gateway from a JSON configuration document (NULL or "" means
 // defaults plus environment) and returns its handle. Returns 0 on failure with
 // *err set to a malloc'd message.
 //
 //export llmux_new
-func llmux_new(configJSON *C.char, err **C.char) C.uint64_t {
+func llmux_new(configJSON *C.char, err **C.char) (handle C.uint64_t) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			handle = 0
+			setErr(err, recovered(rec))
+		}
+	}()
 	h, e := openGateway(goStr(configJSON))
 	if e != nil {
 		setErr(err, e)
@@ -80,14 +108,26 @@ func llmux_new(configJSON *C.char, err **C.char) C.uint64_t {
 // Closing an unknown or already-closed handle is a no-op.
 //
 //export llmux_close
-func llmux_close(h C.uint64_t) { closeGateway(uint64(h)) }
+func llmux_close(h C.uint64_t) {
+	defer func() { _ = recover() }() // void: nowhere to report, but never fatal
+	closeGateway(uint64(h))
+}
 
 // One unary call. method is "chat", "embed" or "models"; requestJSON is the
 // same OpenAI-shaped body the HTTP API takes. Returns malloc'd UTF-8 JSON the
 // caller frees with llmux_free, or NULL with *err set.
 //
 //export llmux_call
-func llmux_call(h C.uint64_t, method *C.char, requestJSON *C.char, err **C.char) *C.char {
+func llmux_call(h C.uint64_t, method *C.char, requestJSON *C.char, err **C.char) (result *C.char) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			// A panic in C.CString below can only have happened before the
+			// pointer was assigned to result, so there is nothing half-built to
+			// free here; NULL + *err is the ABI's documented failure.
+			result = nil
+			setErr(err, recovered(rec))
+		}
+	}()
 	out, e := callMethod(uint64(h), goStr(method), goStr(requestJSON))
 	if e != nil {
 		setErr(err, e)
@@ -101,6 +141,7 @@ func llmux_call(h C.uint64_t, method *C.char, requestJSON *C.char, err **C.char)
 //
 //export llmux_free
 func llmux_free(p *C.char) {
+	defer func() { _ = recover() }() // void: nowhere to report, but never fatal
 	if p != nil {
 		C.free(unsafe.Pointer(p))
 	}
@@ -116,7 +157,13 @@ func llmux_free(p *C.char) {
 //
 //export llmux_stream
 func llmux_stream(h C.uint64_t, method *C.char, requestJSON *C.char,
-	cb C.llmux_chunk_cb, userData unsafe.Pointer, err **C.char) C.int {
+	cb C.llmux_chunk_cb, userData unsafe.Pointer, err **C.char) (rc C.int) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			rc = -1
+			setErr(err, recovered(rec))
+		}
+	}()
 	if cb == nil {
 		setErr(err, errNoCallback)
 		return -1
@@ -124,7 +171,7 @@ func llmux_stream(h C.uint64_t, method *C.char, requestJSON *C.char,
 	e := streamMethod(uint64(h), goStr(method), goStr(requestJSON), func(chunk string) error {
 		cs := C.CString(chunk)
 		defer C.free(unsafe.Pointer(cs))
-		if rc := C.llmux_invoke_chunk_cb(cb, cs, userData); rc != 0 {
+		if stop := C.llmux_invoke_chunk_cb(cb, cs, userData); stop != 0 {
 			return errCallbackStop
 		}
 		return nil

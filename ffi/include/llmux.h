@@ -40,6 +40,11 @@
  *             Calling with a closed or invented handle is a clean error, not a
  *             crash. Handles are never reused.
  *   Threads   A handle is safe to use from several threads at once.
+ *   Panics    A Go panic inside the library is caught at every entry point and
+ *             returned to you as an ordinary error (message + Go stack), never
+ *             allowed to escape into your process. A panic that escaped would
+ *             not be an exception your language could catch: it is a Go runtime
+ *             fatal error and it would take the whole host down.
  *
  * SPDX-License-Identifier: MIT OR Apache-2.0
  */

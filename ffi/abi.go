@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,38 @@ const Version = "0.1.4"
 // installs anything at load time — constructing a gateway is llmux_new's job
 // and even that is inert (core/gateway.New starts nothing; see embedtest/).
 func main() {}
+
+// ---------------------------------------------------------------------------
+// Panic backstop
+// ---------------------------------------------------------------------------
+
+// recovered turns a recovered panic value into an ordinary error carrying the
+// value and the stack it came from.
+//
+// Why every entry point needs this. In c-shared mode there is no goroutine
+// above us to unwind into: a panic that escapes an //export function is a
+// runtime fatal error, and it takes the HOST process with it — a Rails worker,
+// a Python daemon, a JVM — printing a Go traceback its operator cannot act on.
+// The HTTP shell has had this backstop from the start (server.recoverMW turns a
+// panic into a logged 500), and the README calls the sidecar and the library
+// interchangeable deployments of the same gateway. Without a recover here they
+// are not interchangeable at all: the same bug is a 500 in one and a dead
+// worker in the other.
+//
+// The panic is converted into the error channel the ABI already has — the
+// trailing char** err — so a host learns what happened through the mechanism it
+// already handles, and the stack goes with it because there is nowhere else for
+// a shared library to put one (it owns no log destination in someone else's
+// process).
+func recovered(rec any) error {
+	return fmt.Errorf("llmux: recovered from a panic inside the library: %v\n%s", rec, debug.Stack())
+}
+
+// newGateway builds the gateway behind a handle. It is a variable, not a direct
+// call to gateway.New, so a test can substitute a constructor that panics and
+// prove openGateway's recover backstop actually catches it. Nothing else
+// reassigns it.
+var newGateway = gateway.New
 
 // ---------------------------------------------------------------------------
 // Handle registry
@@ -71,19 +104,26 @@ func lookup(h uint64) (*instance, error) {
 // ping, no goroutines. A shared library loaded into someone else's process must
 // not start background traffic they did not ask for. Hosts that want the
 // background work run the sidecar, which is what the HTTP server is for.
-func openGateway(configJSON string) (uint64, error) {
+func openGateway(configJSON string) (h uint64, err error) {
+	// A panic here (a malformed provider block reaching a nil dereference deep in
+	// construction, say) must be an error, not a dead host process. See recovered.
+	defer func() {
+		if rec := recover(); rec != nil {
+			h, err = 0, recovered(rec)
+		}
+	}()
 	cfg, err := config.FromJSON([]byte(configJSON))
 	if err != nil {
 		return 0, err
 	}
-	gw, err := gateway.New(cfg)
+	gw, err := newGateway(cfg)
 	if err != nil {
 		return 0, err
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	inst := &instance{gw: gw, ctx: ctx, cancel: cancel}
 
-	h := nextID.Add(1)
+	h = nextID.Add(1)
 	regMu.Lock()
 	reg[h] = inst
 	regMu.Unlock()
@@ -95,6 +135,11 @@ func openGateway(configJSON string) (uint64, error) {
 // unknown or already-closed handle is a no-op, so a host's cleanup path is
 // idempotent and a double free is not a crash.
 func closeGateway(h uint64) {
+	// llmux_close is void: there is no error channel to report a panic through,
+	// so the backstop swallows it. The handle has already been removed from the
+	// registry by the time anything that can panic runs, so a host's cleanup path
+	// still makes progress instead of taking the process down. See recovered.
+	defer func() { _ = recover() }()
 	regMu.Lock()
 	inst, ok := reg[h]
 	delete(reg, h)
@@ -134,7 +179,13 @@ func unknownMethod(method string, allowed []string) error {
 // JSON documents the HTTP API serves, so the wire contract is reused rather
 // than reinvented — a request body that works against POST /v1/chat/completions
 // works here unchanged.
-func callMethod(h uint64, method, requestJSON string) (string, error) {
+func callMethod(h uint64, method, requestJSON string) (out string, err error) {
+	// See recovered: a panic below this line would otherwise kill the host.
+	defer func() {
+		if rec := recover(); rec != nil {
+			out, err = "", recovered(rec)
+		}
+	}()
 	inst, err := lookup(h)
 	if err != nil {
 		return "", err
@@ -249,7 +300,16 @@ func (s emitSink) Done()                        {}
 // emit returning an error stops the stream. streamMethod then returns an error
 // satisfying abortedError, which the C shim reports as a clean stop rather than
 // a failure — the host asked for it and already knows.
-func streamMethod(h uint64, method, requestJSON string, emit func(string) error) error {
+func streamMethod(h uint64, method, requestJSON string, emit func(string) error) (err error) {
+	// See recovered. This one also covers the host's own chunk callback: emit
+	// runs inside this call frame, so a binding whose callback trampoline panics
+	// (a Python binding that failed to reacquire the GIL, a JVM binding on an
+	// unattached thread) surfaces as an error rather than as a dead process.
+	defer func() {
+		if rec := recover(); rec != nil {
+			err = recovered(rec)
+		}
+	}()
 	inst, err := lookup(h)
 	if err != nil {
 		return err
