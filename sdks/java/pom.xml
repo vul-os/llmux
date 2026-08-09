@@ -20,7 +20,17 @@
   </licenses>
 
   <properties>
+    <!--
+      The SIDECAR half (Llmux, LlmuxException) targets Java 11 and is the
+      recommended way to use llmux from the JVM. The DIRECT half (LlmuxDirect)
+      needs java.lang.foreign, which is permanent from Java 22, so it is
+      compiled by a second execution of the compiler plugin at a higher
+      release. Two releases in one artifact rather than a floor of 22 for
+      everybody: an 11 consumer that never touches LlmuxDirect never loads it
+      and never sees its class-file version.
+    -->
     <maven.compiler.release>11</maven.compiler.release>
+    <direct.release>22</direct.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
   </properties>
 
@@ -49,6 +59,36 @@
 
   <build>
     <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <executions>
+          <!-- Everything except the FFM binding, at release 11. -->
+          <execution>
+            <id>default-compile</id>
+            <configuration>
+              <excludes>
+                <exclude>to/llmux/LlmuxDirect.java</exclude>
+              </excludes>
+            </configuration>
+          </execution>
+          <!-- The FFM binding, at release 22. Building this module therefore
+               needs a JDK 22+ toolchain even though the output is usable from
+               11. -->
+          <execution>
+            <id>compile-direct</id>
+            <phase>compile</phase>
+            <goals><goal>compile</goal></goals>
+            <configuration>
+              <release>${direct.release}</release>
+              <includes>
+                <include>to/llmux/LlmuxDirect.java</include>
+              </includes>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-surefire-plugin</artifactId>
