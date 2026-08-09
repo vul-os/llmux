@@ -84,6 +84,10 @@ var outboundDialSites = map[string]string{
 	// UNGATED — test harness.
 	"core/conformance/transport.go": "UNGATED, HARNESS: record/replay RoundTripper for provider conformance fixtures. " +
 		"Replay (the CI mode) makes no network call; Record/Live require real keys and are opt-in.",
+	"ffi/bench/main.go": "UNGATED, HARNESS: the C-ABI latency benchmark (in-process vs loopback HTTP). Every " +
+		"address it dials is 127.0.0.1 on a port the same process just bound — its own fake upstream and its " +
+		"own llmux HTTP server. It lives in the separate github.com/vul-os/llmux-ffi module, is not part of " +
+		"`go build ./...`, and is never linked into libllmux or any shipped binary.",
 }
 
 // minDialSites is a coverage floor: if the AST scan silently stopped matching
