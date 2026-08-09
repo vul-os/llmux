@@ -80,6 +80,13 @@ var outboundDialSites = map[string]string{
 	// UNGATED — clients OF a llmux gateway, not the gateway itself.
 	"cmd/llmux/cli.go":       "UNGATED, CLIENT: the CLI subcommands call a llmux gateway (default http://localhost:4000), not a provider.",
 	"sdks/go/llmux/llmux.go": "UNGATED, CLIENT: the embedded-gateway SDK polls its own loopback /health to wait for readiness.",
+	"sdks/go/examples/sidecar/main.go": "UNGATED, CLIENT + EXAMPLE: the Go SDK's sidecar example. It spawns " +
+		"`llmux serve` itself on 127.0.0.1 on a port it just bound, then talks HTTP to THAT — it is a client " +
+		"of a llmux gateway, never of a provider, so the sovereignty gate is enforced on the far side of the " +
+		"hop by the server it started. Every address it dials is its own child. It is an example under " +
+		"sdks/, is not imported by any library or shipped binary, and its sibling sdks/go/examples/direct " +
+		"deliberately dials nothing at all (it embeds the gateway instead), which is the contrast the pair " +
+		"exists to draw.",
 
 	// UNGATED — test harness.
 	"core/conformance/transport.go": "UNGATED, HARNESS: record/replay RoundTripper for provider conformance fixtures. " +
