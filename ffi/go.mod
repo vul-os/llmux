@@ -19,8 +19,8 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/redis/go-redis/v9 v9.20.1 // indirect
 	go.uber.org/atomic v1.11.0 // indirect
-	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/text v0.39.0 // indirect
 )
 
 // The shared library is always built from this checkout, against the tree it
