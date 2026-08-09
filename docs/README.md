@@ -1,6 +1,7 @@
 # llmux documentation
 
-Everything you need to run, configure, and operate llmux.
+Everything you need to import llmux as a Go library, or run, configure, and
+operate it as a server.
 
 ## Guides
 
