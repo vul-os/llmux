@@ -1,0 +1,35 @@
+{
+  "name": "@vul-os/llmux-bun",
+  "version": "0.1.0",
+  "description": "llmux for Bun — the C ABI in-process, or the sidecar over loopback.",
+  "type": "module",
+  "module": "index.ts",
+  "exports": {
+    ".": "./index.ts"
+  },
+  "license": "MIT",
+  "homepage": "https://llmux.to",
+  "keywords": [
+    "llm",
+    "gateway",
+    "openai",
+    "bun",
+    "ffi"
+  ],
+  "files": [
+    "index.ts",
+    "stream-worker.ts",
+    "README.md"
+  ],
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "scripts": {
+    "check": "../node/node_modules/.bin/tsc -p tsconfig.json --noEmit",
+    "example:direct": "bun run examples/direct.ts",
+    "example:sidecar": "bun run examples/sidecar.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "1.3.14"
+  }
+}
