@@ -1,0 +1,5 @@
+# Built examples
+direct_chat
+sidecar_chat
+*.o
+*.dSYM/
