@@ -396,9 +396,24 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .toprail span:last-child{border-right:0;margin-left:auto;color:var(--teal-ink)}
 .toprail .live{display:inline-block;width:6px;height:6px;background:var(--teal);margin-right:8px;
   position:relative;top:-1px}
-@media (max-width:720px){
-  .toprail span{padding:9px 12px;font-size:11px}
-  .toprail span:last-child{margin-left:0}
+/* Below ~900px the five cells no longer fit on one line, and a wrapping flex
+   row makes a mess of a rule set that assumes one: the last cell on each
+   wrapped row keeps its border-right and leaves a divider hanging in mid-air;
+   `padding-left:0` only ever applies to the very first cell, so every wrapped
+   row starts indented against the ones above; and `margin-left:auto` on the
+   version throws it to the far right of a half-empty row with a gap where the
+   dividers should be. A grid has explicit columns, so each of those can be
+   addressed by position instead of by hoping the row breaks somewhere useful. */
+@media (max-width:900px){
+  .toprail{display:grid;grid-template-columns:1fr 1fr;font-size:11px}
+  .toprail span{padding:9px 12px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  .toprail span:first-child{padding-left:12px}
+  .toprail span:nth-child(2n){border-right:0}
+  /* Five cells in two columns leaves the version alone on the last row. Given
+     the whole row it reads as a footer to the strip rather than as a cell with
+     a divider beside nothing. */
+  .toprail span:last-child{grid-column:1/-1;border-right:0;border-bottom:0;margin-left:0;text-align:right}
+  .toprail span:nth-last-child(2),.toprail span:nth-last-child(3){border-bottom:0}
 }
 
 /* The hero is one grid, not a headline followed by a two-column block. The
@@ -1344,8 +1359,35 @@ html.js .rv.in{opacity:1;transform:none}
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
 
+/* ═══ Hero load sequence ══════════════════════════════════════════════════
+   The hero carries `rv in` from the markup rather than earning `in` from the
+   observer, so it has never had an entrance — it simply exists at full opacity
+   on the first frame. This gives it one, in the order a reader takes it in:
+   the spec strip, the two display lines, the tagline, the prose, then the
+   panel alongside.
+
+   Deliberately an animation and not a second `.rv` state. A reveal built on
+   `opacity:0` as its resting value strands the content if the class that
+   clears it never arrives; here the resting value is the finished frame, and
+   `backwards` only borrows the opening one for the duration of the run. No
+   JavaScript is involved, so nothing can fail to arrive. The blanket
+   `animation:none` in the reduced-motion block above already switches all of
+   this off, which is why there is no second query here. */
+@keyframes heroIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+html.js .band.hero .toprail,
+html.js .band.hero .hero-h,
+html.js .band.hero .hero-tag,
+html.js .band.hero .hero-copy,
+html.js .band.hero .hero-side{animation:heroIn .66s var(--ease) backwards}
+html.js .band.hero .hero-h{animation-delay:.07s}
+html.js .band.hero .hero-tag{animation-delay:.14s}
+html.js .band.hero .hero-copy{animation-delay:.21s}
+html.js .band.hero .hero-side{animation-delay:.28s}
+
 @media print{
   html.js .rv{opacity:1!important;transform:none!important}
+  html.js .band.hero .toprail,html.js .band.hero .hero-h,html.js .band.hero .hero-tag,
+  html.js .band.hero .hero-copy,html.js .band.hero .hero-side{animation:none}
   .hdr,.bus{display:none}
 }
 
@@ -1428,7 +1470,7 @@ html.js .rv.in{opacity:1;transform:none}
       <span>no telemetry</span>
       <!-- Must equal VERSION at the repo root. It said v0.1.1 while VERSION
            said 0.1.2 — the landing was advertising the previous release. -->
-      <span>v0.1.3</span>
+      <span>v0.1.4</span>
     </div>
 
     <div class="hero-grid">

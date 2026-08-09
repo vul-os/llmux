@@ -2026,6 +2026,29 @@ function renderPrevNext(slug){
   docFoot.hidden = !html;
 }
 
+// The pager already defines a linear path through the eighteen documents; the
+// arrow keys just walk it without asking the reader to scroll to the bottom
+// first. Held to the same guards as "/": never while typing, never when a
+// modifier is down (⌘←/⌥← are browser and word-jump commands), and never
+// while the mobile sheet is open, where the arrows belong to the list.
+document.addEventListener('keydown', (e)=>{
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+  if (rail.classList.contains('open')) return;
+  // current() carries an optional "~heading" suffix; the pager works in
+  // documents, so take the slug half only.
+  const raw = current();
+  const sep = raw.indexOf('~');
+  const i = idxOf[sep === -1 ? raw : raw.slice(0, sep)];
+  if (i === undefined) return;
+  const to = DOCS[e.key === 'ArrowLeft' ? i - 1 : i + 1];
+  if (!to) return;
+  e.preventDefault();
+  location.hash = '#' + to.slug;
+});
+
 // ---- The mobile index sheet ------------------------------------------
 const rail = document.getElementById('docsNav');
 const navToggle = document.getElementById('navToggle');
