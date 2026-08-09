@@ -1,14 +1,20 @@
 # Architecture
 
-llmux is a single Go binary. The **OpenAI HTTP schema is the canonical
-contract**: providers are adapters behind it, routing and budget controls ride on
-standard request fields plus `extra_headers` / `metadata`, and the streaming
-format is byte-identical to OpenAI so every language's stream parser just works.
+llmux is a Go **library first**: `core/gateway` is the whole dispatch path —
+routing, retries, failover, sovereignty enforcement, BYOK, caching, pricing and
+metering — with no HTTP surface of its own. `core/server` is one shell over
+that library: the OpenAI-compatible HTTP API, streaming, auth and the embedded
+admin console. It is not the only possible shell, and nothing in `core/gateway`
+imports it. The **OpenAI HTTP schema is the canonical contract** either way:
+providers are adapters behind it, routing and budget controls ride on standard
+request fields plus `extra_headers` / `metadata`, and the streaming format is
+byte-identical to OpenAI so every language's stream parser just works.
 
 ```text
 core/                the open gateway (no cp dependency)
   openai/            canonical OpenAI wire types (the contract)
-  server/            HTTP gateway, streaming, auth, metrics, usage
+  gateway/           the library: New, Chat, ChatStream, Embed, Authorize, Run — no HTTP
+  server/            HTTP shell over gateway/: routing to handlers, streaming, auth, metrics
   sovereign/         the sovereignty gate (where your AI runs; default-deny egress)
   provider/          Provider interface + SSE utilities
     passthrough/     OpenAI-shaped upstreams
@@ -19,22 +25,89 @@ core/                the open gateway (no cp dependency)
   cache/             exact + semantic response cache
   pricing/           catalog + live sync + cost accounting
   config/            JSON config loader
-cmd/llmux/           the binary (server + CLI subcommands)
+cmd/llmux/           the binary (server + CLI subcommands) — one shell among possible others
 integration/cp/      OPTIONAL control-plane (billing/entitlements) adapter
-web/                 admin console (ui.html, hand-written, no build step), embedded at /ui
+web/                 admin console (ui.html, hand-written, no build step), embedded at /ui by core/server only
 ```
+
+## llmux as a library
+
+`core/gateway.New(cfg *config.Config, opts ...Option) (*Gateway, error)` builds
+a `Gateway` and holds to five rules: it starts no goroutines (background work is
+opt-in via `Run`); it reads no environment itself (`config.FromEnv` /
+`config.Default()` is an explicit call the caller makes); there is no
+package-level mutable state or package logger, so two gateways in one process
+never interfere; readiness is explicit, never implied; and it is pure core with
+opt-in I/O. Dispatch with `Chat` / `ChatStream` / `Embed`; `Run(ctx)` (or the
+non-blocking `Start(ctx)`) opts into the price-catalog syncer, the file key
+store's spend flusher, and a Redis ping — none of which run otherwise.
+
+Two things happen regardless, and are documented here rather than left to be
+discovered:
+
+- **If `cfg.Postgres` is set, `New` connects and migrates eagerly.** Building
+  the Postgres key store (`keys.NewPGStore`) is the one qualification to "New
+  opens no sockets" — an explicitly opted-into remote dependency. With no DSN
+  (every default and library configuration), `New` opens nothing.
+- **`New` reads `os.Getenv` for any provider configured with `api_key_env`.**
+  Each provider adapter resolves its credential at construction time
+  (`config.ProviderConfig.ResolveKey`), so a provider entry naming
+  `"api_key_env": "OPENAI_API_KEY"` is read from the environment the moment
+  `New` builds that adapter. This is config-directed, not auto-detected: it
+  only reads the specific env var names present in the config you pass (or
+  that `config.Default()`'s own auto-detection already wrote there) — never an
+  arbitrary variable `New` decided to go looking for.
+
+`Authorize(ctx, token) (context.Context, func(), error)` is the single auth
+path: `core/server`'s HTTP middleware and an in-process host both call it, so an
+embedder cannot get a laxer check than a network client. The returned `release`
+function is **never nil** and **must always be called**, including on error —
+it frees a budget-gate reservation the call may have placed; skipping it is an
+easy leak. When no credential wall is configured at all (no static keys, no
+external identity), `Authorize` is a no-op that returns `ctx` unchanged — the
+standalone local-sidecar posture, where an in-process host is already trusted.
+
+`core/server` is optional in two independent, and easily confused, ways:
+
+- **`server.Options{UI: bool}`** (default `true`) decides whether a *running*
+  server *mounts* the console route at `/ui`. It is a runtime choice made by
+  whatever Go program constructs the `*server.Server` — the stock `cmd/llmux`
+  binary always passes the default (`UI: true`) and has no flag for it. Setting
+  it `false` 404s every `/ui*` path, but the console's bytes are still linked
+  into that binary: `core/server` imports `web/` unconditionally, so `go:embed`
+  still embeds `ui.html`.
+- **The `noui` build tag** decides whether the console is *compiled in* at all.
+  With it, `web.Enabled()` reports false, `HTML()`/`Licenses()` return `nil`,
+  and `/ui*` serves a small JSON stub saying the console was not built in
+  rather than 404ing (which would read as "wrong URL"). This is the tag that
+  actually removes the bytes; `Options.UI` alone does not.
+- Importing `core/gateway` alone (not `core/server`) never links `web/` at
+  all — only `core/server` imports it — so a pure library host has zero UI
+  bytes in it regardless of build tags. Measured in this checkout
+  (darwin/arm64, go1.25.12): a program importing only `core/gateway` builds to
+  **15,293,346 bytes**; adding `core/server` with the console (the default)
+  brings it to **17,114,706 bytes** (+1,821,360 bytes for the HTTP shell and
+  the embedded console together). See
+  [Operations → building without the console](operations.md#building-without-the-console-noui)
+  for the `noui`-specific delta.
 
 ## The sovereignty gate (where your AI runs)
 
 llmux is Vulos's **sovereign** LLM gateway: inference runs on **your** box by
 default, and a request is **never silently sent to a company that mines you**.
 This is enforced, not documented-hope. `core/sovereign` classifies every
-configured provider by *where its traffic goes* and the server calls the gate
-(`core/server/sovereignty.go`, `enforceSovereignty`) **before any network call
-on every dispatch path** — chat, streaming chat, embeddings, the semantic-cache
-embedder, and all model-bearing modality routes (`/v1/completions`,
-`/v1/responses`, images, audio speech/transcriptions/translations, moderations,
-rerank).
+configured provider by *where its traffic goes*, and the gate is called
+**before any network call on every dispatch path** — chat, streaming chat,
+embeddings, the semantic-cache embedder, and all model-bearing modality routes
+(`/v1/completions`, `/v1/responses`, images, audio
+speech/transcriptions/translations, moderations, rerank). Chat, streaming chat,
+embeddings and the semantic-cache embedder call it from inside `core/gateway`
+(`core/gateway/sovereignty.go`, `enforceSovereignty`) — the library path, so an
+embedding host gets the same check a network client does. The forwarded
+modality routes are HTTP-only and still live in `core/server`
+(`forward.go`/`transcription.go`), which calls the identical check through a
+one-line delegate (`core/server/sovereignty.go`'s `enforceSovereignty` calls
+`Gateway.EnforceSovereignty`) — one gate, reached from two call sites.
 
 Providers resolve to a 4-tier dial, most→least private:
 
@@ -72,8 +145,8 @@ text:
 |---|---|---|
 | **Price-catalog sync** (`core/pricing`) | **On by default** — `config.Default()` ships two public feeds (openrouter.ai, raw.githubusercontent.com); a GET at startup and every `sync_interval_minutes` | Nothing. It is a plain GET of a public price list — no prompt, no key, no usage. Disable with `"pricing": {"sources": []}`; the built-in seed catalog still prices requests offline, or point `sources` at your own mirror. |
 | **Control-plane seam** (`integration/cp`) | Only when `LLMUX_CP_URL` is set | Billing counts (model, tokens, account) — never prompts or completions |
-| **Redis** (cache + rate limits) | Only when `redis` is configured | Cache **values**, which can contain completions — treat Redis as inside your sovereignty boundary |
-| **Postgres** (key spend/budgets) | Only when a DSN is configured | Key names, spend, budgets |
+| **Redis** (cache + rate limits) — `core/gateway/gateway.go` | Client constructed whenever `redis` is configured; `redis.NewClient` itself does not dial, but `Gateway.Start` pings it, so a misconfigured address fails at startup, not on the first request | Cache **values**, which can contain completions — treat Redis as inside your sovereignty boundary |
+| **Postgres** (key spend/budgets) — `core/keys` (`NewPGStore`, called from `core/gateway/gateway.go`) | Connects and migrates **eagerly, inside `New`** whenever `cfg.Postgres` is set — the one exception to "`New` opens no sockets" (see [llmux as a library](#llmux-as-a-library)) | Key names, spend, budgets |
 
 Everything in that table is enumerated in the `outboundDialSites` registry in
 `core/sovereign/egress_guard_test.go`. Adding an outbound connection anywhere in
@@ -142,6 +215,8 @@ its own; the same binary and code path serve both self-host and managed.
 
 ## Related
 
+- [Client examples → embed it locally](client-examples.md#embed-it-locally-no-separate-server-to-run) — copy-paste `gateway.New` / `llmux.New` usage
+- [Operations → building without the console](operations.md#building-without-the-console-noui) — the `noui` tag, `Options.UI`, measured sizes
 - [Connecting providers](GETTING-STARTED.md#2-connect-providers) — native adapters vs. passthrough, and adapter stability
 - [Model routing and selection](ADMIN-GUIDE.md#model-routing-and-selection) — how a model name resolves to a provider
 - [Control-plane seam](control-plane.md) — the optional cloud billing adapter
