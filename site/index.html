@@ -1289,10 +1289,12 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:11px;letter-spacin
 .tabbar label:last-of-type{border-right:0}
 .tabpanel{display:none}
 #tab-build:checked ~ .tabbar label[for="tab-build"],
+#tab-embed:checked ~ .tabbar label[for="tab-embed"],
 #tab-call:checked ~ .tabbar label[for="tab-call"],
 #tab-conf:checked ~ .tabbar label[for="tab-conf"]{color:var(--ink);border-bottom-color:var(--teal);
   background:var(--panel)}
 #tab-build:checked ~ .tabpanels #panel-build,
+#tab-embed:checked ~ .tabpanels #panel-embed,
 #tab-call:checked ~ .tabpanels #panel-call,
 #tab-conf:checked ~ .tabpanels #panel-conf{display:block}
 .tabs .tabin:focus-visible ~ .tabbar label{outline:2px solid var(--teal);outline-offset:-2px}
@@ -1424,12 +1426,13 @@ html.js .rv.in{opacity:1;transform:none}
       </h1>
       <p class="hero-tag rv in">Nothing leaves your box <em>unless you say so.</em></p>
       <div class="hero-copy rv in">
-        <p>llmux is a single Go binary that speaks the <b>OpenAI HTTP API</b> and routes every request to
-          the provider behind it. Point any OpenAI SDK at it and get routing, fallback chains, per-key
-          budgets, caching and live cost — across OpenAI, Anthropic, Gemini, Cohere, Bedrock and Azure,
-          with zero per-language code.</p>
-        <p>A default-deny <b>sovereignty gate</b> runs before every dispatch, so inference stays on your
-          box until you explicitly, loggably opt a provider out.</p>
+        <p>llmux is a Go <b>library first</b> — <code>import</code> the gateway straight into a Go
+          program and dispatch in-process, no port and nothing started until you ask. The same code also
+          ships as a single binary that speaks the <b>OpenAI HTTP API</b>: point any OpenAI SDK at it and
+          get routing, fallback chains, per-key budgets, caching and live cost — across OpenAI, Anthropic,
+          Gemini, Cohere, Bedrock and Azure, with zero per-language code.</p>
+        <p>A default-deny <b>sovereignty gate</b> runs before every dispatch, in-process or over HTTP, so
+          inference stays on your box until you explicitly, loggably opt a provider out.</p>
       </div>
       <div class="hero-side rv in">
         <div class="code">
@@ -2339,15 +2342,19 @@ html.js .rv.in{opacity:1;transform:none}
 
     <h2 class="sec rv">Build it, point a key at it, call it. No account to create.</h2>
     <p class="lead rv">Go 1.25+ and nothing else — the admin console is a hand-written file, so there's no
-      Node toolchain anywhere in this repo. No database or cache is required for a single replica.</p>
+      Node toolchain anywhere in this repo. No database or cache is required for a single replica. Writing
+      Go? Skip the binary — <code>gateway.New</code> builds the same dispatch path in-process, with no
+      goroutines started and no sockets opened beyond an explicitly configured Postgres DSN.</p>
 
     <div class="split" style="margin-top:40px">
       <div class="tabs rv">
         <input class="tabin" type="radio" name="qs" id="tab-build" checked>
+        <input class="tabin" type="radio" name="qs" id="tab-embed">
         <input class="tabin" type="radio" name="qs" id="tab-call">
         <input class="tabin" type="radio" name="qs" id="tab-conf">
         <div class="tabbar">
           <label for="tab-build">Build &amp; run</label>
+          <label for="tab-embed">Embed it</label>
           <label for="tab-call">Call it</label>
           <label for="tab-conf">Set a budget</label>
         </div>
@@ -2369,6 +2376,28 @@ html.js .rv.in{opacity:1;transform:none}
 <span class="ln"><span class="cb-c"># 3. Run — gateway on :4000, dashboard at /ui</span></span>
 <span class="ln"><span class="cb-f">cp</span> llmux.example.json llmux.json</span>
 <span class="ln"><span class="cb-f">./dist/llmux</span> <span class="cb-flag">-config</span> llmux.json</span></code></pre>
+            </div>
+          </div>
+          <div class="tabpanel" id="panel-embed">
+            <div class="code">
+              <div class="code-bar"><i></i><span class="path">main.go</span></div>
+              <!-- go: package/import/func are keywords; New/Chat are calls;
+                   gw/res/err are variables; base_url-equivalent keys are
+                   struct fields (properties); "cheapest"/"hi"/"user" are
+                   strings. No subprocess, no port — a straight import. -->
+              <pre><code><span class="ln"><span class="cb-k">import</span> <span class="cb-p">(</span></span>
+<span class="ln">    <span class="cb-s">"github.com/vul-os/llmux/core/config"</span></span>
+<span class="ln">    <span class="cb-s">"github.com/vul-os/llmux/core/gateway"</span></span>
+<span class="ln">    <span class="cb-s">"github.com/vul-os/llmux/core/openai"</span></span>
+<span class="ln"><span class="cb-p">)</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">gw</span><span class="cb-op">,</span> <span class="cb-var">err</span> <span class="cb-op">:=</span> <span class="cb-f">gateway.New</span><span class="cb-p">(</span><span class="cb-f">config.Default</span><span class="cb-p">())</span>  <span class="cb-c">// no goroutines, no sockets*</span></span>
+<span class="ln"><span class="cb-k">defer</span> <span class="cb-var">gw</span><span class="cb-p">.</span><span class="cb-f">Close</span><span class="cb-p">()</span></span>
+<span class="ln"></span>
+<span class="ln"><span class="cb-var">res</span><span class="cb-op">,</span> <span class="cb-var">err</span> <span class="cb-op">:=</span> <span class="cb-var">gw</span><span class="cb-p">.</span><span class="cb-f">Chat</span><span class="cb-p">(</span><span class="cb-var">ctx</span><span class="cb-p">,</span> <span class="cb-op">&amp;</span><span class="cb-var">openai</span><span class="cb-p">.</span><span class="cb-f">ChatCompletionRequest</span><span class="cb-p">{</span></span>
+<span class="ln">    <span class="cb-pr">Model</span><span class="cb-p">:</span>    <span class="cb-s">"cheapest"</span><span class="cb-p">,</span></span>
+<span class="ln">    <span class="cb-pr">Messages</span><span class="cb-p">:</span> <span class="cb-p">[]openai.Message{{</span><span class="cb-pr">Role</span><span class="cb-p">:</span> <span class="cb-s">"user"</span><span class="cb-p">,</span> <span class="cb-pr">Content</span><span class="cb-p">:</span> <span class="cb-f">openai.Str</span><span class="cb-p">(</span><span class="cb-s">"hi"</span><span class="cb-p">)}},</span></span>
+<span class="ln"><span class="cb-p">})</span></span></code></pre>
             </div>
           </div>
           <div class="tabpanel" id="panel-call">
