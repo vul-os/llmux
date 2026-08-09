@@ -1,0 +1,4 @@
+{
+  "//": "Marks examples/ as ESM so `node examples/direct.ts` runs under Node's type stripping with import.meta and top-level await. The published package does not include this directory (see the root package.json \"files\" list).",
+  "type": "module"
+}

@@ -4,6 +4,17 @@
   "description": "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.",
   "main": "index.js",
   "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./direct": {
+      "types": "./direct.d.ts",
+      "default": "./direct.js"
+    },
+    "./package.json": "./package.json"
+  },
   "license": "MIT",
   "homepage": "https://llmux.to",
   "keywords": [
@@ -13,17 +24,24 @@
     "anthropic",
     "gemini",
     "proxy",
-    "litellm"
+    "litellm",
+    "ffi"
   ],
   "files": [
     "index.js",
     "index.d.ts",
+    "direct.js",
+    "direct.d.ts",
     "bin/"
   ],
   "peerDependencies": {
+    "koffi": ">=2.9.0",
     "openai": ">=4.0.0"
   },
   "peerDependenciesMeta": {
+    "koffi": {
+      "optional": true
+    },
     "openai": {
       "optional": true
     }
@@ -35,15 +53,19 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "typecheck:scripts": "tsc -p scripts/tsconfig.json --noEmit",
+    "typecheck:examples": "tsc -p examples/tsconfig.json --noEmit",
     "lint": "eslint .",
     "check:lint-config": "node scripts/check-lint-config.mjs",
     "pretest": "npm run build",
-    "test": "node --test test/sidecar.test.js"
+    "test": "node --test test/sidecar.test.js",
+    "example:direct": "npm run build && node examples/direct.ts",
+    "example:sidecar": "npm run build && node examples/sidecar.ts"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
     "@types/node": "^26.1.2",
     "eslint": "10.8.0",
+    "koffi": "3.1.4",
     "typescript": "6.0.3",
     "typescript-eslint": "8.66.0"
   }
