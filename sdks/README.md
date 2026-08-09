@@ -1,145 +1,96 @@
 # llmux language packages
 
-Thin, native packages that let you use llmux **locally** in any language — no
-server to run. They bundle the gateway binary and manage it for you.
+Use llmux from any of fifteen languages, **two ways**:
 
-The architecture is deliberate: one Go binary is **both** the hosted server and
-the locally-embedded sidecar. The packages here are tiny wrappers (~one file
-each) that start the binary on a local port and hand you a `base_url` for your
-existing OpenAI client. Streaming works natively in every language because each
-just reads its own local socket — no FFI, no per-language stream glue.
+- **Direct** — in-process. Go imports the package. Every other language loads a
+  C ABI shared library (`llmux_new`/`call`/`stream`/`close`/`free`), built with
+  `go build -buildmode=c-shared`. See [`../ffi/README.md`](../ffi/README.md).
+- **Sidecar** — the gateway as a separate process, either one you run or one the
+  package spawns and manages for you on `127.0.0.1`.
 
-| Package | Mechanism | Streaming |
-|---------|-----------|-----------|
-| **python** | spawns the bundled binary on `127.0.0.1:<port>` | native (your OpenAI client) |
-| **node** | spawns the bundled binary on `127.0.0.1:<port>` | native |
-| **go** | runs the gateway **in-process** (imports `core/`) | native |
-| **ruby** | spawns the bundled binary on `127.0.0.1:<port>` | native |
-| **php** | spawns the bundled binary on `127.0.0.1:<port>` | native |
-| **rust** | spawns the bundled binary on `127.0.0.1:<port>` | native |
-| **java** | spawns the bundled binary on `127.0.0.1:<port>` | native |
-| **dotnet** | spawns the bundled binary on `127.0.0.1:<port>` | native |
-| **elixir** | spawns the bundled binary on `127.0.0.1:<port>` | native |
+Neither is the right answer everywhere. **The "Default" column is a real
+recommendation, not a formality** — for several languages the honest advice is
+the sidecar, and the reason is in that language's README.
 
-Every spawning package follows the same contract: resolve the binary
-(`LLMUX_BINARY` → bundled `bin/llmux` → `llmux` on `PATH`), pick a free
-`127.0.0.1` port, launch the binary with `LLMUX_ADDR=127.0.0.1:<port>`
-(inheriting the environment so provider keys pass through), poll `/health` until
-ready, then expose `base_url()` and `openai_base_url()` (→ `…/v1`, default API
-key `"llmux-local"`). Start is lazy, singleton, concurrency-safe, and the child
-is terminated at process exit. Where a popular OpenAI SDK exists, an OPTIONAL
-convenience constructor returns a client already pointed at the gateway
-(Ruby → `ruby-openai`, PHP → `openai-php/client`, Rust → `async-openai` behind a
-feature, Java → `openai-java`, .NET → the official `OpenAI` nuget).
+| Language | Direct | Sidecar | Default | Streaming (direct) |
+|---|---|---|---|---|
+| [go](go/) | package import — **no FFI, no shared library** | ✓ | **direct** | `ChunkFunc` callback |
+| [c](c/) | ✓ links `libllmux` | ✓ | **direct** | C callback |
+| [cpp](cpp/) | ✓ header-only RAII (`llmux.hpp`) | ✓ | **direct** | C callback |
+| [rust](rust/) | ✓ `libloading` | ✓ | direct | iterator |
+| [swift](swift/) | ✓ SwiftPM, C interop | ✓ | direct | `AsyncSequence` |
+| [deno](deno/) | ✓ `Deno.dlopen` | ✓ | direct | `for await` |
+| [bun](bun/) | ✓ `bun:ffi` | ✓ | direct | `for await` (worker-backed) |
+| [node](node/) | ✓ koffi | ✓ | **sidecar** for servers | callback only — see below |
+| [python](python/) | ✓ `ctypes` | ✓ | **sidecar** | callback + `stream_iter` |
+| [java](java/) | ✓ FFM (JDK 22+) | ✓ | **sidecar** | callback |
+| [kotlin](kotlin/) | ✓ over the Java binding | ✓ | **sidecar** | `Flow` |
+| [dotnet](dotnet/) | ✓ `LibraryImport` + `SafeHandle` | ✓ | **sidecar** | `IAsyncEnumerable` |
+| [ruby](ruby/) | ✓ `fiddle` (stdlib) | ✓ | depends — see README | callback |
+| [php](php/) | ✓ `FFI` extension | ✓ | **sidecar** | callback |
+| [elixir](elixir/) | **none, deliberately** | ✓ | **sidecar** | n/a |
 
-## Go: embed in-process
+## Why the sidecar is the default in six of them
 
-Go doesn't spawn the binary — it imports the gateway and runs it in the same
-process. There is no port, no listener and no HTTP hop:
+Each of these was measured, not assumed. The numbers are in the language READMEs.
 
-```go
-import (
-	"github.com/vul-os/llmux/core/openai"
-	"github.com/vul-os/llmux/sdks/go/llmux"
-)
+- **Java / Kotlin.** Loading the library replaces five of HotSpot's signal
+  handlers (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG`) and adds
+  `SA_ONSTACK` to three more, including `SIGUSR2`, which HotSpot uses to suspend
+  threads. Both runtimes still work — two million recovered implicit NPEs say so
+  — and `libjsig` fixes it cleanly. But `libjsig` is a flag on the **java launch
+  command**, and a library cannot add one to a process that already started.
+  (`SIGPROF` is *not* touched: JFR profiling is unaffected. The commonly-cited
+  hazard does not exist here — see [`java/signal-probe.sh`](java/signal-probe.sh).)
+- **Python / PHP / Ruby.** The Go runtime is **not fork-safe**. Measured in real
+  php-fpm: a worker that loaded the library in the master answers `models` in
+  0.1 ms and then never answers `chat` at all. Same shape after `os.fork()` in
+  Python. Note the trap — **`models` succeeds in a broken child**, so a health
+  check that only lists models is a false green for a process that will hang on
+  the first real request. Python's fix is the `spawn` start method; PHP-FPM and
+  Unicorn fork by design.
+- **Node.** A Node thread that has entered a Go `c-shared` library never
+  terminates, so neither `worker_threads` nor koffi's async pool can move
+  streaming off the main thread — the process hangs at exit. Node direct mode is
+  therefore synchronous and takes a callback rather than an async iterator.
+  Buffering the whole answer and replaying it as fake chunks would be worse than
+  an honest HTTP call.
+- **Elixir.** In-process would mean a NIF: it cannot be killed or
+  `Task.await`-timed-out, a segfault takes the whole VM, and a dirty-IO NIF caps
+  concurrency at the scheduler count. Every safe alternative reintroduces the
+  second process the C ABI exists to remove.
 
-gw, err := llmux.New(llmux.Options{}) // auto-detects providers from env
-if err != nil {
-	log.Fatal(err)
-}
-defer gw.Close()
+## Costs that apply to every direct binding
 
-res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{
-	Model:    "gpt-4o-mini",
-	Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}},
-})
-// res.Response, res.Provider (who served, after failover), res.BYOK, res.CacheHit
-```
+- **The Go runtime lives in your process** — its GC, scheduler and signal
+  handlers.
+- **Not fork-safe.** See above.
+- **`dlclose` hangs.** Load the library once per process and leave it mapped;
+  every binding here does.
+- **Cancelling a stream does not always stop the upstream call.** A buffered
+  async wrapper can let the callback run ahead — in one measured case a consumer
+  taking 3 of 10 chunks still caused all 10 to be generated **and metered**.
+  Each README states its measured callback count under early exit.
+- **Latency is not the reason to embed.** The boundary is ~4 µs in-process
+  versus ~46 µs over loopback, but a real chat call measures ~80–92 µs against
+  ~102–109 µs — noise next to a model answering in hundreds of milliseconds. The
+  reasons are: no second process, no port, no loopback surface.
 
-`llmux.New` starts nothing: no price-catalog sync, no spend flusher, no
-background traffic. Call `gw.Run(ctx)` if you want that work.
+## Prebuilt libraries — what actually exists
 
-`llmux.Start` is still there for the case where you need to hand an
-OpenAI-compatible HTTP client a base URL, but it is a loopback shim, not
-embedding — it costs a port, a listener and a JSON round-trip per call:
+Direct mode needs a shared library for your platform. Today:
 
-```go
-local, err := llmux.Start(llmux.Options{}) // deprecated; ephemeral loopback port
-defer local.Close()
-cfg := openai.DefaultConfig("llmux-local")        // github.com/sashabaranov/go-openai
-cfg.BaseURL = local.OpenAIBaseURL()               // → http://127.0.0.1:<port>/v1
-```
+| Target | Status |
+|---|---|
+| darwin/arm64 | built and smoke-tested |
+| linux/arm64 | built and smoke-tested |
+| linux/amd64 | CI only |
+| **windows/amd64** | **does not exist — no DLL ships** |
+| **darwin/amd64** | **not built** |
 
-## Binary distribution
+**openrate's matrix is different** (no linux/arm64; an unexecuted darwin/amd64
+build). Do not assume one covers the other. Build your own with
+[`../scripts/build-ffi.sh`](../scripts/build-ffi.sh).
 
-For local development, run `make sdk-bins` to build the binary into each
-package's `bin/` directory (`priv/bin/` for Elixir). The `bin/` payloads are
-gitignored — only the wrapper source is committed. Real releases produce
-per-OS/arch binaries in CI and ship them inside the package artifacts:
-
-| Package | Ships the binary via |
-|---------|----------------------|
-| python | platform wheels (`llmux/bin/llmux`) |
-| node | npm `optionalDependencies` (`bin/llmux`) |
-| go | n/a — embeds the gateway in-process |
-| ruby | platform gems (`bin/llmux`) |
-| php | composer package / release archive (`bin/llmux`) |
-| rust | `bin/llmux` next to `Cargo.toml` (or a build/install step) |
-| java | jar-sibling `bin/` or `LLMUX_HOME/bin/llmux` |
-| dotnet | nuget `contentFiles` (`bin/llmux`) |
-| elixir | `priv/bin/llmux` packaged in the hex archive |
-
-Override the binary path anytime with `LLMUX_BINARY=/path/to/llmux`.
-
-## Testing
-
-Every package has a real test suite covering the sidecar contract: binary
-resolution (`LLMUX_BINARY` → bundled → PATH → clear error), URL formatting
-(`openai_base_url() == base_url() + "/v1"`), health-poll readiness (200) and
-timeout (never-200 / unreachable), lazy singleton (no double-spawn), cleanup
-(child terminated / port freed), plus an integration test gated on the real
-binary. The non-integration tests drive a **fake fixture** — a tiny HTTP server
-that honors `LLMUX_ADDR` and serves `/health` — so they need no real gateway and
-no network beyond localhost.
-
-Run everything available with `make sdk-test` from the repo root (it builds the
-real binary once into `/tmp`, exports `LLMUX_BINARY`, and skips toolchains that
-aren't installed). Per language:
-
-| Package | Framework | How to run |
-|---------|-----------|------------|
-| python | stdlib `unittest` | `cd sdks/python && python3 -m unittest discover -s tests` |
-| node | built-in `node --test` | `cd sdks/node && node --test` |
-| go | stdlib `testing` | `go test ./sdks/go/...` |
-| ruby | stdlib `minitest` | `cd sdks/ruby && ruby -Ilib -Itest test/test_llmux.rb` |
-| rust | `cargo test` | `cd sdks/rust && cargo test` |
-| java | JUnit 5 (CI) + a dependency-free runnable check | `cd sdks/java && mvn test` · or `sh run-java-check.sh` |
-| php | PHPUnit | `cd sdks/php && composer install && vendor/bin/phpunit` |
-| dotnet | xUnit | `cd sdks/dotnet && dotnet test tests/Llmux.Tests.csproj` |
-| elixir | ExUnit | `cd sdks/elixir && mix test` |
-
-Notes:
-- **Integration tests** auto-skip when no real binary is resolvable. To force
-  them, set `LLMUX_BINARY` (python/node/ruby/rust/java) or `LLMUX_BINARY_REAL`
-  (php/dotnet/elixir, so it doesn't collide with the fake-fixture override) to a
-  built gateway: `GOFLAGS=-mod=mod GOPROXY=off go build -o /tmp/llmux-bin ./cmd/llmux`.
-- **java** has no committed JUnit jars; the always-runnable check is plain
-  `javac`/`java` via `run-java-check.sh` (used by `make sdk-test`), while the
-  JUnit suite (`src/test/java/.../LlmuxTest.java`, wired in `pom.xml`) runs under
-  Maven in CI.
-- **php / dotnet / elixir** fixture tests shell out to `python3` (or `python`)
-  for the fake `/health` server and skip gracefully if it is absent.
-
-## Provider keys
-
-All packages inherit provider API keys from the environment
-(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …), so the embedded
-gateway auto-detects providers exactly like the standalone binary.
-
-## Proven
-
-Each package has been run end-to-end making a real chat completion through llmux:
-Python sidecar, Node sidecar, and Go in-process — all from this one Go codebase.
-The Ruby, PHP, Rust, Java, .NET, and Elixir wrappers implement the identical
-sidecar contract (binary resolution, free-port, spawn with `LLMUX_ADDR`, health
-poll, lazy singleton, exit cleanup).
+The sidecar path has none of these constraints — it needs only the `llmux`
+binary for your platform.
