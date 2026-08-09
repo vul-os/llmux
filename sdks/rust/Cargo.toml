@@ -15,7 +15,15 @@ default = []
 async-openai = ["dep:async-openai"]
 
 [dependencies]
+# The one dependency the direct path needs. `dlopen`/`LoadLibrary` are the
+# platform primitives and std does not expose them; libloading is the standard
+# safe wrapper and is what the SDK spec names for Rust. It pulls in `cfg-if`
+# and, on Windows, `windows-targets` — nothing else.
+libloading = "0.8"
+
 async-openai = { version = "0.23", optional = true }
 
-# No HTTP crate needed for the health poll: we use a tiny std::net GET. The
+# No HTTP crate. The health poll and the sidecar client in `http` are a few
+# hundred lines of std::net, so a consumer of this crate does not inherit
+# hyper, tokio and a TLS stack just to dlopen a shared library. The
 # `async-openai` feature pulls in the popular OpenAI client only when requested.

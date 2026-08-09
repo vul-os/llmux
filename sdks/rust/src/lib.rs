@@ -1,8 +1,25 @@
-//! llmux — the LLM multiplexer, embedded locally for Rust.
+//! llmux — the LLM multiplexer, for Rust, in two modes.
 //!
-//! The local wedge: instead of running a server yourself, this starts the
-//! gateway as a child process on `127.0.0.1` and hands you a `base_url`. Point
-//! any OpenAI-compatible client at it.
+//! # Direct: llmux inside your process
+//!
+//! [`direct::Gateway`] `dlopen`s `libllmux` and calls it over the C ABI. No
+//! server, no port, no loopback socket. Handles close on [`Drop`], errors are
+//! `Result`, and streaming is an `Iterator`.
+//!
+//! ```no_run
+//! let gw = llmux::direct::Gateway::open(None)?;
+//! let models = gw.call("models", None)?;
+//! # Ok::<(), llmux::direct::Error>(())
+//! ```
+//!
+//! It costs a 12–17 MB shared library, the Go runtime in your address space,
+//! and fork-unsafety. Read [`direct`] before choosing it.
+//!
+//! # Sidecar: llmux as a child process
+//!
+//! This module. Instead of running a server yourself, it starts the gateway as
+//! a child process on `127.0.0.1` and hands you a `base_url`. Point any
+//! OpenAI-compatible client at it, or use the tiny std-only client in [`http`].
 //!
 //! ```no_run
 //! let base = llmux::base_url()?;            // http://127.0.0.1:<port>
@@ -12,6 +29,19 @@
 //!
 //! Provider keys are inherited from the environment (`OPENAI_API_KEY`,
 //! `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, …).
+//!
+//! # Which one
+//!
+//! Direct, for most Rust programs: Rust does not pre-fork and does not embed a
+//! competing runtime, so the two costs that push other languages to the sidecar
+//! do not apply. Choose the sidecar when you want per-tenant virtual keys and
+//! budgets (enforced by the HTTP shell's auth middleware, which an in-process
+//! caller is inside of and bypasses), when several processes should share one
+//! gateway and one cache, or when you want llmux restartable independently of
+//! your program. See the crate README.
+
+pub mod direct;
+pub mod http;
 
 use std::env;
 use std::fmt;
@@ -224,9 +254,7 @@ fn health_once(hostport: &str) -> std::io::Result<bool> {
     )?;
     stream.set_read_timeout(Some(Duration::from_secs(1)))?;
     stream.set_write_timeout(Some(Duration::from_secs(1)))?;
-    let req = format!(
-        "GET /health HTTP/1.0\r\nHost: {hostport}\r\nConnection: close\r\n\r\n"
-    );
+    let req = format!("GET /health HTTP/1.0\r\nHost: {hostport}\r\nConnection: close\r\n\r\n");
     stream.write_all(req.as_bytes())?;
     let mut buf = Vec::new();
     // Read just enough for the status line.

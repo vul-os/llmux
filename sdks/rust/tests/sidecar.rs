@@ -123,10 +123,7 @@ fn sidecar_public_api_with_fake() {
         ..Default::default()
     })
     .expect("fake should become healthy");
-    assert!(
-        base.starts_with("http://127.0.0.1:"),
-        "base = {base}"
-    );
+    assert!(base.starts_with("http://127.0.0.1:"), "base = {base}");
     let v1 = llmux::openai_base_url().unwrap();
     assert_eq!(v1, format!("{base}/v1"));
     assert!(v1.ends_with("/v1"));
@@ -141,7 +138,10 @@ fn sidecar_public_api_with_fake() {
 
     // 3) Cleanup: stop() kills the child and frees the port.
     llmux::stop();
-    assert!(wait_port_closed(port, Duration::from_secs(3)), "port not freed");
+    assert!(
+        wait_port_closed(port, Duration::from_secs(3)),
+        "port not freed"
+    );
 
     std::env::remove_var("LLMUX_BINARY");
 }
