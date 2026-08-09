@@ -128,10 +128,16 @@ to pull without a second stack. `stream()` is the honest shape of the ABI;
 ## The costs of direct mode — read these
 
 1. **The Go runtime lives in your interpreter.** Its garbage collector, its
-   scheduler, and its signal handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`,
-   `SIGPROF` and others. A Python profiler or crash reporter with its own
-   `SIGPROF`/`SIGSEGV` handling can conflict. Go chains to a pre-existing
-   handler in most cases, and "most" is the honest word.
+   scheduler, and its signal handlers. Measured: Go replaces five — `SIGSEGV`,
+   `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG` — and leaves three more in place with
+   `SA_ONSTACK` added (`SIGILL`, `SIGXFSZ`, `SIGUSR2`). A crash reporter or a
+   sanitizer build with its own `SIGSEGV` handling can conflict; Go chains to a
+   pre-existing handler in most cases, and "most" is the honest word.
+
+   **Profiling is not affected.** `SIGPROF` is not touched, so `yappi` and
+   anything else driven by `setitimer(ITIMER_PROF)` keeps working with the
+   library loaded; `py-spy` samples from outside the process and was never at
+   risk either way. The measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 
 2. **It is not fork-safe.** After `fork()` without `exec()` the Go runtime in
    the child is broken. Concrete victims in Python:

@@ -168,7 +168,7 @@ php-fpm the only shape that works is `FFI::cdef()` inside the worker, after the
 fork, with `ffi.enable=1` globally.**
 
 That is: give every PHP script on the box the ability to call arbitrary native
-code, re-`dlopen` a 12.7 MB library per worker, and be careful never to let it
+code, re-`dlopen` a 12.8 MB library per worker, and be careful never to let it
 load in the master. Against `Llmux::start()`, which needs no php.ini change and
 no care at all.
 
@@ -186,9 +186,12 @@ no care at all.
 ### The rest of the honest list
 
 1. **The Go runtime lives in your process** — its GC, its scheduler, and its
-   signal handlers (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPROF`, …). PHP itself is
-   quiet about signals, but extensions are not: Xdebug, `pcntl` signal
-   dispatch, and APM agents all interact with the same handlers.
+   signal handlers. Measured: five are replaced (`SIGSEGV`, `SIGBUS`, `SIGFPE`,
+   `SIGPIPE`, `SIGURG`) and three more keep their handler but gain `SA_ONSTACK`
+   (`SIGILL`, `SIGXFSZ`, `SIGUSR2`); **`SIGPROF` is not touched**, so a sampling
+   profiler is not the thing to worry about here. PHP itself is quiet about
+   signals, but extensions are not: Xdebug, `pcntl` signal dispatch, and APM
+   agents all interact with the same handlers. The measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 2. **Not fork-safe.** For PHP the concrete victims are **php-fpm** (any `pm`
    mode — workers are always forked from the master), **mod_php** under Apache
    `prefork`/`event` MPM, **`pcntl_fork()`** in your own code, and Swoole /

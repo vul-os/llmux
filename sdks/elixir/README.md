@@ -104,12 +104,14 @@ and `Task.await/2` timeouts cannot touch. Over the sidecar, a slow request is a
 process blocked on a socket — cancellable, supervisable, and observable.
 
 **5. Two runtimes in one address space.** The BEAM has a preemptive scheduler
-and per-process GC; the Go runtime has its own scheduler, a global GC, and
-signal handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPROF` and `SIGURG` (which
-Go sends to its own threads constantly for asynchronous preemption). ERTS
-installs its own handlers, including for crash dumps. Both are well-behaved
-alone. Together they are a support burden no one has signed up for, and a
-12.7 MB library mapped into the VM to boot.
+and per-process GC; the Go runtime has its own scheduler, a global GC, and its
+own signal handlers. Measured: Go replaces `SIGSEGV`, `SIGBUS`, `SIGFPE`,
+`SIGPIPE` and `SIGURG` — the last of which Go sends to its own threads
+constantly for asynchronous preemption — and adds `SA_ONSTACK` to `SIGILL`,
+`SIGXFSZ` and `SIGUSR2`. `SIGPROF` is not touched. ERTS installs its own
+handlers, including for crash dumps. Both are well-behaved alone. Together they
+are a support burden no one has signed up for, and a 12.8 MB library mapped into
+the VM to boot.
 
 **6. The streaming callback is the worst case, not the best.** `llmux_stream`
 invokes a callback on the calling thread once per token. In a NIF that is a

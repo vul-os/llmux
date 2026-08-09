@@ -242,10 +242,13 @@ arbitrary `dlopen`'d dylib or spawning child processes at all.
 ## The costs of direct mode
 
 1. **The Go runtime lives in your process** — its GC, its scheduler, and its
-   handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPROF`. The Swift runtime does
-   not install competing handlers, so this is quieter for Swift than for a JVM;
-   but a crash reporter or a sanitizer build in the same process can still
-   conflict.
+   signal handlers. Measured: Go replaces `SIGSEGV`, `SIGBUS`, `SIGFPE`,
+   `SIGPIPE` and `SIGURG`, and adds `SA_ONSTACK` to `SIGILL`, `SIGXFSZ` and
+   `SIGUSR2`. The Swift runtime does not install competing handlers, so this is
+   quieter for Swift than for a JVM; but a crash reporter or a sanitizer build in
+   the same process can still conflict. **`SIGPROF` is not touched**, and
+   Instruments samples out of process, so profiling is unaffected either way. The
+   measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 2. **Not fork-safe.** After `fork()` without `exec()` the Go runtime in the
    child is broken. Swift's `Foundation.Process` always `exec`s, and there is no
    idiomatic Swift pre-fork worker model, so the practical victims are narrow:

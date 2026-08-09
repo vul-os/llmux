@@ -115,10 +115,13 @@ marshalling layer, no runtime to attach, no GIL. Prefer it, **unless**:
   `exec()`; the child hangs on the first call that needs a thread that did not
   come across. `sidecar_chat.c` forks, and is safe doing so *only because it
   never loads libllmux*. Do not merge the two examples into one binary.
-- **Your process handles its own signals.** Go installs handlers for `SIGSEGV`,
-  `SIGBUS`, `SIGFPE`, `SIGPROF` and others. A crash reporter, a sampling
-  profiler or a sanitizer build can conflict. Go chains to a pre-existing
-  handler in most cases; "most" is the honest word.
+- **Your process handles its own signals.** Measured: Go replaces `SIGSEGV`,
+  `SIGBUS`, `SIGFPE`, `SIGPIPE` and `SIGURG`, and adds `SA_ONSTACK` to `SIGILL`,
+  `SIGXFSZ` and `SIGUSR2`. A crash reporter or a sanitizer build can conflict. Go
+  chains to a pre-existing handler in most cases; "most" is the honest word.
+  **`SIGPROF` is not touched**, so a `SIGPROF`-driven sampling profiler keeps
+  working, and `perf`, which uses `perf_events` rather than signals, was never at
+  risk. The measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 - **You need per-tenant keys, budgets or model allow-lists.** Those are enforced
   by the HTTP shell's auth middleware. The C ABI has no authentication by
   design: an in-process host is already inside the trust boundary.

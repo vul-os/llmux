@@ -271,10 +271,14 @@ Not footnotes. All of these are properties of `-buildmode=c-shared`, and
 [`ffi/README.md`](../../ffi/README.md) is the long version.
 
 1. **The Go runtime lives in your process** — its GC, its scheduler, and its
-   signal handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPROF` and others. Go
-   chains to a pre-existing handler in most cases; "most" is the honest word.
-   Node installs its own crash handlers, and a native profiler or crash reporter
-   attached to your process is a third party in that negotiation.
+   signal handlers. Measured: Go replaces five — `SIGSEGV`, `SIGBUS`, `SIGFPE`,
+   `SIGPIPE`, `SIGURG` — and leaves three more in place with `SA_ONSTACK` added
+   (`SIGILL`, `SIGXFSZ`, `SIGUSR2`). Go chains to a pre-existing handler in most
+   cases; "most" is the honest word. Node installs its own crash handlers, and a
+   crash reporter attached to your process is a third party in that negotiation.
+
+   **`SIGPROF` is not touched**, so sampling profilers that use it are
+   unaffected. The measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 
 2. **It is not fork-safe.** After `fork()` without `exec()` the Go runtime in the
    child is broken. Node's own `child_process` and `cluster` always `exec`, so

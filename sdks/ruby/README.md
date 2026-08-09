@@ -192,10 +192,15 @@ web deployment even though Ruby's FFI itself is in good shape.
 ### The rest of the honest list
 
 1. **The Go runtime lives in your process** — its GC, its scheduler, and its
-   signal handlers (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPROF`, …). Ruby installs
-   its own, and Go chains to a pre-existing handler in most cases. "Most" is the
-   honest word; a sampling profiler using `SIGPROF` (`stackprof` in `:wall`
-   mode) is the shape of thing to watch.
+   signal handlers. Measured: five are replaced (`SIGSEGV`, `SIGBUS`, `SIGFPE`,
+   `SIGPIPE`, `SIGURG`) and three more keep their handler but gain `SA_ONSTACK`
+   (`SIGILL`, `SIGXFSZ`, `SIGUSR2`). Ruby installs its own, and Go chains to a
+   pre-existing handler in most cases; "most" is the honest word.
+
+   **`stackprof` is not the thing to watch.** `SIGPROF` — `stackprof`'s `:cpu`
+   mode — was measured untouched, and `:wall` mode's `SIGALRM` is excluded by the
+   same rule: under `-buildmode=c-shared` Go installs handlers only for
+   synchronous signals plus `SIGPIPE` and `SIGURG`. The measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 2. **Not fork-safe** — see above.
 3. **The shared library is 12–17 MB**, loaded per process that uses it.
 4. **Prebuilt binaries cover darwin/arm64 and linux/arm64 only** — see

@@ -121,9 +121,12 @@ GIL. Prefer direct mode, **unless**:
 - **Your process forks.** The Go runtime does not survive `fork()` without
   `exec()`.
 - **Your process handles its own signals**, or you build with sanitizers, or you
-  ship a crash reporter. Go installs handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`
-  and `SIGPROF`. Go chains to a pre-existing handler in most cases; "most" is
-  the honest word.
+  ship a crash reporter. Measured: Go replaces `SIGSEGV`, `SIGBUS`, `SIGFPE`,
+  `SIGPIPE` and `SIGURG`, and adds `SA_ONSTACK` to `SIGILL`, `SIGXFSZ` and
+  `SIGUSR2`. Go chains to a pre-existing handler in most cases; "most" is the
+  honest word. **`SIGPROF` is not touched**, so a `SIGPROF`-driven sampling
+  profiler keeps working, and `perf`, which uses `perf_events` rather than
+  signals, was never at risk. The measurement is in [`sdks/java/README.md`](../java/README.md#the-jvm-and-gos-signal-handlers).
 - **You need per-tenant keys, budgets or model allow-lists.** Those live in the
   HTTP shell's auth middleware; the C ABI has no authentication by design,
   because an in-process host is already inside the trust boundary.
