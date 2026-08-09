@@ -34,25 +34,41 @@ feature, Java → `openai-java`, .NET → the official `OpenAI` nuget).
 
 ## Go: embed in-process
 
-Go doesn't spawn the binary — it imports the gateway package and runs it
-in-process, no subprocess required. Same `core/` server the binary uses:
+Go doesn't spawn the binary — it imports the gateway and runs it in the same
+process. There is no port, no listener and no HTTP hop:
 
 ```go
-import "github.com/vul-os/llmux/sdks/go/llmux"
+import (
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/sdks/go/llmux"
+)
 
-local, err := llmux.Start(llmux.Options{}) // auto-detects providers from env; ephemeral port
+gw, err := llmux.New(llmux.Options{}) // auto-detects providers from env
 if err != nil {
 	log.Fatal(err)
 }
-defer local.Close()
+defer gw.Close()
 
-// point any OpenAI-compatible Go client at the embedded gateway
+res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{
+	Model:    "gpt-4o-mini",
+	Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}},
+})
+// res.Response, res.Provider (who served, after failover), res.BYOK, res.CacheHit
+```
+
+`llmux.New` starts nothing: no price-catalog sync, no spend flusher, no
+background traffic. Call `gw.Run(ctx)` if you want that work.
+
+`llmux.Start` is still there for the case where you need to hand an
+OpenAI-compatible HTTP client a base URL, but it is a loopback shim, not
+embedding — it costs a port, a listener and a JSON round-trip per call:
+
+```go
+local, err := llmux.Start(llmux.Options{}) // deprecated; ephemeral loopback port
+defer local.Close()
 cfg := openai.DefaultConfig("llmux-local")        // github.com/sashabaranov/go-openai
 cfg.BaseURL = local.OpenAIBaseURL()               // → http://127.0.0.1:<port>/v1
 ```
-
-`Options` lets you pass an explicit `*config.Config`, override `Addr`, or set
-`ReadyTimeout`; `Start` blocks until `/health` is serving.
 
 ## Binary distribution
 

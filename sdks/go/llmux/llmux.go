@@ -1,8 +1,13 @@
 // Package llmux embeds the gateway in-process for Go programs.
 //
-// Unlike the Python/Node packages — which spawn the binary as a local sidecar —
-// Go can run the gateway directly in-process, no subprocess required:
+// There are two ways in, and the first is the real one:
 //
+//	// Library: no listener, no port, no HTTP hop.
+//	gw, err := llmux.New(llmux.Options{})
+//	defer gw.Close()
+//	res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{...})
+//
+//	// Loopback sidecar: for handing an OpenAI-compatible HTTP client a URL.
 //	local, err := llmux.Start(llmux.Options{})
 //	defer local.Close()
 //	// point any OpenAI-compatible Go client at local.OpenAIBaseURL()
@@ -18,6 +23,7 @@ import (
 	"time"
 
 	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/server"
 )
 
@@ -40,8 +46,31 @@ type Local struct {
 	done    chan struct{}
 }
 
-// Start launches the gateway in a background goroutine and returns once it is
-// serving (health endpoint OK).
+// New builds an in-process gateway with NO listener, no loopback port and no
+// HTTP hop — the real embedding path. Dispatch with gw.Chat / gw.ChatStream /
+// gw.Embed and close it when done.
+//
+// It starts nothing: no price-catalog sync, no spend flusher, no background
+// traffic at all. Call gw.Run(ctx) (or gw.Start(ctx)) if you want that work.
+//
+// Options.Addr and Options.ReadyTimeout are ignored — they only mean something
+// for the loopback sidecar Start builds.
+func New(opts Options) (*gateway.Gateway, error) {
+	cfg := opts.Config
+	if cfg == nil {
+		// config.Default() reads the environment for provider keys. That is an
+		// explicit opt-in here: passing your own Config reads nothing.
+		cfg = config.Default()
+	}
+	return gateway.New(cfg)
+}
+
+// Start launches the gateway behind a loopback HTTP listener in a background
+// goroutine and returns once it is serving (health endpoint OK).
+//
+// Deprecated: this is a loopback shim, not embedding — it costs a port, a
+// listener and a JSON round-trip per call. Use New for in-process dispatch.
+// Start remains for handing an OpenAI-compatible HTTP client a base URL.
 func Start(opts Options) (*Local, error) {
 	cfg := opts.Config
 	if cfg == nil {
