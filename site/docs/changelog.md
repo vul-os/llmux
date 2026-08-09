@@ -10,6 +10,61 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-09
+
+Additive. Nothing that compiled against v0.1.2 changes behaviour; the breaking
+changes were all in that release.
+
+### Added
+
+- **A C ABI, so languages other than Go can embed llmux in-process.**
+  `ffi/` is a separate Go module (`github.com/vul-os/llmux-ffi`, named outside
+  the parent import path so Go's `internal/` rule constrains it exactly as it
+  would a third-party embedder). Six symbols — `llmux_new`, `llmux_call`,
+  `llmux_stream`, `llmux_close`, `llmux_free`, `llmux_abi_version` — carrying the
+  same OpenAI-shaped JSON the HTTP API already serves, so there is one wire
+  contract rather than two. Handles are `uint64` registry keys that are never
+  reused, so use-after-close is a readable error and not a segfault.
+  A C smoke test dlopens the built library, runs 32 named checks, and then
+  asserts that 32 checks ran.
+- **Fifteen language packages**, each with direct (in-process) and sidecar
+  modes: go, c, cpp, rust, swift, deno, bun, node, python, java, kotlin, dotnet,
+  ruby, php, elixir. Indexed in [`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md).
+- **Five documentation pages** — `choosing-a-mode`, `embedding`, `c-abi`,
+  `sdks`, `quickstarts` — taking the set from 12 to 17.
+- **The admin console can be compiled out** with `-tags noui` (33,312 bytes), and
+  a program importing only `core/gateway` links zero console bytes regardless.
+
+### Fixed
+
+- **The darwin dylib had a bare install name**, so `dyld` never consulted an
+  executable's `-rpath` and any consumer that *linked* llmux — rather than
+  `dlopen`ing it by path — died at startup with `Library not loaded`. Nothing
+  caught it because every test and example dlopens by absolute path, the one
+  case that works either way. Now stamped `@rpath/`.
+- **`docs/client-examples.md` claimed the Go SDK "runs the gateway in-process —
+  imports `core/server` directly, no subprocess".** It bound a loopback TCP
+  listener and polled `/health`. There is now a real in-process path; the
+  loopback shim is documented as the deprecated compatibility path it is.
+- **Cancelling a stream did not always stop the upstream call.** A consumer
+  taking 3 of 10 chunks still caused all 10 to be generated and metered in the
+  Bun binding (and the same shape was found in Kotlin and C#). Each README now
+  states its measured callback count under early exit.
+
+### Notes
+
+- Prebuilt FFI libraries exist for **darwin/arm64** and **linux/arm64** only;
+  linux/amd64 is CI-only, and **no Windows DLL ships**. openrate's matrix
+  differs — do not read one off the other.
+- Loading the library replaces five of HotSpot's signal handlers (`SIGSEGV`,
+  `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG`) and adds `SA_ONSTACK` to three more.
+  `SIGPROF` is **not** touched, so JFR profiling is unaffected. `libjsig` fixes
+  the rest but is a java launch flag, which is why the sidecar is the
+  recommended default for Java and Kotlin. Evidence:
+  [`sdks/java/signal-probe.sh`](https://github.com/vul-os/llmux/blob/main/sdks/java/signal-probe.sh).
+- The Go runtime is **not fork-safe**, and the failure is a false green:
+  `models` succeeds in a forked child while `chat` hangs.
+
 ## [0.1.2] - 2026-08-09
 
 llmux is now an importable Go library. The gateway logic moved into
@@ -289,7 +344,8 @@ section before upgrading anyway.
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/vul-os/llmux/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/vul-os/llmux/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/vul-os/llmux/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vul-os/llmux/releases/tag/v0.1.0
