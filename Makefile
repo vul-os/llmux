@@ -1,4 +1,4 @@
-.PHONY: build site-docs test test-embed test-ffi ffi ffi-bench cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
+.PHONY: build site-docs site-chrome site-chrome-selftest test test-embed test-ffi ffi ffi-bench cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
@@ -84,10 +84,16 @@ fmt-check: ## gofmt gate over EVERY Go directory (the check CI runs)
 verify-selftest: ## Prove scripts/verify.sh still REFUSES every broken-release shape
 	bash scripts/verify.sh --selftest
 
+site-chrome: ## Assert the site's ratified chrome: no docs footer, pinned rail, zero outbound origins, every fence language vendored
+	node scripts/check-docs-chrome.mjs
+
+site-chrome-selftest: ## Prove site-chrome still FAILS when each of its assertions is broken
+	node scripts/check-docs-chrome.test.mjs
+
 # The artifact-level gates, in the order CI runs them. `test` is separate
 # because it needs no Node; these are the ones that catch a green build
 # shipping a wrong artifact — or shipping a right artifact nobody can check.
-gates: fmt-check verify-selftest test-embed test-ffi ## Run the artifact gates (gofmt scope + release-verifier matrix + embeddability + C ABI)
+gates: fmt-check verify-selftest test-embed test-ffi site-chrome site-chrome-selftest ## Run the artifact gates (gofmt scope + release-verifier matrix + embeddability + C ABI + site chrome)
 
 run: build ## Build and run on :4000
 	$(BIN)

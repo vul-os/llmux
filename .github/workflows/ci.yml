@@ -95,6 +95,24 @@ jobs:
       - name: Test
         run: go test -race -cover -timeout 180s ./...
 
+      # The site is static, self-contained and makes NO outbound requests —
+      # that claim is load-bearing (a sibling product shipped an external
+      # iframe and silently broke the same claim), and review does not catch
+      # it. This asserts it, plus the two ratified chrome rules that have
+      # regressed before: docs pages carry no footer, and the docs rail is
+      # pinned with the shell packed left. It also proves every fenced
+      # language in docs/ is in the VENDORED highlight.js build, so a new
+      # SDK page cannot ship a code block that renders as grey plaintext.
+      #
+      # The selftest runs too, and is not optional: it breaks each assertion
+      # in a throwaway copy of the tree and requires the gate to fail, then
+      # restores. Without it, "check-docs-chrome: PASS" is a line of text.
+      - name: Site chrome (no footer, pinned rail, no outbound origins, vendored languages)
+        run: node scripts/check-docs-chrome.mjs
+
+      - name: Prove the site-chrome gate still fails when its assertions are broken
+        run: node scripts/check-docs-chrome.test.mjs
+
       # The admin console is optional: `-tags noui` drops the go:embed and
       # core/server mounts a JSON stub instead. Only ONE tag state is exercised
       # by the steps above, so without this the untagged build could rot for a
