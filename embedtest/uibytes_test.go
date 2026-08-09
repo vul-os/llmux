@@ -14,9 +14,14 @@ import (
 // G3 proves the library does not IMPORT the console package. This proves the
 // consequence an embedder actually cares about: the compiled binary of a host
 // that uses llmux as a library does not contain the console's HTML at all.
-// The two are not the same claim — a stray `var _ = webui.HTML` in any package
-// the library reaches would satisfy neither, but only this one measures the
-// artefact that ships.
+//
+// NEITHER GUARD SUBSUMES THE OTHER, and mutation testing showed exactly why:
+// adding `import webui` to core/gateway plus a discardable `_ = webui.HTML()`
+// turns G3 red while leaving THIS test green — the linker drops the dead call
+// and the embed with it, and the binary comes out byte-for-byte the same size.
+// Promote that to a package-level `var UIProbe = webui.HTML()` and the bytes
+// really ship: G7 goes red too. So G3 catches the dependency the day it is
+// written, and G7 catches the payload actually reaching users' binaries.
 
 // uiSentinels are byte strings that exist ONLY inside web/ui.html. They are
 // verified to be present in the source file before being searched for in a
@@ -101,10 +106,25 @@ func TestLibraryOnlyHostLinksNoUIBytes(t *testing.T) {
 			len(uiFound), len(uiSentinels), uiFound)
 	}
 
+	// Where the boundary actually is. server.Options{UI:false} switches the
+	// ROUTE off, not the bytes: core/server still references webui.HTML() from a
+	// branch the linker cannot prune. Measured here: 17,221,218 bytes with every
+	// sentinel present, i.e. the same as UI:true. Asserted so that nobody
+	// documents the flag as a size lever — the lever is the import (or -tags
+	// noui, which G5 measures).
+	offBin := buildHost(t, "./hosts/serveruioff")
+	offFound, offSize := binaryHasSentinels(t, offBin)
+	if len(offFound) != len(uiSentinels) {
+		t.Errorf("server.Options{UI:false} now DROPS the console bytes (%d of %d sentinels found, %d bytes). "+
+			"That is an improvement, not a failure — update this assertion and say so, then check whether "+
+			"docs still describe the import as the only boundary.", len(offFound), len(uiSentinels), offSize)
+	}
+
 	if uiSize <= libSize {
 		t.Errorf("the console-mounting host (%d bytes) is not larger than the library-only host (%d bytes) — "+
 			"the console is apparently free, which it is not", uiSize, libSize)
 	}
-	t.Logf("library-only host %d bytes, no UI bytes; library+server(UI) host %d bytes, all %d sentinels present "+
-		"(delta %d bytes)", libSize, uiSize, len(uiSentinels), uiSize-libSize)
+	t.Logf("library-only host %d bytes, no UI bytes; library+server(UI:true) %d bytes and "+
+		"library+server(UI:false) %d bytes, both carrying all %d sentinels (delta over library-only: %d bytes)",
+		libSize, uiSize, offSize, len(uiSentinels), uiSize-libSize)
 }

@@ -94,15 +94,20 @@ func TestGatewayDependsOnNeitherServerNorUI(t *testing.T) {
 				}
 			}
 
+			failed := false
 			if contains(list, serverPkg) {
+				failed = true
 				t.Errorf("INVERTED IMPORT: %s depends on %s. The library must not depend on its HTTP shell — "+
 					"an embedder would then link the whole server, its routes and its middlewares.", libPkg, serverPkg)
 			}
 			if contains(list, uiPkg) {
+				failed = true
 				t.Errorf("INVERTED IMPORT: %s depends on %s. The library must not depend on the admin console "+
 					"embed — see G7, which asserts the resulting binary carries no UI bytes.", libPkg, uiPkg)
 			}
-			t.Logf("%s: %d transitive packages, neither %s nor %s among them", libPkg, len(list), serverPkg, uiPkg)
+			if !failed {
+				t.Logf("%s: %d transitive packages, neither %s nor %s among them", libPkg, len(list), serverPkg, uiPkg)
+			}
 		})
 	}
 }

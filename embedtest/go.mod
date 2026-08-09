@@ -1,5 +1,6 @@
-// embedtest is a SEPARATE Go module on purpose. See doc.go for why.
-module github.com/vul-os/llmux/embedtest
+// embedtest is a SEPARATE Go module on purpose, and its path is deliberately
+// OUTSIDE github.com/vul-os/llmux/... — see doc.go and internalprobe/.
+module github.com/vul-os/llmux-embedtest
 
 go 1.25.0
 
