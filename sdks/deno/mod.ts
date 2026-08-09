@@ -78,8 +78,15 @@ export function resolveLibrary(explicit?: string): string {
   try {
     Deno.statSync(candidate);
     return candidate.pathname;
-  } catch {
-    return libFileName();
+  } catch (e) {
+    // NotFound means there is no checkout build here, so fall back to the bare
+    // name. Anything else — in practice NotCapable, because statSync needs
+    // --allow-read and the direct mode deliberately does not ask for it — means
+    // we simply cannot look. Prefer the checkout path in that case and let
+    // dlopen deliver the verdict, rather than silently skipping a library that
+    // is sitting right there.
+    if (e instanceof Deno.errors.NotFound) return libFileName();
+    return candidate.pathname;
   }
 }
 
