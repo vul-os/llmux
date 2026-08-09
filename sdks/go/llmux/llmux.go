@@ -1,18 +1,39 @@
 // Package llmux embeds the gateway in-process for Go programs.
 //
-// There are two ways in, and the first is the real one:
+// # New is the real one
 //
-//	// Library: no listener, no port, no HTTP hop.
+//	// No listener, no port, no HTTP hop, no serialization.
 //	gw, err := llmux.New(llmux.Options{})
 //	defer gw.Close()
 //	res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{...})
 //
-//	// Loopback sidecar: for handing an OpenAI-compatible HTTP client a URL.
-//	local, err := llmux.Start(llmux.Options{})
-//	defer local.Close()
-//	// point any OpenAI-compatible Go client at local.OpenAIBaseURL()
+// gw is a *gateway.Gateway, and gw.Chat returns a *gateway.Result carrying the
+// per-request facts the HTTP shell has to discard: which provider actually
+// served after failover, whether it was a cache hit, whether it went out on the
+// account's own key, and the upstream's rate-limit headers.
 //
-// Provider keys are auto-detected from the environment (OPENAI_API_KEY, etc.).
+// This package is a thin convenience over core/gateway, not a required layer.
+// Importing github.com/vul-os/llmux/core/gateway and calling gateway.New(cfg)
+// yourself is equally supported.
+//
+// # Start is a deprecated loopback shim
+//
+//	local, err := llmux.Start(llmux.Options{})  // Deprecated
+//	defer local.Close()
+//	// hand local.OpenAIBaseURL() to an OpenAI-compatible HTTP client
+//
+// Start runs the whole HTTP server on a loopback port inside this process. It
+// costs a port, a listener and a JSON round trip per call, and it gives you
+// none of the Result fields above — the HTTP tax without the process isolation
+// you would get from a real sidecar. It is kept for one job: handing a base URL
+// to an OpenAI-compatible client you did not write and cannot change.
+//
+// Start is also NOT the sidecar. The sidecar is a separate `llmux serve`
+// process, which is what gets you per-tenant keys, budgets and crash isolation;
+// see sdks/go/examples/sidecar.
+//
+// Provider keys are auto-detected from the environment (OPENAI_API_KEY, etc.)
+// when Options.Config is nil. Passing your own Config reads nothing.
 package llmux
 
 import (
