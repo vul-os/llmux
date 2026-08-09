@@ -10,6 +10,81 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-08-09
+
+llmux is now an importable Go library. The gateway logic moved into
+`core/gateway`, which speaks in Go types and never touches `net/http` server
+machinery; `core/server` is a thin HTTP shell over it, and the admin console can
+be compiled out entirely.
+
+**This release breaks exported API despite being a patch version.** It stays on
+the 0.1 line because the blast radius is provably nil: the old module path
+`github.com/llmux/llmux` pointed at a GitHub organisation with no repositories,
+so it never resolved and nothing could have depended on it. Read the Breaking
+section before upgrading anyway.
+
+### Breaking
+
+- **The module path is now `github.com/vul-os/llmux`.** It was
+  `github.com/llmux/llmux`, which never resolved — the code has always lived at
+  `vul-os/llmux`. Update imports; there is no compatibility shim, because there
+  is nothing to be compatible with.
+- **Four exported package variables were removed** from `core/provider`:
+  `DropParams` and `MaxResponseBytes` (`response.go`), and `DefaultHTTPClient`
+  and `StreamHTTPClient` (`provider.go`). They are now fields on the new
+  `provider.Options`, passed per instance. They were process-global and
+  `server.New` mutated the first two, so two gateways in one process silently
+  corrupted each other's limits — the reason this had to change for embedding to
+  be safe at all. The identically-named `config.Config` fields are unaffected.
+- **`providers.Build` takes three arguments**: `Build(cfgs)` →
+  `Build(cfgs, opts provider.Options, log *slog.Logger)`.
+- **Every provider adapter's `New` takes `provider.Options`**: `New(c)` →
+  `New(c, opts)`, across `passthrough`, `anthropic`, `gemini`, `cohere`,
+  `bedrock` and `azure`.
+
+### Added
+
+- **`core/gateway` — the in-process API.** `New`, `Chat`, `ChatStream`, `Embed`,
+  `Models`, `Authorize`, `Run`, `Start`, `Close`, and a `Result` carrying the
+  response alongside the provider that actually served it after failover, the
+  BYOK flag, the cache-hit flag and the upstream rate-limit headers. Streaming
+  is a `ChunkFunc` callback, not an SSE writer. No `http.Request` or
+  `http.ResponseWriter` appears anywhere in the surface.
+- **`gateway.New` starts no goroutines and opens no sockets.** Background work —
+  the pricing syncer, the key-store spend flusher — begins only when the caller
+  invokes `Run`. Previously the pricing syncer was on by default and reached out
+  to openrouter.ai and raw.githubusercontent.com every six hours, which is a
+  surprise inside someone else's process. Two exceptions are documented rather
+  than papered over: `New` connects and migrates eagerly when `cfg.Postgres` is
+  set, and it reads `os.Getenv` for any provider configured with `api_key_env`
+  (config-directed, not auto-detected).
+- **The admin console can be compiled out.** `server.Options{UI: bool}` controls
+  whether it is mounted, and a build tagged `noui` removes the embedded assets
+  from the binary entirely, saving 33,312 bytes on this checkout's `cmd/llmux`
+  build. Note the distinction: the flag governs what is *served*, the tag
+  governs what is *linked*, and a program that imports only `core/gateway` links
+  zero console bytes regardless of either.
+- **An embeddability test suite** in `embedtest/`, a separate Go module, plus CI
+  guards asserting that construction is inert, that `core/gateway` never imports
+  the server or the console, that both build tags compile, and that a
+  library-only host links no UI bytes.
+
+### Changed
+
+- `core/server` is now a thin adapter layer: request decoding, SSE framing,
+  auth-decision plumbing, admin routes and the console mount. `ChatRaw` retains
+  the raw-bytes passthrough so unknown upstream fields still survive the HTTP
+  path.
+- `Authorize` returns `(ctx, release func(), error)`. `release` is never nil and
+  **must** be called; the HTTP middleware defers it. Failing to call it leaks a
+  budget hold.
+- Logging inside `core/` goes through the configured `*slog.Logger` instead of
+  the package-level `log`.
+- The egress guard now scans `core/gateway/` as well as `core/server/`. This is
+  load-bearing, not cosmetic: with the old scope, dispatch moving into
+  `core/gateway` would have escaped the check entirely.
+- Test count: 558 → 562 top-level.
+
 ## [0.1.1] - 2026-08-09
 
 ### Added
@@ -214,6 +289,7 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/vul-os/llmux/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/vul-os/llmux/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/vul-os/llmux/releases/tag/v0.1.0
