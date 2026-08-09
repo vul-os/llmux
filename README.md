@@ -2,12 +2,14 @@
 
 <img src="assets/llmux-logo.png" alt="llmux" width="340" />
 
-### The sovereign OpenAI-compatible endpoint — your AI runs on your box.
+### Import it. The server is optional. Your AI runs on your box either way.
 
-Point your existing OpenAI SDK at llmux and get routing, fallbacks, per-key
-budgets, caching, and live cost — across every provider, with zero
-per-language code. Inference runs **on your box by default**, and a request is
-**never silently sent off the box** unless you explicitly, loggably opt in.
+`go get github.com/vul-os/llmux/core/gateway` gets you the whole dispatch
+path — routing, fallbacks, per-key budgets, caching, live cost, and a
+default-deny sovereignty gate — as an in-process Go library with **no HTTP
+surface, no port, and nothing started until you ask for it**. Want a
+standalone service instead (or as well)? The same code ships as a single
+binary with an OpenAI-compatible HTTP API and an embedded admin dashboard.
 
 **[MIT OR Apache-2.0](LICENSE-MIT) · Go 1.25 · [Tests](TESTING.md)**
 
@@ -19,26 +21,41 @@ per-language code. Inference runs **on your box by default**, and a request is
 
 ## What is llmux?
 
-llmux is a **single Go binary** that speaks the OpenAI HTTP API and routes
-every request to the provider behind it — native adapters for Anthropic,
-Gemini, Cohere, Bedrock, and Azure, passthrough for any OpenAI-shaped upstream
-(OpenAI, DeepSeek, Groq, Mistral, Together, OpenRouter, and 100+ more), and a
-`local` provider for an on-box Ollama/llama.cpp/vLLM server.
+llmux is a Go **library first**: `core/gateway` is the whole dispatch
+path — routing, retries, failover, sovereignty enforcement, BYOK, caching,
+pricing and metering — with no HTTP surface of its own. `import` it into a Go
+program, call `gateway.New`, and dispatch with `Chat` / `ChatStream` / `Embed`;
+nothing starts until you tell it to. Native adapters cover Anthropic, Gemini,
+Cohere, Bedrock, and Azure; passthrough covers any OpenAI-shaped upstream
+(OpenAI, DeepSeek, Groq, Mistral, Together, OpenRouter, and 100+ more); a
+`local` provider covers an on-box Ollama/llama.cpp/vLLM server.
 
-Every language already ships a mature OpenAI client that accepts a custom
-`base_url`. Point it at llmux and the routing, budgets, caching, and cost
-accounting happen underneath — no new SDK to learn.
+`core/server` is one shell over that library — the same code compiled as a
+**single Go binary** that speaks the OpenAI HTTP API. It is not the only
+possible shell, and `core/gateway` never imports it. Every language already
+ships a mature OpenAI client that accepts a custom `base_url`; point one at the
+binary and the routing, budgets, caching, and cost accounting happen
+underneath — no new SDK to learn. See [Client examples → embed it
+locally](docs/client-examples.md#embed-it-locally-no-separate-server-to-run)
+for the Go library API, or the [quick start](#quick-start) below for the
+binary.
 
 It's **self-hosted, open source, has no telemetry, and has no accounts** — no
-login, no email, no sign-up; you authenticate with an operator-issued bearer
-token and configure it by editing a JSON file. It ships an admin dashboard
-*inside* the binary — usage, keys, and the live model catalog, nothing more.
-An optional control-plane seam adds centralized billing when you want it, and
-is invisible when you don't.
+login, no email, no sign-up; the binary authenticates callers with an
+operator-issued bearer token and is configured by editing a JSON file. It ships
+an admin dashboard *inside* the binary — usage, keys, and the live model
+catalog, nothing more — and that dashboard is itself optional: the `noui`
+build tag drops it from the binary entirely, and `server.Options{UI: false}`
+turns off the route at runtime (without shrinking the binary — only the build
+tag does that). See [Operations → building without the
+console](docs/operations.md#building-without-the-console-noui). An optional
+control-plane seam adds centralized billing when you want it, and is invisible
+when you don't.
 
-It also enforces a default-deny *sovereignty gate* before every dispatch, so
-inference stays on your box unless you explicitly opt a provider in. This is
-the reason the project exists — see **[the sovereignty gate](#the-sovereignty-gate)** below.
+It also enforces a default-deny *sovereignty gate* before every dispatch —
+whether called from Go in-process or over HTTP — so inference stays on your box
+unless you explicitly opt a provider in. This is the reason the project
+exists — see **[the sovereignty gate](#the-sovereignty-gate)** below.
 
 > ### ⚠️ One outbound call IS on by default: the price-catalog sync
 >
@@ -74,6 +91,51 @@ flowchart LR
 ```
 
 ## Quick start
+
+### As a library
+
+```bash
+go get github.com/vul-os/llmux/core/gateway
+```
+
+```go
+import (
+    "github.com/vul-os/llmux/core/config"
+    "github.com/vul-os/llmux/core/gateway"
+    "github.com/vul-os/llmux/core/openai"
+)
+
+gw, err := gateway.New(config.Default())   // no goroutines started, no sockets opened*
+if err != nil {
+    log.Fatal(err)
+}
+defer gw.Close()
+
+res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{
+    Model:    "cheapest",                                            // least-cost route from your config
+    Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}},
+})
+fmt.Println(res.Response.Choices[0].Message.Content.String(), res.Response.Usage.Cost)
+```
+
+\* Two exceptions, stated up front: if `cfg.Postgres` is set, `New` connects and
+migrates the key store **eagerly**; and `New` reads `os.Getenv` for any
+provider configured with `api_key_env` (config-directed, not auto-detected —
+see [Architecture → llmux as a library](docs/architecture.md#llmux-as-a-library)).
+Everything else — the price-catalog sync, the spend flusher, a Redis ping — is
+opt-in via `gw.Run(ctx)`.
+
+Building your own auth layer on top? Route every call through
+`gw.Authorize(ctx, token)` first — it returns `(ctx, release func(), error)`,
+and `release` is **never nil** and **must always be called**, even on error, or
+a budget-gate reservation leaks. Full API, streaming, and the deprecated
+loopback-sidecar path: [Client examples → embed it
+locally](docs/client-examples.md#embed-it-locally-no-separate-server-to-run).
+
+### As a server (the sidecar)
+
+The same code, compiled as a single binary with an OpenAI-compatible HTTP API
+and the embedded admin console.
 
 > **Prerequisites:** Go 1.25+, and at least one provider API key. There is no
 > Node toolchain anywhere in this repo — the embedded admin console
@@ -122,6 +184,11 @@ which any OpenAI client ignores harmlessly if it doesn't look for it:
 }
 ```
 
+Building without the console: `go build -tags noui` drops `web/ui.html` and its
+license notices from the binary — 33,312 bytes smaller in this checkout. Full
+breakdown: [Operations → building without the
+console](docs/operations.md#building-without-the-console-noui).
+
 > **17+ languages** — copy-paste examples for Python, Node, TypeScript, Go, Ruby,
 > PHP, Java, C#, Rust, C++, C, Swift, Kotlin, Elixir, R, and Dart, plus how to
 > embed llmux as a local dependency with no separate server to run, live in
@@ -156,11 +223,11 @@ refusal still fires; CI runs the same matrix on every push.
 ## The sovereignty gate
 
 This is the part other OpenAI-compatible gateways don't have. `core/sovereign`
-classifies every configured provider by *where its traffic goes*, and the
-server calls the gate **before any network call, on every dispatch path** —
-chat, streaming chat, embeddings, the semantic-cache embedder, and every
-model-bearing modality route. Providers resolve to a 4-tier dial, most→least
-private:
+classifies every configured provider by *where its traffic goes*, and the gate
+is called **before any network call, on every dispatch path** — chat, streaming
+chat, embeddings, the semantic-cache embedder, and every model-bearing modality
+route — whether that call originated in-process (`core/gateway`) or over HTTP
+(`core/server`). Providers resolve to a 4-tier dial, most→least private:
 
 | Tier | What it is | Default |
 |---|---|---|
@@ -190,7 +257,8 @@ for the full mechanism, and
 
 | | |
 |---|---|
-| 🛡️ **Sovereignty gate** | A default-deny, 4-tier (`local`/`sovereign`/`brokered`/`external`) egress policy runs before *every* dispatch path. Fails closed; every permitted off-box call is logged with its tier. See [above](#the-sovereignty-gate). |
+| 📦 **Library-first** | `core/gateway.New` builds the whole dispatch path with no HTTP surface: no goroutines, no sockets (bar an explicitly configured Postgres DSN), no environment reads beyond what the config you pass names. `core/server` — the HTTP API and console — is one optional shell over it. See [Quick start → as a library](#as-a-library). |
+| 🛡️ **Sovereignty gate** | A default-deny, 4-tier (`local`/`sovereign`/`brokered`/`external`) egress policy runs before *every* dispatch path, whether called in-process or over HTTP. Fails closed; every permitted off-box call is logged with its tier. See [above](#the-sovereignty-gate). |
 | 🔌 **OpenAI-compatible API** | `chat/completions`, `completions`, `embeddings`, `models`, plus `responses`, `rerank`, `moderations`, `images/generations`, `audio/speech`, and `audio/transcriptions`+`audio/translations` (multipart speech-to-text). Works with any OpenAI SDK unchanged. `chat/completions` and `embeddings` are natively translated per provider; the other modality routes are forwarded and served only by **passthrough** providers — a translating native adapter (Anthropic/Gemini/Cohere/Bedrock/Azure) returns 501 for them. |
 | 🌐 **Multi-provider routing** | Native adapters for Anthropic, Gemini, Cohere, Bedrock, and Azure — plus passthrough for any OpenAI-shaped upstream. Tool-calling, vision, and streaming translated per provider. |
 | 🧭 **Flexible routes** | Model aliases, `provider/model` prefixes, wildcards (`claude-*`), catch-all routes, fallback chains with retries/backoff, and least-cost selection. |
@@ -240,7 +308,7 @@ Full documentation lives in **[`docs/`](docs/)**, and is also published at
 | [Client examples](docs/client-examples.md) | Copy-paste requests in curl and 17+ languages, plus embedding llmux locally |
 | [API reference](docs/api.md) | Endpoints, auth, errors, and cost |
 | [Configuration](docs/configuration.md) | Config file, environment variables, and the sovereignty fields |
-| [Architecture](docs/architecture.md) | How the gateway is laid out, and the sovereignty gate in full |
+| [Architecture](docs/architecture.md) | How the gateway is laid out, `core/gateway` as a library, and the sovereignty gate in full |
 | [Admin guide](docs/ADMIN-GUIDE.md) | Budgets, rate limits, cost accounting, model routing, the dashboard |
 | [LLM access: BYOK vs central](docs/LLM-ACCESS.md) | Per-account own-key vs central metered keys, billing |
 | [Control-plane seam](docs/control-plane.md) | Optional centralized billing & entitlements |
@@ -299,8 +367,9 @@ the live model catalog, and nothing else.
 
 ## Deployment modes
 
-llmux is one self-hosted binary; its shape is defined by whether the optional
-**control-plane seam** is wired:
+This is a separate axis from library-vs-binary above: whichever way you run
+llmux — embedded via `core/gateway`, or as the standalone binary — its shape is
+further defined by whether the optional **control-plane seam** is wired:
 
 | Shape | How | Billing / sovereignty |
 |---|---|---|
