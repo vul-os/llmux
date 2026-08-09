@@ -46,8 +46,8 @@ one line each on top of the non-throwing ones.
 std::string out = gw.chat(req);                  // throws llmux::Error
 
 llmux::StringResult r = gw.try_chat(req);        // never throws
-if (!r.ok()) std::cerr << r.error;               // plain UTF-8 text, not JSON
-else         use(r.value);
+if (!r.ok()) std::cerr << r.error();             // plain UTF-8 text, not JSON
+else         use(r.value());                     // or r.take() to move it out
 ```
 
 `Gateway::try_open()` is the non-throwing constructor. Define
@@ -163,7 +163,11 @@ class OwnedString {                              // move-only; frees with llmux_
     char** err_slot() noexcept;                  // for a trailing char** err
 };
 
-template <class T> struct Result { T value; std::string error; bool ok() const; };
+template <class T> class Result {                // value held in a std::optional,
+    bool ok() const;                             // so a failure constructs no T
+    const std::string& error() const;
+    const T& value() const&;   T take();
+};
 using StringResult = Result<std::string>;
 using VoidResult   = Result<Unit>;
 

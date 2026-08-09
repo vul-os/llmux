@@ -35,7 +35,7 @@
 //
 //   gw.chat(req)      throws llmux::Error, carrying the library's message.
 //   gw.try_chat(req)  returns llmux::Result<std::string> — an expected-like
-//                     value with .ok(), .value and .error. Never throws.
+//                     value with .ok(), .value() and .error(). Never throws.
 //
 // The throwing calls are one line each on top of the try_ ones. Define
 // LLMUX_NO_EXCEPTIONS before including this header (or build with
@@ -48,6 +48,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -124,20 +125,39 @@ private:
 // Result — the non-throwing return shape.
 // ---------------------------------------------------------------------------
 
-/// An expected-like pair. `error` is the library's message: plain UTF-8 text,
-/// not JSON. Do not parse it.
-template <typename T> struct Result {
-	T value{};
-	std::string error{};
-
-	[[nodiscard]] bool ok() const noexcept { return error.empty(); }
-	[[nodiscard]] explicit operator bool() const noexcept { return ok(); }
-
-	static Result success(T v) { return Result{std::move(v), {}}; }
-	static Result failure(std::string message) {
-		return Result{T{}, message.empty() ? std::string("llmux failed without a message")
-		                                   : std::move(message)};
+/// An expected-like value. `error()` is the library's message: plain UTF-8
+/// text, not JSON. Do not parse it.
+///
+/// The value is held in a std::optional rather than as a plain member, and that
+/// is not a style choice: a failure must not construct a T. With a plain member,
+/// `Result<Gateway>::failure(...)` would default-construct a Gateway — opening a
+/// real gateway on the failure path, from inside the code reporting that a
+/// gateway could not be opened.
+template <typename T> class Result {
+public:
+	[[nodiscard]] static Result success(T v) {
+		Result r;
+		r.value_.emplace(std::move(v));
+		return r;
 	}
+	[[nodiscard]] static Result failure(std::string message) {
+		Result r;
+		r.error_ = message.empty() ? std::string("llmux failed without a message")
+		                           : std::move(message);
+		return r;
+	}
+
+	[[nodiscard]] bool ok() const noexcept { return error_.empty(); }
+	[[nodiscard]] explicit operator bool() const noexcept { return ok(); }
+	[[nodiscard]] const std::string &error() const noexcept { return error_; }
+
+	/// Precondition: ok(). Reading it otherwise is a programming error.
+	[[nodiscard]] const T &value() const & { return *value_; }
+	[[nodiscard]] T take() { return std::move(*value_); }
+
+private:
+	std::optional<T> value_;
+	std::string error_;
 };
 
 using StringResult = Result<std::string>;
@@ -154,8 +174,8 @@ public:
 
 namespace detail {
 template <typename T> T unwrap(Result<T> r) {
-	if (!r.ok()) throw Error(r.error);
-	return std::move(r.value);
+	if (!r.ok()) throw Error(r.error());
+	return r.take();
 }
 }  // namespace detail
 #endif

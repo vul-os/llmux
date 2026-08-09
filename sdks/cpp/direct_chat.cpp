@@ -162,7 +162,7 @@ int main(int argc, char **argv) {
 		// --- the same failure without exceptions --------------------------------
 		{
 			const llmux::StringResult r = gw.try_call("no-such-method", "{}");
-			std::cout << "try_call      ok=" << std::boolalpha << r.ok() << " error=\"" << r.error
+			std::cout << "try_call      ok=" << std::boolalpha << r.ok() << " error=\"" << r.error()
 			          << "\"\n";
 		}
 
@@ -175,7 +175,7 @@ int main(int argc, char **argv) {
 			leaked = inner.handle();
 			throw std::runtime_error("something went wrong mid-block");
 		} catch (const std::runtime_error &) {
-			llmux::Gateway probe = llmux::Gateway::try_open(config).value;  // keep the lib busy
+			llmux::Gateway probe = llmux::Gateway::try_open(config).take();  // keep the lib busy
 			std::cout << "unwind        handle " << leaked
 			          << " was closed by ~Gateway during unwinding\n";
 		}
@@ -188,12 +188,12 @@ int main(int argc, char **argv) {
 	// are registry keys and are never reused.
 	std::cout << "\nafter close   ";
 	{
-		llmux::Gateway closed = llmux::Gateway::try_open(config).value;
+		llmux::Gateway closed = llmux::Gateway::try_open(config).take();
 		const std::uint64_t h = closed.handle();
 		closed.close();
 		closed.close();  // idempotent
 		const llmux::StringResult r = closed.try_models();
-		std::cout << "handle " << h << ": " << (r.ok() ? "the closed handle answered!" : r.error)
+		std::cout << "handle " << h << ": " << (r.ok() ? "the closed handle answered!" : r.error())
 		          << "\n";
 	}
 	return 0;
