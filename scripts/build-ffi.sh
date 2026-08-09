@@ -121,6 +121,19 @@ build_target() {
     skipped+=("${goos}/${goarch} — the build FAILED (see the output above)")
     return 0
   fi
+  # `go build -buildmode=c-shared` stamps a BARE install name on a dylib
+  # ("libllmux.dylib", no prefix). dyld only consults an executable's -rpath
+  # entries for dependencies recorded as "@rpath/...", so a consumer that LINKS
+  # against this library — rather than dlopen'ing it by path — dies at startup
+  # with `Library not loaded: libllmux.dylib` no matter how many -Wl,-rpath
+  # flags it passed. dlopen callers never notice, which is why this survived:
+  # the C smoke test and every example here dlopen by absolute path.
+  if [ "${goos}" = "darwin" ] && command -v install_name_tool >/dev/null 2>&1; then
+    install_name_tool -id "@rpath/${lib}" "${dir}/${lib}" || {
+      skipped+=("${goos}/${goarch} — built, but install_name_tool failed; linking consumers will break")
+      return 0
+    }
+  fi
   local size; size="$(wc -c < "${dir}/${lib}" | tr -d ' ')"
   built+=("${goos}/${goarch}  ${dir}/${lib}  ${size} bytes")
 }
