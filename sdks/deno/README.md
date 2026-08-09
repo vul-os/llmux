@@ -102,20 +102,21 @@ handle     1
 
 models       deepseek/deepseek-chat, openai/gpt-4o-mini, anthropic/claude-3-5-haiku, openai/gpt-4o, anthropic/claude-3-5-sonnet, google/gemini-1.5-pro, google/gemini-1.5-flash
 chat         "the quick brown fox jumps over the lazy dog"
-             took 393 ms; the event loop ticked 171x meanwhile
+             took 390 ms; the event loop ticked 137x meanwhile
 
 stream      the quick brown fox jumps over the lazy dog
-             10 chunks, event loop ticked 168x during the stream
+             10 chunks, event loop ticked 163x during the stream
 
-break       stopped after 3 chunks, no error raised
+break       consumed 3 chunks; the C callback fired 4x (10 = the whole answer)
+            no error raised — stopping is your decision, not a failure
 
 error       no route for model "no-such-model" (providers: fake)
 stream:true llmux: "stream": true is not valid for llmux_call; use llmux_stream
 closed      llmux gateway is closed
 ```
 
-Those tick counts are the whole argument: a 1 ms timer fires 171× across a
-393 ms call. The same measurement on Node is `0`.
+Those tick counts are the whole argument: a 1 ms timer fires 137× across a
+390 ms call. The same measurement on Node is `0`.
 
 No API key and no network — the example spawns
 [`examples/fake-upstream.mjs`](examples/fake-upstream.mjs), an
@@ -180,6 +181,34 @@ error       HTTP 404 {"error":{"message":"no route for model \"no-such-model\" (
 
 (llmux's own log lines are interleaved with that on a real run — including
 `pricing source failed` when the machine is offline — and are cut here.)
+
+---
+
+## What `break` actually stops
+
+A wrapper that turns a native callback into an async iterator has a failure mode
+that looks like success: the consumer stops early, the loop exits, everything
+looks cancelled — and the library ran to completion anyway, generating and
+billing tokens nobody read. It was found in two other bindings in this suite, so
+it is measured here rather than assumed.
+
+`gw.stream(...)` exposes `nativeChunks`, the number of times the C callback
+actually fired. The example breaks after 3 chunks of a 10-chunk answer and
+prints both numbers. Measured on Deno 2.7.11, darwin/arm64:
+
+| upstream pace | consumed | C callback fired |
+|---|---|---|
+| 40 ms/chunk | 3 | **4** |
+| as fast as the socket allows | 3 | **4** |
+
+Deno needs no backpressure machinery for this, and that is not luck: with
+`nonblocking: true`, Deno parks the native thread until the isolate has run the
+callback, so the library can never get more than one chunk ahead of the consumer.
+Flooding the fixture (`FAKE_DELAY_MS=0`) does not change the number.
+
+The residue is one chunk in flight — `llmux_stream` can only notice the stop
+flag at the *next* chunk boundary, which the header says plainly. Tokens already
+served are metered either way.
 
 ---
 

@@ -204,6 +204,22 @@ export interface ChatChunk {
 export type Method = "chat" | "embed" | "models";
 
 /**
+ * What {@link Gateway.stream} returns: an async generator with one extra
+ * property.
+ *
+ * `nativeChunks` counts how many times the C callback has actually fired, which
+ * is NOT the same as how many chunks you consumed. Nothing back-pressures the
+ * library: `llmux_stream` keeps calling the callback as fast as the provider
+ * sends, and your `break` only takes effect at the next chunk boundary AFTER
+ * the flag is set. Compare it with your own count if you care whether the
+ * tokens you stopped reading were nonetheless generated and metered — they
+ * were. See README.md, "What `break` actually stops".
+ */
+export interface ChunkStream extends AsyncGenerator<ChatChunk, void, unknown> {
+  readonly nativeChunks: number;
+}
+
+/**
  * A gateway running in this process.
  *
  * Construction is INERT: no goroutines, no sockets (unless your configuration
@@ -305,7 +321,17 @@ export class Gateway implements Disposable {
    * the library and valid only for the duration of the callback, so it is copied
    * into a JS string there and never held as a pointer.
    */
-  async *stream(request: Record<string, unknown> | string): AsyncGenerator<ChatChunk, void, unknown> {
+  stream(request: Record<string, unknown> | string): ChunkStream {
+    const counter = { n: 0 };
+    const gen = this.#streamImpl(request, counter) as ChunkStream;
+    Object.defineProperty(gen, "nativeChunks", { get: () => counter.n, enumerable: true });
+    return gen;
+  }
+
+  async *#streamImpl(
+    request: Record<string, unknown> | string,
+    counter: { n: number },
+  ): AsyncGenerator<ChatChunk, void, unknown> {
     const lib = this.#lib;
     const h = this.#live();
     const body = typeof request === "string"
@@ -327,6 +353,7 @@ export class Gateway implements Disposable {
     const cb = new Deno.UnsafeCallback(
       { parameters: ["pointer", "pointer"], result: "i32" } as const,
       (chunkPtr: Deno.PointerValue): number => {
+        counter.n++;
         if (chunkPtr !== null && stop === 0) {
           try {
             queue.push(JSON.parse(Deno.UnsafePointerView.getCString(chunkPtr)) as ChatChunk);

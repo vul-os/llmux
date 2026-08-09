@@ -21,12 +21,22 @@ export interface StreamWorkerData {
   handle: bigint;
   /** The request body, already JSON-encoded and already carrying "stream": true. */
   request: string;
-  /** One Int32: non-zero means the consumer asked to stop. */
-  stopFlag: SharedArrayBuffer;
+  /**
+   * Two Int32s shared with the main thread:
+   *   [0] stop  — non-zero means the consumer asked to stop
+   *   [1] acks  — how many chunks the consumer has actually pulled
+   * The second one is the backpressure channel; see the wait loop below.
+   */
+  control: SharedArrayBuffer;
 }
 
-const { libPath, handle, request, stopFlag } = workerData as StreamWorkerData;
-const stop = new Int32Array(stopFlag);
+/** How far the library may run ahead of the consumer, in chunks. */
+const PREFETCH = 1;
+
+const { libPath, handle, request, control } = workerData as StreamWorkerData;
+const ctl = new Int32Array(control);
+const STOP = 0;
+const ACKS = 1;
 
 const { symbols } = dlopen(libPath, {
   llmux_free: { args: [FFIType.ptr], returns: FFIType.void },
@@ -42,12 +52,29 @@ const cstr = (s: string) => encoder.encode(s + "\0");
 // The callback runs on THIS thread, synchronously, inside llmux_stream — so no
 // `threadsafe: true` and no cross-thread marshalling is needed. That is what
 // ffi/ctest/smoke.c asserts with pthread_self(), rather than assuming it.
+let native = 0;
 const onChunk = new JSCallback(
   (chunkPtr: Pointer): number => {
     // chunk_json is owned by the library and valid only for this call. new
     // CString copies it, so nothing here outlives the return.
-    parentPort!.postMessage({ chunk: new CString(chunkPtr).toString() });
-    return Atomics.load(stop, 0);
+    native++;
+    parentPort!.postMessage({ chunk: new CString(chunkPtr).toString(), native });
+
+    // BACKPRESSURE. Without this the library runs to completion regardless of
+    // what the consumer does: postMessage is fire-and-forget, so a `break` after
+    // 3 chunks of a 10-chunk answer still generated and metered all 10 (measured
+    // — see README.md, "What `break` actually stops"). Blocking here until the
+    // consumer is at most PREFETCH chunks behind bounds the overrun at PREFETCH.
+    //
+    // Blocking is legal on this thread and only on this thread: Atomics.wait
+    // throws on a main thread, and this callback is running inside
+    // llmux_stream, which is already blocking the worker.
+    while (Atomics.load(ctl, STOP) === 0 && Atomics.load(ctl, ACKS) < native - PREFETCH) {
+      // A bounded wait, re-checking STOP each time, so a lost notify degrades
+      // into a 50 ms poll instead of a hang.
+      Atomics.wait(ctl, ACKS, Atomics.load(ctl, ACKS), 50);
+    }
+    return Atomics.load(ctl, STOP);
   },
   { args: [FFIType.ptr, FFIType.ptr], returns: FFIType.i32 },
 );
@@ -72,4 +99,4 @@ try {
   onChunk.close();
 }
 
-parentPort!.postMessage({ done: true, error: failure });
+parentPort!.postMessage({ done: true, error: failure, native });

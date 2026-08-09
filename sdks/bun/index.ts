@@ -168,6 +168,19 @@ export interface ChatChunk {
 export type Method = "chat" | "embed" | "models";
 
 /**
+ * What {@link Gateway.stream} returns: an async generator with one extra
+ * property.
+ *
+ * `nativeChunks` counts how many times the C callback actually fired, which is
+ * NOT the same as how many chunks you consumed. Compare the two after an early
+ * `break` if you care whether the tokens you stopped reading were nonetheless
+ * generated and metered. See README.md, "What `break` actually stops".
+ */
+export interface ChunkStream extends AsyncGenerator<ChatChunk, void, unknown> {
+  readonly nativeChunks: number;
+}
+
+/**
  * A gateway running in this process.
  *
  * Construction is INERT: no goroutines, no sockets (unless your configuration
@@ -265,15 +278,31 @@ export class Gateway implements AsyncDisposable {
    * a thread in the same process, so it dlopens the same already-loaded library
    * and llmux.h guarantees a handle is safe from several threads at once.
    */
-  async *stream(
+  stream(request: Record<string, unknown> | string): ChunkStream {
+    const counter = { n: 0 };
+    const gen = this.#streamImpl(request, counter) as ChunkStream;
+    Object.defineProperty(gen, "nativeChunks", { get: () => counter.n, enumerable: true });
+    return gen;
+  }
+
+  async *#streamImpl(
     request: Record<string, unknown> | string,
+    counter: { n: number },
   ): AsyncGenerator<ChatChunk, void, unknown> {
     const handle = this.#live();
     const body = typeof request === "string" ? request : JSON.stringify({ ...request, stream: true });
-    const stopFlag = new SharedArrayBuffer(4);
-    const stop = new Int32Array(stopFlag);
+    // [0] stop, [1] acks — see stream-worker.ts.
+    const control = new SharedArrayBuffer(8);
+    const ctl = new Int32Array(control);
+    const STOP = 0;
+    const ACKS = 1;
+    /** Tell the worker the consumer has pulled `n` chunks, releasing its wait. */
+    const ack = (n: number) => {
+      Atomics.store(ctl, ACKS, n);
+      Atomics.notify(ctl, ACKS);
+    };
 
-    const data: StreamWorkerData = { libPath: this.#libPath, handle, request: body, stopFlag };
+    const data: StreamWorkerData = { libPath: this.#libPath, handle, request: body, control };
     const worker = new Worker(new URL("./stream-worker.ts", import.meta.url).href, { workerData: data });
 
     const queue: ChatChunk[] = [];
@@ -286,13 +315,15 @@ export class Gateway implements AsyncDisposable {
       w?.();
     };
 
-    worker.on("message", (m: { chunk?: string; done?: boolean; error?: string | null }) => {
+    worker.on("message", (m: { chunk?: string; done?: boolean; error?: string | null; native?: number }) => {
+      if (typeof m.native === "number") counter.n = m.native;
       if (typeof m.chunk === "string") {
         try {
           queue.push(JSON.parse(m.chunk) as ChatChunk);
         } catch {
           failure = new Error("llmux sent a chunk that is not JSON");
-          Atomics.store(stop, 0, 1);
+          Atomics.store(ctl, STOP, 1);
+          Atomics.notify(ctl, ACKS);
         }
       } else if (m.done) {
         if (m.error) failure = new Error(m.error);
@@ -310,10 +341,14 @@ export class Gateway implements AsyncDisposable {
       ping();
     });
 
+    let pulled = 0;
     try {
       for (;;) {
         const head = queue.shift();
         if (head !== undefined) {
+          // Ack BEFORE yielding: the consumer's body may take a while, and the
+          // point is to keep the library one chunk ahead, not zero.
+          ack(++pulled);
           yield head;
           continue;
         }
@@ -327,7 +362,8 @@ export class Gateway implements AsyncDisposable {
       // Reached on `break` and `throw` too. Ask llmux to stop before tearing the
       // worker down, so the native call unwinds and closes its JSCallback on its
       // own thread rather than being killed mid-stream.
-      Atomics.store(stop, 0, 1);
+      Atomics.store(ctl, STOP, 1);
+      Atomics.notify(ctl, ACKS); // release the worker if it is parked in the wait loop
       if (!done) {
         await new Promise<void>((resolve) => {
           const check = () => (done ? resolve() : (wake = check));

@@ -22,7 +22,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 async function startUpstream(): Promise<{ config: string; stop: () => void }> {
   const child = spawn(process.execPath, [path.join(here, "fake-upstream.mjs")], {
     stdio: ["ignore", "pipe", "inherit"],
-    env: { ...process.env, FAKE_TEXT: "the quick brown fox jumps over the lazy dog", FAKE_DELAY_MS: "40" },
+    env: { ...process.env, FAKE_TEXT: "the quick brown fox jumps over the lazy dog", FAKE_DELAY_MS: process.env.FAKE_DELAY_MS ?? "40" },
   });
   const rl = readline.createInterface({ input: child.stdout });
   const first = await rl[Symbol.asyncIterator]().next();
@@ -73,9 +73,15 @@ async function main(): Promise<void> {
     // Returning false returns non-zero from the C callback. llmux stops at the
     // next chunk boundary, llmux_stream still returns 0, and no error is raised:
     // you decided to stop, so llmux does not hand your own decision back to you.
+    // The callback form cannot overrun. There is no queue between the library
+    // and you, so the number of chunks the C callback delivered IS the number
+    // your callback saw — Node's one advantage over the buffered async
+    // iterators the Deno and Bun SDKs expose. Both numbers are printed so the
+    // claim is checkable rather than asserted.
     let seen = 0;
-    gw.stream({ model: "demo", messages: [{ role: "user", content: "hello" }] }, () => ++seen < 3);
-    console.log(`break       stopped after ${String(seen)} chunks, no error raised\n`);
+    const delivered2 = gw.stream({ model: "demo", messages: [{ role: "user", content: "hello" }] }, () => ++seen < 3);
+    console.log(`break       consumed ${String(seen)} chunks; the C callback fired ${String(delivered2)}x (10 = the whole answer)`);
+    console.log("            no error raised — stopping is your decision, not a failure\n");
 
     // ---- the error path ----------------------------------------------------
     try {

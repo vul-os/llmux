@@ -19,7 +19,7 @@ async function startUpstream(): Promise<{ config: string; stop: () => void }> {
     [process.execPath, "run", new URL("./fake-upstream.mjs", import.meta.url).pathname],
     {
       stdout: "pipe",
-      env: { ...process.env, FAKE_TEXT: "the quick brown fox jumps over the lazy dog", FAKE_DELAY_MS: "40" },
+      env: { ...process.env, FAKE_TEXT: "the quick brown fox jumps over the lazy dog", FAKE_DELAY_MS: process.env.FAKE_DELAY_MS ?? "40" },
     },
   );
   const first = await child.stdout.getReader().read();
@@ -80,12 +80,15 @@ try {
   // The generator's finally block raises the shared stop flag, the C callback
   // returns it, and llmux stops at the next chunk boundary. llmux_stream still
   // returns 0: stopping was your decision, not a failure.
+  // MEASURE the overrun rather than assuming cancellation is instant.
   let seen = 0;
-  for await (const chunk of gw.stream({ model: "demo", messages: [{ role: "user", content: "hello" }] })) {
+  const partial = gw.stream({ model: "demo", messages: [{ role: "user", content: "hello" }] });
+  for await (const chunk of partial) {
     void chunk;
     if (++seen === 3) break;
   }
-  console.log(`break       stopped after ${seen} chunks, no error raised\n`);
+  console.log(`break       consumed ${seen} chunks; the C callback fired ${partial.nativeChunks}x (10 = the whole answer)`);
+  console.log("            no error raised — stopping is your decision, not a failure\n");
 
   // ---- the error path ---------------------------------------------------------
   try {

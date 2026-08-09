@@ -15,7 +15,7 @@ before you choose:
 
 - `gw.stream(...)` is a genuine async iterator and does **not** stall the event
   loop. It runs `llmux_stream` on a `node:worker_threads` Worker and posts each
-  chunk back. Measured: 294 event-loop ticks of a 1 ms timer across a 10-chunk
+  chunk back. Measured: 171 event-loop ticks of a 1 ms timer across a 10-chunk
   stream.
 - `gw.call(...)` **does** stall it, for the entire upstream round trip.
   `bun:ffi` has no asynchronous call mode — there is no `nonblocking` option on
@@ -108,16 +108,17 @@ chat         "the quick brown fox jumps over the lazy dog"
              blocked the event loop for 373 ms; timer fired 0x
 
 stream      the quick brown fox jumps over the lazy dog
-             10 chunks, event loop ticked 294x during the stream
+             10 chunks, event loop ticked 171x during the stream
 
-break       stopped after 3 chunks, no error raised
+break       consumed 3 chunks; the C callback fired 4x (10 = the whole answer)
+            no error raised — stopping is your decision, not a failure
 
 error       no route for model "no-such-model" (providers: fake)
 stream:true llmux: "stream": true is not valid for llmux_call; use llmux_stream
 closed      llmux gateway is closed
 ```
 
-Those two tick counts, `0x` and `294x`, are the argument for reading the
+Those two tick counts, `0x` and `171x`, are the argument for reading the
 "which one" section above rather than skipping it.
 
 No API key and no network: the example spawns
@@ -170,6 +171,50 @@ error       HTTP 404 {"error":{"message":"no route for model \"no-such-model\" (
 ```
 
 (llmux's own log lines are interleaved with that on a real run and are cut here.)
+
+---
+
+## What `break` actually stops
+
+A wrapper that turns a native callback into an async iterator has a failure mode
+that looks like success: the consumer stops early, the loop exits, everything
+looks cancelled — and the library ran to completion anyway, generating and
+billing tokens nobody read. It was found in two other bindings in this suite, so
+it is measured here rather than assumed.
+
+`gw.stream(...)` exposes `nativeChunks`, the number of times the C callback
+actually fired. The example breaks after 3 chunks of a 10-chunk answer and
+prints both numbers. Measured on Bun 1.3.14, darwin/arm64:
+
+| upstream pace | consumed | C callback fired |
+|---|---|---|
+| 40 ms/chunk, no backpressure | 3 | 4 |
+| as fast as the socket allows, **no backpressure** | 3 | **10 — the entire answer** |
+| 40 ms/chunk, with backpressure | 3 | **4** |
+| as fast as the socket allows, with backpressure | 3 | **5** |
+
+The middle row is the bug, reproduced. `postMessage` from the worker is
+fire-and-forget, so with a fast upstream the worker ran the whole completion
+before the main thread got round to breaking — a `take(3)` that silently paid
+for ten chunks.
+
+The fix is in [`stream-worker.ts`](stream-worker.ts): a second Int32 in the
+shared control block counts chunks the consumer has actually pulled, and the
+callback blocks in `Atomics.wait` until it is no more than one chunk ahead.
+Blocking there is legal precisely because it is the worker thread — `Atomics.wait`
+throws on a main thread — and that thread is already parked inside
+`llmux_stream`. The wait is bounded at 50 ms per iteration and re-checks the stop
+flag, so a lost notify degrades to a poll instead of a hang.
+
+It costs something, and the cost should be stated: against an upstream with no
+delay at all, backpressure took the full 10-chunk stream from 294 event-loop
+ticks to 16, because the library now waits for the loop between chunks. Against
+a realistic 40 ms/chunk upstream it made no measurable difference (318 ticks).
+A real model is far slower than either fixture.
+
+The residue is one chunk in flight — `llmux_stream` can only notice the stop
+flag at the *next* chunk boundary, which the header says plainly. Tokens already
+served are metered either way.
 
 ---
 

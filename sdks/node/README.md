@@ -134,12 +134,13 @@ handle     1
 
 models       anthropic/claude-3-5-haiku, google/gemini-1.5-flash, deepseek/deepseek-chat, openai/gpt-4o, openai/gpt-4o-mini, anthropic/claude-3-5-sonnet, google/gemini-1.5-pro
 chat         "the quick brown fox jumps over the lazy dog"
-             blocked the event loop for 375 ms; timer fired 0x
+             blocked the event loop for 380 ms; timer fired 0x
 
 stream      the quick brown fox jumps over the lazy dog
              10 chunks
 
-break       stopped after 3 chunks, no error raised
+break       consumed 3 chunks; the C callback fired 3x (10 = the whole answer)
+            no error raised — stopping is your decision, not a failure
 
 error       no route for model "no-such-model" (providers: fake)
 stream:true llmux: "stream": true is not valid for llmux_call; use llmux_stream
@@ -149,7 +150,7 @@ closed      llmux gateway is closed
 The example needs no API key and no network: it spawns
 [`examples/fake-upstream.mjs`](examples/fake-upstream.mjs), a 70-line
 OpenAI-compatible fixture that prints the llmux config routing `demo` at itself.
-`FAKE_DELAY_MS=40` makes it answer at a realistic pace, which is what the "375
+`FAKE_DELAY_MS=40` makes it answer at a realistic pace, which is what the "380
 ms, 0 ticks" line above is measuring.
 
 ---
@@ -232,6 +233,35 @@ peer dependency** so the sidecar path installs with no native code at all.
 
 The cost of the dependency is real and worth naming: koffi is native code
 running in your process, and a bug in it is a segfault, not an exception.
+
+---
+
+## What `break` actually stops
+
+A wrapper that turns a native callback into an async iterator has a failure mode
+that looks like success: the consumer stops early, the loop exits, everything
+looks cancelled — and the library ran to completion anyway, generating and
+billing tokens nobody read. It was found in two other bindings in this suite, so
+it is measured here rather than assumed.
+
+`gw.stream(...)` returns the number of chunks the C callback delivered. The
+example breaks after 3 chunks of a 10-chunk answer and
+prints both numbers. Measured on Node v24.12.0, darwin/arm64:
+
+| upstream pace | consumed | C callback fired |
+|---|---|---|
+| 40 ms/chunk | 3 | **3** |
+| as fast as the socket allows | 3 | **3** |
+
+Node's binding cannot have this bug, and this is the one place where being
+forced into a callback API is an advantage: there is no queue between the
+library and your code, so the C callback's return value *is* your callback's
+return value. `false` stops the stream on the very next boundary, and the two
+counts are equal by construction rather than by tuning.
+
+The residue is one chunk in flight — `llmux_stream` can only notice the stop
+flag at the *next* chunk boundary, which the header says plainly. Tokens already
+served are metered either way.
 
 ---
 

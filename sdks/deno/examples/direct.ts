@@ -17,7 +17,10 @@ const out = (s: string) => Deno.stdout.writeSync(enc.encode(s));
 async function startUpstream(): Promise<{ config: string; stop: () => void }> {
   const child = new Deno.Command(Deno.execPath(), {
     args: ["run", "--allow-net", "--allow-env", new URL("./fake-upstream.mjs", import.meta.url).pathname],
-    env: { FAKE_TEXT: "the quick brown fox jumps over the lazy dog", FAKE_DELAY_MS: "40" },
+    env: {
+      FAKE_TEXT: "the quick brown fox jumps over the lazy dog",
+      FAKE_DELAY_MS: Deno.env.get("FAKE_DELAY_MS") ?? "40",
+    },
     stdout: "piped",
   }).spawn();
   const reader = child.stdout.getReader();
@@ -82,12 +85,19 @@ try {
   // The generator's finally block sets the stop flag, so the C callback returns
   // non-zero and llmux stops at the next chunk boundary. llmux_stream still
   // returns 0: stopping was your decision, not a failure.
+  // MEASURE the overrun rather than assuming cancellation is instant: nothing
+  // back-pressures llmux, so chunks that arrived before the stop flag was set
+  // were generated and metered whether or not this loop read them.
   let seen = 0;
-  for await (const chunk of gw.stream({ model: "demo", messages: [{ role: "user", content: "hello" }] })) {
+  const partial = gw.stream({ model: "demo", messages: [{ role: "user", content: "hello" }] });
+  for await (const chunk of partial) {
     void chunk;
     if (++seen === 3) break;
   }
-  console.log(`break       stopped after ${seen} chunks, no error raised\n`);
+  console.log(
+    `break       consumed ${seen} chunks; the C callback fired ${partial.nativeChunks}x (10 = the whole answer)`,
+  );
+  console.log(`            no error raised — stopping is your decision, not a failure\n`);
 
   // ---- the error path -------------------------------------------------------
   try {
