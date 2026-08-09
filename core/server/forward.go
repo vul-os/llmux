@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/openai"
 	"github.com/vul-os/llmux/core/provider"
 )
@@ -51,14 +52,14 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 		writeError(w, http.StatusForbidden, openai.NewError("model "+model+" not allowed for this key", "invalid_request_error", "model_not_allowed"))
 		return
 	}
-	res, err := s.router.Resolve(model)
+	res, err := s.gw.Router().Resolve(model)
 	if err != nil {
 		writeError(w, http.StatusNotFound, openai.NewError(err.Error(), "invalid_request_error", "model_not_found"))
 		return
 	}
 	// Fail closed: never serve a metered request on a budgeted key for a model we
 	// cannot price (see unmeterableBudgeted) — uncounted spend would evade budget.
-	if s.unmeterableBudgeted(r.Context(), model, res.Primary.Provider.Name()) {
+	if s.gw.UnmeterableBudgeted(r.Context(), model, res.Primary.Provider.Name()) {
 		writeUnmeterable(w, model)
 		return
 	}
@@ -92,8 +93,8 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 		Method: http.MethodPost, Suffix: suffix, Body: body, ContentType: "application/json",
 	})
 	if err != nil {
-		s.metrics.incUpstreamErr()
-		writeProviderError(w, err)
+		s.gw.Metrics().IncUpstreamErr()
+		s.writeProviderError(w, err)
 		return
 	}
 	defer fr.Body.Close()
@@ -122,10 +123,10 @@ func (s *Server) handleForward(w http.ResponseWriter, r *http.Request, suffix st
 			usage = &openai.Usage{}
 		}
 	}
-	s.attachCost(model, t.Provider.Name(), usage)
+	s.gw.AttachCost(model, t.Provider.Name(), usage)
 	meterCtx := withBYOK(r.Context(), byok)
-	s.recordSpend(meterCtx, usage)
-	s.logUsage(meterCtx, model, stream, false, usage)
+	s.gw.RecordSpend(meterCtx, usage)
+	s.gw.LogUsage(meterCtx, model, stream, false, usage)
 }
 
 // isStreamRequest best-effort reports whether the request body asked to stream.
@@ -207,8 +208,8 @@ func copyForwardMetered(w http.ResponseWriter, fr *provider.ForwardResponse) (*o
 // byte count — so large forwards are metered rather than silently billed as
 // cost=0. A real usage object, when parsed, always wins.
 func estimateForwardUsage(reqRaw []byte, servedBytes int) *openai.Usage {
-	prompt := charsToTokens(promptCharsFromBody(reqRaw))
-	completion := charsToTokens(servedBytes)
+	prompt := gateway.CharsToTokens(promptCharsFromBody(reqRaw))
+	completion := gateway.CharsToTokens(servedBytes)
 	return &openai.Usage{
 		PromptTokens:     prompt,
 		CompletionTokens: completion,

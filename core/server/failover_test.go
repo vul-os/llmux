@@ -170,7 +170,7 @@ func TestConcurrentChatRequestsRace(t *testing.T) {
 	}
 	s, _ := New(cfg)
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 	var wg sync.WaitGroup
 	const N = 100
 	for i := 0; i < N; i++ {
@@ -185,7 +185,7 @@ func TestConcurrentChatRequestsRace(t *testing.T) {
 		}(i)
 	}
 	wg.Wait()
-	if got := s.stats.snapshot()["total"].(Aggregate).Requests; got != N {
+	if got := s.gw.Stats().Snapshot()["total"].(Aggregate).Requests; got != N {
 		t.Fatalf("usage total requests=%d, want %d", got, N)
 	}
 }

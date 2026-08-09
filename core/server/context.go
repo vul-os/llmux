@@ -3,56 +3,26 @@ package server
 import (
 	"context"
 
+	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/keys"
 )
 
-type ctxKey int
-
-const (
-	keyCtxKey ctxKey = iota
-	accountCtxKey
-	byokCtxKey
-)
+// The request-context accessors live in core/gateway, because the gateway's
+// dispatch paths read them and an embedding host (which never touches this
+// package) writes them via Gateway.Authorize. The HTTP shell's auth middleware
+// writes the same values, so both entry points converge. These are thin
+// aliases so the handlers read the same as they always did.
 
 // withKey attaches an authenticated virtual key to the context.
-func withKey(ctx context.Context, k *keys.Key) context.Context {
-	return context.WithValue(ctx, keyCtxKey, k)
-}
+func withKey(ctx context.Context, k *keys.Key) context.Context { return gateway.WithKey(ctx, k) }
 
-// withAccount attaches the resolved Vulos account id to the context, so usage
-// can be attributed to the account (not just the key name).
+// withAccount attaches the resolved Vulos account id to the context.
 func withAccount(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, accountCtxKey, id)
+	return gateway.WithAccount(ctx, id)
 }
 
-// accountFrom returns the resolved account id from context, or "".
-func accountFrom(ctx context.Context) string {
-	id, _ := ctx.Value(accountCtxKey).(string)
-	return id
-}
-
-// withBYOK marks the request as served via the account's own provider key
-// (BYOK), so it is recorded as unmetered and not billed to the control plane.
-func withBYOK(ctx context.Context, byok bool) context.Context {
-	return context.WithValue(ctx, byokCtxKey, byok)
-}
-
-// byokFrom reports whether the request was served via BYOK (unmetered).
-func byokFrom(ctx context.Context) bool {
-	b, _ := ctx.Value(byokCtxKey).(bool)
-	return b
-}
+// withBYOK marks the request as served via the account's own provider key.
+func withBYOK(ctx context.Context, byok bool) context.Context { return gateway.WithBYOK(ctx, byok) }
 
 // keyFrom returns the authenticated key from context, or nil.
-func keyFrom(ctx context.Context) *keys.Key {
-	k, _ := ctx.Value(keyCtxKey).(*keys.Key)
-	return k
-}
-
-// keyName returns the authenticated key's label, or "" if unauthenticated.
-func keyName(ctx context.Context) string {
-	if k := keyFrom(ctx); k != nil {
-		return k.Name
-	}
-	return ""
-}
+func keyFrom(ctx context.Context) *keys.Key { return gateway.KeyFrom(ctx) }

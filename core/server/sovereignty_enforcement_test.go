@@ -73,7 +73,7 @@ func TestSovereignBlocksEveryModalityRoute(t *testing.T) {
 		t.Fatalf("blocked modality routes must NOT reach the network; upstream hits=%d", n)
 	}
 	// One metric increment per blocked route.
-	if got := atomic.LoadInt64(&s.metrics.egressBlocked); got != int64(len(paths)) {
+	if got := s.gw.Metrics().EgressBlocked(); got != int64(len(paths)) {
 		t.Fatalf("egressBlocked = %d, want %d (one per blocked route)", got, len(paths))
 	}
 }
@@ -226,10 +226,10 @@ func TestSovereignBlocksSemanticCacheEmbedder(t *testing.T) {
 	}
 	// Policy: the local chat provider is allowed; the embed provider is a blocked
 	// external egress target (not opted in), even though its URL is loopback.
-	s.sovereign = sovereign.NewPolicy([]config.ProviderConfig{
+	s.SetSovereignPolicy(sovereign.NewPolicy([]config.ProviderConfig{
 		{Name: "localchat", BaseURL: chatUp.URL + "/v1"},               // loopback → local, allowed
 		{Name: "remoteembed", BaseURL: "https://api.embed.example/v1"}, // external, blocked
-	})
+	}))
 
 	// A normal chat request. With semantic caching on, the cache tries to embed
 	// the prompt on lookup (and would on store) — that embed must be blocked.
@@ -274,10 +274,10 @@ func TestSovereignSemanticCacheEmbedderOptInReaches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	s.sovereign = sovereign.NewPolicy([]config.ProviderConfig{
+	s.SetSovereignPolicy(sovereign.NewPolicy([]config.ProviderConfig{
 		{Name: "localchat", BaseURL: chatUp.URL + "/v1"},
 		{Name: "remoteembed", BaseURL: "https://api.embed.example/v1", AllowEgress: true}, // opted in
-	})
+	}))
 
 	resp := doChat(t, s, "chat-model")
 	if resp.StatusCode != http.StatusOK {
@@ -309,10 +309,10 @@ func buildFailoverServer(t *testing.T, localURL string) *Server {
 	}
 	// Policy: primary "remote" is a blocked external egress; "local" is the
 	// real loopback upstream and is allowed.
-	s.sovereign = sovereign.NewPolicy([]config.ProviderConfig{
+	s.SetSovereignPolicy(sovereign.NewPolicy([]config.ProviderConfig{
 		{Name: "remote", BaseURL: "https://api.remote.example/v1"}, // blocked
 		{Name: "local", BaseURL: localURL + "/v1"},                 // loopback → local, allowed
-	})
+	}))
 	return s
 }
 
@@ -329,10 +329,10 @@ func TestSovereignFailoverSkipsBlockedServesLocal(t *testing.T) {
 	s := buildFailoverServer(t, local.URL)
 
 	// Sanity: the policy says remote is blocked, local is allowed.
-	if d := s.sovereign.Check("remote"); d.Allowed {
+	if d := s.Sovereign().Check("remote"); d.Allowed {
 		t.Fatalf("remote should be blocked; got %+v", d)
 	}
-	if d := s.sovereign.Check("local"); !d.Allowed || d.Tier != sovereign.TierLocal {
+	if d := s.Sovereign().Check("local"); !d.Allowed || d.Tier != sovereign.TierLocal {
 		t.Fatalf("local should be allowed+local; got %+v", d)
 	}
 
@@ -369,10 +369,10 @@ func TestSovereignAllTargetsBlockedSurfaces403(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	// Both classified as blocked external egress regardless of the loopback URL.
-	s.sovereign = sovereign.NewPolicy([]config.ProviderConfig{
+	s.SetSovereignPolicy(sovereign.NewPolicy([]config.ProviderConfig{
 		{Name: "remote1", BaseURL: "https://api.a.example/v1"},
 		{Name: "remote2", BaseURL: "https://api.b.example/v1"},
-	})
+	}))
 
 	resp := doChat(t, s, "anything")
 	if resp.StatusCode != http.StatusForbidden {

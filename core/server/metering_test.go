@@ -29,7 +29,7 @@ func newMeteredServer(t *testing.T, up *httptest.Server) (*Server, *captureLogge
 		t.Fatalf("new server: %v", err)
 	}
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 	return s, cl
 }
 
@@ -333,7 +333,7 @@ func (f *failingWriter) Write(p []byte) (int, error) {
 // priceModel injects a unit price for a model so metering yields a non-zero cost.
 func priceModel(t *testing.T, s *Server, model string) {
 	t.Helper()
-	s.catalog.SetSource("test-"+model, 0, map[string]pricing.Price{
+	s.gw.Catalog().SetSource("test-"+model, 0, map[string]pricing.Price{
 		model: {Model: model, Provider: "openai", InputPerMTok: 1, OutputPerMTok: 1},
 	})
 }
@@ -362,7 +362,7 @@ func TestCacheHitNotBilled(t *testing.T) {
 	}
 	priceModel(t, s, "m")
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 
 	body := `{"model":"m","messages":[{"role":"user","content":"hi"}]}`
 
@@ -371,7 +371,7 @@ func TestCacheHitNotBilled(t *testing.T) {
 	if rec1.Code != 200 || rec1.Header().Get("X-LLMux-Cache") == "hit" {
 		t.Fatalf("first call should be a served miss: %d %q", rec1.Code, rec1.Header().Get("X-LLMux-Cache"))
 	}
-	spendAfterMiss := s.keys.Spend("sk-budget")
+	spendAfterMiss := s.gw.Keys().Spend("sk-budget")
 	if spendAfterMiss <= 0 {
 		t.Fatalf("first (miss) call must charge real spend, got %v", spendAfterMiss)
 	}
@@ -384,7 +384,7 @@ func TestCacheHitNotBilled(t *testing.T) {
 	if n := atomic.LoadInt32(&calls); n != 1 {
 		t.Fatalf("cache hit must not call the provider; upstream calls=%d", n)
 	}
-	if got := s.keys.Spend("sk-budget"); got != spendAfterMiss {
+	if got := s.gw.Keys().Spend("sk-budget"); got != spendAfterMiss {
 		t.Fatalf("cache hit must NOT be billed: spend went %v -> %v", spendAfterMiss, got)
 	}
 

@@ -115,7 +115,7 @@ func TestUsageLogged(t *testing.T) {
 	}
 	s, _ := New(cfg)
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 
 	post(s, `{"model":"openai/gpt-4o","messages":[]}`)
 	if len(cl.recs) != 1 {

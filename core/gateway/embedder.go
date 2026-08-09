@@ -1,4 +1,4 @@
-package server
+package gateway
 
 import (
 	"context"
@@ -11,10 +11,10 @@ import (
 	"github.com/vul-os/llmux/core/openai"
 )
 
-// serverEmbedder implements cache.Embedder by calling the gateway's own
+// gatewayEmbedder implements cache.Embedder by calling the gateway's own
 // embeddings route in-process (no HTTP hop, no auth). Used by the semantic cache.
-type serverEmbedder struct {
-	s     *Server
+type gatewayEmbedder struct {
+	g     *Gateway
 	model string
 }
 
@@ -28,13 +28,13 @@ type serverEmbedder struct {
 // dialing, so the cache can never become a sovereignty bypass. A blocked embed
 // model surfaces an error to the caller (semantic.go treats a lookup/store
 // embed error as a cache miss and proceeds), never a silent off-box call.
-func (e serverEmbedder) Embed(ctx context.Context, text string) ([]float64, error) {
-	res, err := e.s.router.Resolve(e.model)
+func (e gatewayEmbedder) Embed(ctx context.Context, text string) ([]float64, error) {
+	res, err := e.g.router.Resolve(e.model)
 	if err != nil {
 		return nil, err
 	}
 	t := res.Primary
-	if err := e.s.enforceSovereignty(t.Provider.Name()); err != nil {
+	if err := e.g.enforceSovereignty(t.Provider.Name()); err != nil {
 		return nil, err
 	}
 	input, _ := json.Marshal(text)
@@ -75,8 +75,8 @@ func cacheScope(ctx context.Context) string {
 // returns canonical prompt text (which gets embedded); for exact caching, a body
 // hash. The scope is prefixed in both modes so the isolation holds for the
 // semantic cache too.
-func (s *Server) cacheKeyFor(req *openai.ChatCompletionRequest, raw []byte, scope string) string {
-	if s.semantic {
+func (g *Gateway) cacheKeyFor(req *openai.ChatCompletionRequest, raw []byte, scope string) string {
+	if g.semantic {
 		return scope + "\x00" + canonicalText(req)
 	}
 	return scope + ":" + cache.KeyFor(raw)

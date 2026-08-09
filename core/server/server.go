@@ -1,16 +1,16 @@
-// Package server is the HTTP gateway: it exposes the OpenAI-compatible API and
-// dispatches to providers via the router. It speaks only canonical openai types.
+// Package server is the HTTP shell over core/gateway: it exposes the
+// OpenAI-compatible API, the admin endpoints and the embedded console, and
+// translates between HTTP and the in-process gateway. Every dispatch decision —
+// routing, retries, failover, sovereignty, BYOK, caching, metering — lives in
+// core/gateway; this package owns status codes, headers and wire framing.
 package server
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"net/http"
@@ -18,235 +18,65 @@ import (
 	"strings"
 	"time"
 
-	"github.com/redis/go-redis/v9"
-
-	"github.com/vul-os/llmux/core/cache"
 	"github.com/vul-os/llmux/core/config"
-	"github.com/vul-os/llmux/core/keys"
+	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/openai"
-	"github.com/vul-os/llmux/core/pricing"
 	"github.com/vul-os/llmux/core/provider"
 	"github.com/vul-os/llmux/core/providers"
-	"github.com/vul-os/llmux/core/router"
-	"github.com/vul-os/llmux/core/sovereign"
 )
 
-// Server is the llmux gateway.
-type Server struct {
-	cfg              *config.Config
-	registry         *provider.Registry
-	router           *router.Router
-	sovereign        *sovereign.Policy
-	keys             keys.Store
-	identity         Identity
-	budget           BudgetGate
-	byok             BYOKStore
-	externalIdentity bool
-	cache            cache.Cache
-	catalog          *pricing.Catalog
-	pricingSources   []pricing.Source
-	usage            UsageLogger
-	stats            *usageStats
-	metrics          *Metrics
-	log              *slog.Logger
-	popts            provider.Options
-	semantic         bool
-	mux              *http.ServeMux
+// Options configure the HTTP shell itself (not the gateway).
+type Options struct {
+	// UI mounts the embedded admin console at /ui. Default true — `llmux serve`
+	// keeps today's behaviour exactly. Set false for an API-only gateway; with
+	// the `noui` build tag the console is not compiled in at all and /ui serves
+	// a small JSON stub instead.
+	UI bool
 }
 
-// New builds a Server from config.
-func New(cfg *config.Config) (*Server, error) {
-	logger := newLogger(cfg.LogLevel)
-	// Per-gateway adapter options. These used to be package-level variables in
-	// core/provider that server.New MUTATED, so two gateways in one process
-	// silently corrupted each other; they are now owned by this gateway alone.
-	popts := provider.NewOptions()
-	// Bound non-streaming upstream response bodies (0 = unlimited).
-	popts.MaxResponseBytes = cfg.MaxResponseBytes
-	// Strip configured params before forwarding to OpenAI-shaped upstreams.
-	popts.DropParams = cfg.DropParams
+// DefaultOptions returns the sidecar defaults: the console on.
+func DefaultOptions() Options { return Options{UI: true} }
 
-	reg, err := providers.Build(cfg.Providers, popts, logger)
+// Server is the llmux HTTP gateway.
+type Server struct {
+	cfg   *config.Config
+	gw    *gateway.Gateway
+	opts  Options
+	log   *slog.Logger
+	popts provider.Options
+	mux   *http.ServeMux
+}
+
+// New builds a Server (and the Gateway underneath it) from config.
+func New(cfg *config.Config) (*Server, error) { return NewWithOptions(cfg, DefaultOptions()) }
+
+// NewWithOptions builds a Server from config with explicit shell options.
+func NewWithOptions(cfg *config.Config, opts Options) (*Server, error) {
+	gw, err := gateway.New(cfg)
 	if err != nil {
 		return nil, err
 	}
-	catalog := pricing.New()
-	// Warm start from the on-disk cache, if configured.
-	if cfg.Pricing.CatalogPath != "" {
-		if err := catalog.Load(cfg.Pricing.CatalogPath); err == nil {
-			log.Printf("llmux: loaded price cache from %s (%d models)", cfg.Pricing.CatalogPath, catalog.Len())
-		}
-	}
-	sources := buildPricingSources(cfg)
-	// Apply manual overrides synchronously so they take effect before first sync.
-	applyOverrides(catalog, cfg)
+	return NewWithGateway(gw, opts), nil
+}
 
-	// Optional shared Redis client (rate limiting + cache across replicas).
-	var rdb *redis.Client
-	if cfg.Redis != "" {
-		rdb = redis.NewClient(&redis.Options{Addr: cfg.Redis})
-		if err := rdb.Ping(context.Background()).Err(); err != nil {
-			return nil, fmt.Errorf("redis %s: %w", cfg.Redis, err)
-		}
-		log.Printf("llmux: redis connected (%s)", cfg.Redis)
-	}
-
-	// Choose the key store: Postgres (cross-replica) > file (persistent) > memory.
-	var keyStore keys.Store
-	switch {
-	case cfg.Postgres != "":
-		var lim keys.Limiter
-		if rdb != nil {
-			lim = keys.NewRedisLimiter(rdb)
-		}
-		pg, err := keys.NewPGStore(context.Background(), cfg.Postgres, cfg.PostgresSchema, cfg.Keys, lim)
-		if err != nil {
-			return nil, err
-		}
-		keyStore = pg
-		schema := cfg.PostgresSchema
-		if schema == "" {
-			schema = keys.DefaultSchema
-		}
-		log.Printf("llmux: keys/spend in Postgres (schema %s)", schema)
-	case cfg.KeyStorePath != "":
-		fs, err := keys.NewFileStore(cfg.Keys, cfg.KeyStorePath)
-		if err != nil {
-			return nil, err
-		}
-		keyStore = fs
-		log.Printf("llmux: persisting key spend to %s", cfg.KeyStorePath)
-	default:
-		keyStore = keys.NewMemStore(cfg.Keys)
-	}
-
-	// Sovereignty policy: classify every provider local vs egress and label the
-	// posture at startup. This is the enforcement source of truth for "nothing
-	// leaves the box unless you say so".
-	sov := sovereign.NewPolicy(cfg.Providers)
-	logSovereignty(sov)
-
+// NewWithGateway wraps an already-built Gateway in the HTTP shell. A host that
+// embeds llmux and ALSO wants the HTTP surface builds the gateway once and
+// shares it, rather than running two.
+func NewWithGateway(gw *gateway.Gateway, opts Options) *Server {
 	s := &Server{
-		cfg:            cfg,
-		registry:       reg,
-		router:         router.New(cfg.Routes, reg, catalog),
-		sovereign:      sov,
-		keys:           keyStore,
-		identity:       staticIdentity{keys: keyStore},
-		budget:         newStaticBudgetGate(keyStore),
-		catalog:        catalog,
-		pricingSources: sources,
-		usage:          NopUsageLogger{},
-		stats:          newUsageStats(),
-		metrics:        NewMetrics(),
-		log:            logger,
-		mux:            http.NewServeMux(),
-		popts:          popts,
-	}
-	ttl := time.Duration(cfg.Cache.TTLSeconds) * time.Second
-	switch {
-	case cfg.Cache.Semantic:
-		threshold := cfg.Cache.SimilarityThreshold
-		if threshold <= 0 {
-			threshold = 0.95
-		}
-		model := cfg.Cache.EmbeddingModel
-		s.cache = cache.NewSemanticCache(serverEmbedder{s: s, model: model}, threshold, cfg.Cache.MaxEntries, ttl)
-		s.semantic = true
-		log.Printf("llmux: semantic cache on (model=%q threshold=%.2f)", model, threshold)
-	case cfg.Cache.Enabled && rdb != nil:
-		s.cache = cache.NewRedisCache(rdb, ttl)
-		log.Printf("llmux: response cache in Redis")
-	case cfg.Cache.Enabled:
-		s.cache = cache.NewLRU(cfg.Cache.MaxEntries, ttl)
+		cfg:   gw.Config(),
+		gw:    gw,
+		opts:  opts,
+		log:   gw.Logger(),
+		popts: gw.ProviderOptions(),
+		mux:   http.NewServeMux(),
 	}
 	s.routes()
-	return s, nil
+	return s
 }
 
-// unmeterableBudgeted reports whether serving model on the primary route would be
-// an UNMETERABLE charge against a budget-enforcing key: a non-BYOK request whose
-// resolved model the catalog cannot price. attachCost/recordSpend would then
-// record $0, the key's spend would never rise, OverBudget would never trip, and a
-// budgeted key could burn unbounded real provider spend on the operator's central
-// keys — the same fail-open class as an unchecked budget on a store error
-// (hardened separately). Callers refuse PRE-FLIGHT so no upstream call happens.
-//
-// Unaffected (correctly return false): BYOK requests (unmetered by design — they
-// spend the account's own key), and keys with no budget (BudgetUSD<=0: nothing to
-// enforce, so a $0-logged unpriced request is acceptable and left as-is).
-func (s *Server) unmeterableBudgeted(ctx context.Context, model, primaryProvider string) bool {
-	if s.primaryBYOK(ctx, primaryProvider) {
-		return false
-	}
-	k := keyFrom(ctx)
-	if k == nil || k.BudgetUSD <= 0 {
-		return false
-	}
-	return !s.catalog.HasPrice(model, primaryProvider)
-}
-
-// writeUnmeterable refuses a request the metering guard flagged, with a stable
-// error code an operator can act on (price the model, or scope the key).
-func writeUnmeterable(w http.ResponseWriter, model string) {
-	writeError(w, http.StatusForbidden, openai.NewError(
-		"model "+model+" has no configured price; refusing to serve an unmeterable request against a budgeted key",
-		"invalid_request_error", "model_not_priced"))
-}
-
-// attachCost computes and attaches dollar cost to a usage record from the
-// catalog (route-aware on the provider actually used), unless a provider
-// already supplied it.
-func (s *Server) attachCost(model, provider string, usage *openai.Usage) {
-	if usage == nil || usage.Cost != nil {
-		return
-	}
-	if c := s.catalog.Cost(model, provider, usage); c != nil {
-		usage.Cost = c
-	}
-}
-
-// buildPricingSources assembles the ordered pricing sources from config.
-func buildPricingSources(cfg *config.Config) []pricing.Source {
-	var srcs []pricing.Source
-	for _, u := range cfg.Pricing.Sources {
-		srcs = append(srcs, pricing.SourceFromURL(u))
-	}
-	if cfg.Pricing.Azure {
-		srcs = append(srcs, pricing.NewAzureSource())
-	}
-	if cfg.Pricing.OverridePath != "" {
-		srcs = append(srcs, pricing.NewFileOverrideSource(cfg.Pricing.OverridePath))
-	} else if len(cfg.Pricing.Overrides) > 0 {
-		srcs = append(srcs, pricing.NewOverrideSource(convertOverrides(cfg.Pricing.Overrides)))
-	}
-	return srcs
-}
-
-// applyOverrides loads manual overrides into the catalog immediately.
-func applyOverrides(catalog *pricing.Catalog, cfg *config.Config) {
-	if cfg.Pricing.OverridePath != "" {
-		if p, err := pricing.NewFileOverrideSource(cfg.Pricing.OverridePath).Fetch(context.Background()); err == nil {
-			catalog.SetSource(pricing.SourceNameOverride, pricing.PriorityOverride, p)
-		} else {
-			log.Printf("llmux: override file: %v", err)
-		}
-	} else if len(cfg.Pricing.Overrides) > 0 {
-		catalog.SetSource(pricing.SourceNameOverride, pricing.PriorityOverride, convertOverrides(cfg.Pricing.Overrides))
-	}
-}
-
-func convertOverrides(m map[string]config.PriceOverride) map[string]pricing.Price {
-	out := make(map[string]pricing.Price, len(m))
-	for id, o := range m {
-		out[id] = pricing.Price{
-			Model: id, Provider: o.Provider,
-			InputPerMTok: o.InputPerMTok, OutputPerMTok: o.OutputPerMTok,
-			ContextWindow: o.ContextWindow, MaxOutput: o.MaxOutput, Capabilities: o.Capabilities,
-		}
-	}
-	return out
-}
+// Gateway returns the in-process gateway this shell dispatches to.
+func (s *Server) Gateway() *gateway.Gateway { return s.gw }
 
 func (s *Server) routes() {
 	s.mux.HandleFunc("GET /health", s.handleHealth)
@@ -267,18 +97,13 @@ func (s *Server) Handler() http.Handler {
 	return s.recoverMW(s.observeMW(s.metricsMW(s.authMW(s.mux))))
 }
 
-// Run starts listeners (TCP and/or unix socket) and blocks until ctx is done.
+// Run starts the gateway's background work, then the listeners (TCP and/or unix
+// socket), and blocks until ctx is done.
 func (s *Server) Run(ctx context.Context) error {
-	// Background price-catalog sync (best-effort; built-in/cached catalog meanwhile).
-	if len(s.pricingSources) > 0 {
-		syncer := pricing.NewSyncer(s.catalog, s.pricingSources,
-			time.Duration(s.cfg.Pricing.SyncIntervalMinutes)*time.Minute, s.cfg.Pricing.CatalogPath)
-		go syncer.Run(ctx)
-	}
-
-	// Persist key spend periodically when using the file-backed store.
-	if fs, ok := s.keys.(*keys.FileStore); ok {
-		go fs.StartFlusher(ctx, 5*time.Second)
+	// The sidecar opts into everything the library leaves off: price-catalog
+	// sync, spend flushing, the Redis connection check.
+	if err := s.gw.Start(ctx); err != nil {
+		return err
 	}
 
 	h := s.Handler()
@@ -296,13 +121,15 @@ func (s *Server) Run(ctx context.Context) error {
 		if s.keyless() {
 			switch {
 			case addrIsLoopback(s.cfg.Server.Addr):
-				log.Printf("llmux: WARNING: no master key set — running as an OPEN gateway on loopback (%s). "+
+				s.log.Warn("no master key set — running as an OPEN gateway on loopback. "+
 					"/admin and /metrics are UNAUTHENTICATED but reachable only from this machine. "+
-					"Set server.master_key (LLMUX_MASTER_KEY) before exposing a network address.", s.cfg.Server.Addr)
+					"Set server.master_key (LLMUX_MASTER_KEY) before exposing a network address.",
+					"addr", s.cfg.Server.Addr)
 			case s.cfg.Server.InsecureKeyless:
-				log.Printf("llmux: WARNING: no master key set and bound to a NON-loopback address (%s) with "+
-					"insecure_keyless opt-in — this is an OPEN proxy with UNAUTHENTICATED /admin and /metrics, "+
-					"reachable by anyone who can connect. Set server.master_key (LLMUX_MASTER_KEY) to protect it.", s.cfg.Server.Addr)
+				s.log.Warn("no master key set and bound to a NON-loopback address with insecure_keyless opt-in — "+
+					"this is an OPEN proxy with UNAUTHENTICATED /admin and /metrics, reachable by anyone who can "+
+					"connect. Set server.master_key (LLMUX_MASTER_KEY) to protect it.",
+					"addr", s.cfg.Server.Addr)
 			default:
 				return fmt.Errorf("refusing to start: no master key set (server.master_key / LLMUX_MASTER_KEY) "+
 					"and bound to a non-loopback address %q — this would be an OPEN proxy with unauthenticated "+
@@ -314,7 +141,7 @@ func (s *Server) Run(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		log.Printf("llmux: listening on http://%s", ln.Addr())
+		s.log.Info("listening", "url", "http://"+ln.Addr().String())
 		listeners = append(listeners, ln)
 	}
 	if s.cfg.Server.SocketPath != "" {
@@ -325,7 +152,7 @@ func (s *Server) Run(ctx context.Context) error {
 			return err
 		}
 		_ = os.Chmod(s.cfg.Server.SocketPath, 0o600) // owner-only
-		log.Printf("llmux: listening on unix://%s", s.cfg.Server.SocketPath)
+		s.log.Info("listening", "url", "unix://"+s.cfg.Server.SocketPath)
 		listeners = append(listeners, ln)
 	}
 	if len(listeners) == 0 {
@@ -343,7 +170,7 @@ func (s *Server) Run(ctx context.Context) error {
 
 	select {
 	case <-ctx.Done():
-		log.Printf("llmux: shutting down")
+		s.log.Info("shutting down")
 		shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		return httpSrv.Shutdown(shutCtx)
@@ -360,7 +187,7 @@ func (s *Server) recoverMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
 			if rec := recover(); rec != nil {
-				log.Printf("llmux: panic: %v", rec)
+				s.log.Error("panic serving request", "panic", rec, "path", r.URL.Path)
 				writeError(w, http.StatusInternalServerError,
 					openai.NewError("internal error", "internal_error", ""))
 			}
@@ -373,6 +200,9 @@ func (s *Server) recoverMW(next http.Handler) http.Handler {
 // the bearer token, enforces the per-key rate limit and budget, and attaches the
 // key to the request context. Otherwise it falls back to the master key, or to
 // open access (local sidecar mode) when neither is set.
+//
+// The token -> principal -> budget path itself is Gateway.Authorize, so an
+// in-process embedder and a network client go through exactly one check.
 func (s *Server) authMW(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Public: health and the embedded web app (the dashboard authenticates
@@ -404,51 +234,20 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 			return
 		}
 
-		if s.identityActive() {
-			// Resolve token -> account via the Identity seam. The standalone
-			// default is keys.Lookup (account id = key name); the cp adapter
-			// resolves against the control plane.
-			p, ok := s.identity.Resolve(r.Context(), token)
-			if !ok {
-				writeError(w, http.StatusUnauthorized,
-					openai.NewError("invalid api key", "invalid_request_error", "invalid_api_key"))
-				return
-			}
-			// Gate by the account's LLM budget via the BudgetGate seam. Static
-			// default = per-key budget (fail-closed on a store error). cp = central
-			// entitlements: last-known-good on a warm cache, and — by default — a
-			// bounded degraded RPM cap (not fully open) on a cold cache + cp outage,
-			// with explicit deny enforced. The gate may also place a per-account
-			// in-flight reservation (released after the request) and enforce a
-			// cp-side request-rate cap.
-			d := s.budget.Check(r.Context(), p)
-			if d.RateLimited {
-				releaseDecision(d)
-				writeError(w, http.StatusTooManyRequests,
-					openai.NewError(d.Reason, "rate_limit_error", "rate_limit_exceeded"))
-				return
-			}
-			if d.Denied {
-				releaseDecision(d)
-				writeError(w, http.StatusPaymentRequired,
-					openai.NewError(d.Reason, "insufficient_quota", "budget_exceeded"))
-				return
-			}
-			// The reservation (if any) is held for the request's lifetime and
-			// freed once it completes, so concurrent requests can't all pass on a
+		if s.gw.IdentityActive() {
+			// Resolve token -> account and gate by the account's LLM budget. The
+			// standalone default is keys.Lookup + the per-key budget (fail-closed on
+			// a store error); the cp adapter resolves against the control plane with
+			// last-known-good entitlements and a bounded degraded cap. The gate may
+			// also place a per-account in-flight reservation, released once the
+			// request completes, so concurrent requests can't all pass on a
 			// near-zero balance.
-			defer releaseDecision(d)
-			// Per-minute rate limiting for static keys (cp principals are
-			// rate-capped inside the gate above).
-			if p.Key != nil && !s.keys.Allow(token) {
-				writeError(w, http.StatusTooManyRequests,
-					openai.NewError("rate limit exceeded for key "+p.Key.Name, "rate_limit_error", "rate_limit_exceeded"))
+			ctx, release, err := s.gw.Authorize(r.Context(), token)
+			if err != nil {
+				writeAuthError(w, err)
 				return
 			}
-			ctx := withAccount(r.Context(), p.AccountID)
-			if p.Key != nil {
-				ctx = withKey(ctx, p.Key)
-			}
+			defer release()
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}
@@ -462,6 +261,24 @@ func (s *Server) authMW(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// writeAuthError maps a Gateway.Authorize failure onto its HTTP status: an
+// unknown token is 401, a rate cap is 429, an explicit budget denial is 402.
+func writeAuthError(w http.ResponseWriter, err error) {
+	var ae *gateway.AuthError
+	if errors.As(err, &ae) {
+		if ae.RateLimited {
+			writeError(w, http.StatusTooManyRequests,
+				openai.NewError(ae.Reason, "rate_limit_error", "rate_limit_exceeded"))
+			return
+		}
+		writeError(w, http.StatusPaymentRequired,
+			openai.NewError(ae.Reason, "insufficient_quota", "budget_exceeded"))
+		return
+	}
+	writeError(w, http.StatusUnauthorized,
+		openai.NewError("invalid api key", "invalid_request_error", "invalid_api_key"))
 }
 
 func bearer(r *http.Request) string {
@@ -491,7 +308,7 @@ func (s *Server) isAdmin(r *http.Request) bool {
 // key, no virtual keys, and no external (cp) identity. In that state every
 // request is served — an open proxy — which is only safe on loopback.
 func (s *Server) keyless() bool {
-	return s.cfg.Server.MasterKey == "" && !s.identityActive()
+	return s.cfg.Server.MasterKey == "" && !s.gw.IdentityActive()
 }
 
 // addrIsLoopback reports whether a listen address (host:port, ":port", or a bare
@@ -554,9 +371,10 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"status": "ok"})
 		return
 	}
+	sov := s.gw.Sovereign()
 	provs := make([]map[string]any, 0, len(s.cfg.Providers))
 	for _, p := range s.cfg.Providers {
-		d := s.sovereign.Check(p.Name)
+		d := sov.Check(p.Name)
 		provs = append(provs, map[string]any{
 			"name": p.Name, "type": string(p.Type), "stability": providers.Stability(p.Type),
 			// Sovereignty posture: which tier this provider runs in ("where your
@@ -570,24 +388,24 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		"providers": provs,
 		"sovereignty": map[string]any{
 			"default":        "local",
-			"tiers":          s.sovereign.TierSummary(),
-			"egress_allowed": s.sovereign.AllowedEgress(),
+			"tiers":          sov.TierSummary(),
+			"egress_allowed": sov.AllowedEgress(),
 		},
 	})
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
-	list := openai.ModelList{Object: "list", Data: s.catalog.Models()}
-	writeJSON(w, http.StatusOK, list)
+	writeJSON(w, http.StatusOK, s.gw.ModelList())
 }
 
 // handleCatalog exports the merged price catalog as open JSON — the community
 // can consume this directly, fresher than a PR-gated file.
 func (s *Server) handleCatalog(w http.ResponseWriter, r *http.Request) {
+	catalog := s.gw.Catalog()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"updated": s.catalog.Updated().UTC().Format(time.RFC3339),
-		"count":   s.catalog.Len(),
-		"prices":  s.catalog.Snapshot(),
+		"updated": catalog.Updated().UTC().Format(time.RFC3339),
+		"count":   catalog.Len(),
+		"prices":  catalog.Snapshot(),
 	})
 }
 
@@ -614,30 +432,20 @@ func writeRawJSON(w http.ResponseWriter, data []byte) {
 }
 
 // asProviderError extracts a *provider.Error from an error chain, or nil.
-func asProviderError(err error) *provider.Error {
-	var pe *provider.Error
-	if errors.As(err, &pe) {
-		return pe
-	}
-	return nil
-}
+func asProviderError(err error) *provider.Error { return gateway.AsProviderError(err) }
 
 // writeProviderError relays a provider failure with its upstream status/body.
 // Unexpected (non-provider) errors are logged server-side and returned generic,
 // so internal details (e.g. outbound URLs) are never echoed to clients.
-func writeProviderError(w http.ResponseWriter, err error) {
+func (s *Server) writeProviderError(w http.ResponseWriter, err error) {
 	if pe := asProviderError(err); pe != nil {
 		writeJSON(w, pe.Status(), pe.Body)
 		return
 	}
-	log.Printf("llmux: upstream error: %v", err)
+	s.log.Error("upstream error", "err", err)
 	writeError(w, http.StatusBadGateway,
 		openai.NewError("upstream request failed", "upstream_error", ""))
 }
 
 // genID returns an OpenAI-style identifier with the given prefix.
-func genID(prefix string) string {
-	var b [16]byte
-	_, _ = rand.Read(b[:])
-	return prefix + hex.EncodeToString(b[:])
-}
+func genID(prefix string) string { return gateway.GenID(prefix) }

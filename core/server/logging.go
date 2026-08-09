@@ -4,29 +4,18 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"os"
 	"time"
+
+	"github.com/vul-os/llmux/core/gateway"
 )
 
 type reqIDKey int
 
 const requestIDKey reqIDKey = 0
 
-// newLogger builds a slog logger at the configured level.
-func newLogger(level string) *slog.Logger {
-	var lv slog.Level
-	switch level {
-	case "debug":
-		lv = slog.LevelDebug
-	case "warn":
-		lv = slog.LevelWarn
-	case "error":
-		lv = slog.LevelError
-	default:
-		lv = slog.LevelInfo
-	}
-	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: lv}))
-}
+// newLogger builds a slog logger at the configured level. The gateway owns the
+// construction so a Server and its Gateway always log through one handler.
+func newLogger(level string) *slog.Logger { return gateway.NewLogger(level) }
 
 // observeMW assigns/propagates a request id (X-Request-ID) and emits a
 // structured access-log line per request. It wraps the response to capture

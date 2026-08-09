@@ -82,7 +82,7 @@ func newBYOKServer(t *testing.T, up *httptest.Server, account string, store BYOK
 	s.SetBudgetGate(stubBudget{})
 	s.SetBYOKStore(store)
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 	return s, cl
 }
 

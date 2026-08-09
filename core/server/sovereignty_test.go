@@ -59,7 +59,7 @@ func buildServer(t *testing.T, upURL string, egressPolicy *sovereign.Policy) *Se
 		t.Fatalf("New: %v", err)
 	}
 	if egressPolicy != nil {
-		s.sovereign = egressPolicy
+		s.SetSovereignPolicy(egressPolicy)
 	}
 	return s
 }
@@ -81,7 +81,7 @@ func TestSovereignLocalDefaultServes(t *testing.T) {
 
 	// Real policy from config: the loopback upstream classifies as local.
 	s := buildServer(t, up.URL, nil)
-	if d := s.sovereign.Check("mock"); d.Locality != sovereign.Local || !d.Allowed {
+	if d := s.Sovereign().Check("mock"); d.Locality != sovereign.Local || !d.Allowed {
 		t.Fatalf("loopback provider should be local+allowed; got %+v", d)
 	}
 	resp := doChat(t, s, "anything")
@@ -120,7 +120,7 @@ func TestSovereignBlocksEgressByDefault(t *testing.T) {
 	if n := atomic.LoadInt32(&hits); n != 0 {
 		t.Fatalf("blocked request must NOT reach the network; upstream hits=%d", n)
 	}
-	if atomic.LoadInt64(&s.metrics.egressBlocked) != 1 {
+	if s.gw.Metrics().EgressBlocked() != 1 {
 		t.Fatalf("blocked egress should increment the metric")
 	}
 }
@@ -161,7 +161,7 @@ func TestSovereignSovereignTierServesWithoutOptIn(t *testing.T) {
 	})
 	s := buildServer(t, up.URL, pol)
 
-	if d := s.sovereign.Check("mock"); d.Tier != sovereign.TierSovereign || !d.Allowed {
+	if d := s.Sovereign().Check("mock"); d.Tier != sovereign.TierSovereign || !d.Allowed {
 		t.Fatalf("sovereign provider should be allowed with no opt-in; got %+v", d)
 	}
 	resp := doChat(t, s, "anything")

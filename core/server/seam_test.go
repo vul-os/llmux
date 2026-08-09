@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/keys"
 )
 
@@ -38,21 +39,21 @@ func TestStandaloneIdentityUnchanged(t *testing.T) {
 	s := keyedServer(t, up, config.KeyConfig{Key: "sk-good", Name: "alice"})
 
 	// The default Identity is the static one.
-	if _, ok := s.identity.(staticIdentity); !ok {
-		t.Fatalf("default identity = %T, want staticIdentity", s.identity)
+	if _, ok := s.gw.Identity().(gateway.StaticIdentity); !ok {
+		t.Fatalf("default identity = %T, want gateway.StaticIdentity", s.gw.Identity())
 	}
-	if _, ok := s.budget.(*staticBudgetGate); !ok {
-		t.Fatalf("default budget = %T, want *staticBudgetGate", s.budget)
+	if _, ok := s.gw.BudgetGateOf().(*gateway.StaticBudgetGate); !ok {
+		t.Fatalf("default budget = %T, want *gateway.StaticBudgetGate", s.gw.BudgetGateOf())
 	}
 
-	p, ok := s.identity.Resolve(context.Background(), "sk-good")
+	p, ok := s.gw.Identity().Resolve(context.Background(), "sk-good")
 	if !ok {
 		t.Fatal("valid key did not resolve")
 	}
 	if p.AccountID != "alice" {
 		t.Fatalf("account id = %q, want key name 'alice'", p.AccountID)
 	}
-	if _, ok := s.identity.Resolve(context.Background(), "sk-bad"); ok {
+	if _, ok := s.gw.Identity().Resolve(context.Background(), "sk-bad"); ok {
 		t.Fatal("unknown key resolved")
 	}
 
@@ -80,8 +81,8 @@ func TestStandaloneBudgetDeny(t *testing.T) {
 	s := keyedServer(t, up, config.KeyConfig{Key: "sk-tight", Name: "bob", BudgetUSD: 0.0001})
 
 	// Push spend over the tiny budget.
-	s.keys.AddSpend("sk-tight", 1.0)
-	if d := s.budget.Check(context.Background(), Principal{Token: "sk-tight", AccountID: "bob"}); !d.Denied {
+	s.gw.Keys().AddSpend("sk-tight", 1.0)
+	if d := s.gw.BudgetGateOf().Check(context.Background(), Principal{Token: "sk-tight", AccountID: "bob"}); !d.Denied {
 		t.Fatal("expected over-budget deny")
 	}
 
@@ -99,11 +100,11 @@ func TestStandaloneBudgetDeny(t *testing.T) {
 // an in-flight reservation so that many concurrent requests near the budget
 // limit can't ALL pass the OverBudget check before any has recorded spend (which
 // previously let them overshoot BudgetUSD). With budget=0.10 and a per-request
-// hold of staticReservationHold (0.05), at most ceil(0.10/0.05)=2 requests can
+// hold of gateway.StaticReservationHold (0.05), at most ceil(0.10/0.05)=2 requests can
 // be admitted while none has yet recorded spend; the rest are denied.
 func TestStaticBudgetReservationBoundsConcurrency(t *testing.T) {
 	store := keys.NewMemStore([]config.KeyConfig{{Key: "sk", Name: "team", BudgetUSD: 0.10}})
-	g := newStaticBudgetGate(store)
+	g := gateway.NewStaticBudgetGate(store)
 	p := Principal{Token: "sk", AccountID: "team"}
 	if k, ok := store.Lookup("sk"); ok {
 		p.Key = k
@@ -137,7 +138,7 @@ func TestStaticBudgetReservationBoundsConcurrency(t *testing.T) {
 
 	// Without the reservation layer, all 50 would pass (spend is still 0). With
 	// it, the in-flight holds bound concurrent admits to the budget/hold ratio.
-	maxAllowed := int64(0.10/staticReservationHold) + 1 // small slack for float edge
+	maxAllowed := int64(0.10/gateway.StaticReservationHold) + 1 // small slack for float edge
 	if allowed > maxAllowed {
 		t.Fatalf("allowed=%d exceeds reservation bound (~%d); reservation not enforced", allowed, maxAllowed)
 	}

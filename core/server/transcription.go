@@ -76,7 +76,7 @@ func (s *Server) handleTranscription(w http.ResponseWriter, r *http.Request, suf
 		writeError(w, http.StatusForbidden, openai.NewError("model "+model+" not allowed for this key", "invalid_request_error", "model_not_allowed"))
 		return
 	}
-	res, err := s.router.Resolve(model)
+	res, err := s.gw.Router().Resolve(model)
 	if err != nil {
 		writeError(w, http.StatusNotFound, openai.NewError(err.Error(), "invalid_request_error", "model_not_found"))
 		return
@@ -85,7 +85,7 @@ func (s *Server) handleTranscription(w http.ResponseWriter, r *http.Request, suf
 	// cannot price (see unmeterableBudgeted) — uncounted audio spend would evade
 	// the budget. Transcription models are unpriced in the catalog today, so a
 	// budgeted key is refused here rather than burning unbounded upstream spend.
-	if s.unmeterableBudgeted(r.Context(), model, res.Primary.Provider.Name()) {
+	if s.gw.UnmeterableBudgeted(r.Context(), model, res.Primary.Provider.Name()) {
 		writeUnmeterable(w, model)
 		return
 	}
@@ -122,8 +122,8 @@ func (s *Server) handleTranscription(w http.ResponseWriter, r *http.Request, suf
 		Method: http.MethodPost, Suffix: suffix, Body: body, ContentType: contentType,
 	})
 	if err != nil {
-		s.metrics.incUpstreamErr()
-		writeProviderError(w, err)
+		s.gw.Metrics().IncUpstreamErr()
+		s.writeProviderError(w, err)
 		return
 	}
 	defer fr.Body.Close()
@@ -140,10 +140,10 @@ func (s *Server) handleTranscription(w http.ResponseWriter, r *http.Request, suf
 	if usage == nil {
 		usage = &openai.Usage{}
 	}
-	s.attachCost(model, t.Provider.Name(), usage)
+	s.gw.AttachCost(model, t.Provider.Name(), usage)
 	meterCtx := withBYOK(r.Context(), byok)
-	s.recordSpend(meterCtx, usage)
-	s.logUsage(meterCtx, model, false, false, usage)
+	s.gw.RecordSpend(meterCtx, usage)
+	s.gw.LogUsage(meterCtx, model, false, false, usage)
 }
 
 // scanMultipartModel reads ONLY the "model" form field from a multipart body,

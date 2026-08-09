@@ -39,7 +39,7 @@ func budgetedChatServer(t *testing.T, budget float64, hits *int32) (*Server, *ca
 		t.Fatalf("new server: %v", err)
 	}
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 	return s, cl
 }
 

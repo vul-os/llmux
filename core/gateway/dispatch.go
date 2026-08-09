@@ -1,4 +1,4 @@
-package server
+package gateway
 
 import (
 	"context"
@@ -24,14 +24,14 @@ func retryableStatus(code int) bool {
 
 // shouldFailover reports whether err is worth trying another target for.
 func shouldFailover(err error) bool {
-	if pe := asProviderError(err); pe != nil {
+	if pe := AsProviderError(err); pe != nil {
 		return retryableStatus(pe.Status())
 	}
 	return true // transport-level errors
 }
 
-func (s *Server) backoff(attempt int) time.Duration {
-	base := s.cfg.Retry.BackoffMS
+func (g *Gateway) backoff(attempt int) time.Duration {
+	base := g.cfg.Retry.BackoffMS
 	if base <= 0 {
 		base = 200
 	}
@@ -50,23 +50,23 @@ func (s *Server) backoff(attempt int) time.Duration {
 // BYOK is resolved PER TARGET: each provider needs the right key (an account's
 // OpenAI key must not be sent to Anthropic), and on failover the metering
 // decision follows the provider that actually served the request.
-func (s *Server) dispatchUnary(ctx context.Context, req *openai.ChatCompletionRequest, raw []byte, res router.Resolution) (*openai.ChatCompletionResponse, string, bool, error) {
+func (g *Gateway) dispatchUnary(ctx context.Context, req *openai.ChatCompletionRequest, raw []byte, res router.Resolution) (*openai.ChatCompletionResponse, string, bool, error) {
 	var lastErr error
 	for _, t := range res.All() {
 		// Sovereignty gate: never open a connection to a non-local provider the
 		// operator hasn't opted in. A blocked target is skipped so a local
 		// fallback can still serve; if every target is blocked the 403 surfaces.
-		if err := s.enforceSovereignty(t.Provider.Name()); err != nil {
+		if err := g.enforceSovereignty(t.Provider.Name()); err != nil {
 			lastErr = err
 			continue
 		}
-		callCtx, byok := s.resolveCredential(ctx, t.Provider.Name())
-		for attempt := 0; attempt <= s.cfg.Retry.MaxRetries; attempt++ {
+		callCtx, byok := g.resolveCredential(ctx, t.Provider.Name())
+		for attempt := 0; attempt <= g.cfg.Retry.MaxRetries; attempt++ {
 			if attempt > 0 {
 				select {
 				case <-ctx.Done():
 					return nil, "", false, ctx.Err()
-				case <-time.After(s.backoff(attempt - 1)):
+				case <-time.After(g.backoff(attempt - 1)):
 				}
 			}
 			resp, err := t.Provider.ChatCompletion(callCtx, req, t.Model, raw)

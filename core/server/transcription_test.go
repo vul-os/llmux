@@ -128,7 +128,7 @@ func transcribeServer(t *testing.T, upURL string, routes []config.RouteConfig, k
 		t.Fatalf("new server: %v", err)
 	}
 	cl := &captureLogger{}
-	s.usage = cl
+	s.SetUsageLogger(cl)
 	return s, cl
 }
 

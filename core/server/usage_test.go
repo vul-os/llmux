@@ -125,16 +125,18 @@ func TestJSONLUsageLoggerConcurrent(t *testing.T) {
 // TestSetUsageLoggerNilIgnored: SetUsageLogger(nil) must not blank the sink (a
 // nil sink would panic on the next request); the previous logger stays.
 func TestSetUsageLoggerNilIgnored(t *testing.T) {
-	s := &Server{usage: NopUsageLogger{}}
+	up := mockUpstream(t)
+	defer up.Close()
+	s := testServer(t, up, nil)
 	s.SetUsageLogger(nil)
-	if s.usage == nil {
+	if s.gw.UsageLoggerOf() == nil {
 		t.Fatal("SetUsageLogger(nil) must not clear the usage sink")
 	}
 	// A real logger replaces it.
 	var buf bytes.Buffer
 	jl := NewJSONLUsageLogger(&buf)
 	s.SetUsageLogger(jl)
-	if s.usage != jl {
+	if s.gw.UsageLoggerOf() != jl {
 		t.Fatal("SetUsageLogger(non-nil) must install the logger")
 	}
 }

@@ -71,9 +71,11 @@ var outboundDialSites = map[string]string{
 		"core never imports this package.",
 	"core/keys/pgstore.go": "UNGATED, OPT-IN: Postgres pool for virtual-key spend. Operator-configured DSN, " +
 		"no prompt content.",
-	"core/server/server.go": "UNGATED, OPT-IN: Redis client for shared rate limits + cache. Operator-configured " +
+	"core/gateway/gateway.go": "UNGATED, OPT-IN: Redis client for shared rate limits + cache. Operator-configured " +
 		"address. Cache VALUES can contain completions, so treat Redis as inside your sovereignty boundary. " +
-		"This is the only outbound construct allowed in core/server (see TestServerPackageNeverDialsDirectly).",
+		"This is the only outbound construct allowed in the gateway core or its HTTP shell (see " +
+		"TestServerPackageNeverDialsDirectly). It moved here from core/server when dispatch moved into " +
+		"core/gateway; the client is built lazily-connected and only Gateway.Start pings it.",
 
 	// UNGATED — clients OF a llmux gateway, not the gateway itself.
 	"cmd/llmux/cli.go":       "UNGATED, CLIENT: the CLI subcommands call a llmux gateway (default http://localhost:4000), not a provider.",
@@ -415,18 +417,32 @@ func exprString(e ast.Expr) string {
 	return "?"
 }
 
-// TestServerPackageNeverDialsDirectly keeps the gateway's own handlers on the
-// gated path. core/server may reach an LLM ONLY through a provider adapter; if
-// a handler ever builds its own http.Request, it would bypass the gate by
-// construction and no behavioral test would notice. The one allowed exception
-// (the Redis client in server.go) is named explicitly.
+// dispatchPackages are the packages that decide where a request goes: the
+// gateway core (core/gateway, which owns dispatch, retries and failover) and
+// the HTTP shell over it (core/server, which still owns the modality and
+// transcription forwards). Both are covered by the no-direct-dialing rule.
+var dispatchPackages = []string{"core/gateway/", "core/server/"}
+
+// TestServerPackageNeverDialsDirectly keeps the gateway's own dispatch on the
+// gated path. Neither core/gateway nor core/server may reach an LLM except
+// through a provider adapter; if either ever builds its own http.Request it
+// would bypass the gate by construction and no behavioral test would notice.
+// The one allowed exception (the Redis client in core/gateway/gateway.go) is
+// named explicitly.
 func TestServerPackageNeverDialsDirectly(t *testing.T) {
 	root := repoRoot(t)
-	allowed := map[string]bool{"core/server/server.go": true} // redis.NewClient only
+	allowed := map[string]bool{"core/gateway/gateway.go": true} // redis.NewClient only
 
 	checked := 0
 	for _, rel := range goFiles(t, root) {
-		if !strings.HasPrefix(rel, "core/server/") {
+		inScope := false
+		for _, pkg := range dispatchPackages {
+			if strings.HasPrefix(rel, pkg) {
+				inScope = true
+				break
+			}
+		}
+		if !inScope {
 			continue
 		}
 		checked++
@@ -445,11 +461,11 @@ func TestServerPackageNeverDialsDirectly(t *testing.T) {
 			}
 			continue
 		}
-		t.Errorf("BYPASS: %s opens an outbound connection (%s). core/server must dispatch through a provider "+
-			"adapter so Server.%s applies.", rel, strings.Join(constructs, ", "), gateFunc)
+		t.Errorf("BYPASS: %s opens an outbound connection (%s). Dispatch must go through a provider "+
+			"adapter so %s applies.", rel, strings.Join(constructs, ", "), gateFunc)
 	}
 	if checked == 0 {
-		t.Fatal("egress guard: scanned no core/server files — this test verified nothing")
+		t.Fatal("egress guard: scanned no core/gateway or core/server files — this test verified nothing")
 	}
-	t.Logf("egress guard: %d core/server files checked for direct dialing", checked)
+	t.Logf("egress guard: %d dispatch-package files checked for direct dialing", checked)
 }

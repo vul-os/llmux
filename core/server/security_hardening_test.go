@@ -155,7 +155,7 @@ func TestSecHardening_OverBudgetReturns402(t *testing.T) {
 		t.Fatalf("New: %v", err)
 	}
 	// Push spend past the budget.
-	s.keys.AddSpend("sk-poor", 5.0)
+	s.gw.Keys().AddSpend("sk-poor", 5.0)
 
 	rec := postKey(s, chatBody("m"), "sk-poor")
 	if rec.Code != http.StatusPaymentRequired {
