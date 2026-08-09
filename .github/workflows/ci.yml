@@ -106,6 +106,72 @@ jobs:
           go vet -tags noui ./...
           go test -tags noui -timeout 180s ./...
 
+  # embedtest/ is llmux's embeddability suite: it proves, from OUTSIDE the
+  # module, that core/gateway is usable as a library. It is a SEPARATE Go
+  # module (path github.com/vul-os/llmux-embedtest, deliberately outside the
+  # library's import-path prefix — see embedtest/doc.go), so the `go test ./...`
+  # in the `ci` job above does not descend into it and none of this would ever
+  # run without its own job.
+  #
+  # Everything here goes through scripts/go-test-gate.sh rather than plain
+  # `go test`, because `go test` exits 0 when every package reports
+  # [no test files] — the exact false green a nested module invites.
+  embeddability:
+    name: Embeddability guards (embedtest module)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: ShellCheck the test gate
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          bash -n scripts/go-test-gate.sh
+          shellcheck scripts/go-test-gate.sh
+
+      - name: Vet the embedtest module
+        run: go vet ./...
+        working-directory: embedtest
+
+      # --min is a floor on top-level tests that actually ran and passed (15 at
+      # the time of writing). Each --require names a guard whose disappearance
+      # must be a red build rather than a quieter run: the module wall the whole
+      # suite rests on, the zero-round-trip and zero-goroutine counts, the
+      # unnamed-provider-key check, the import-direction check, the no-UI-bytes
+      # scan and the noui size delta.
+      - name: Embeddability guards
+        run: |
+          ./scripts/go-test-gate.sh --dir embedtest --min 15 \
+            --require TestInternalWallRefusesAnInternalImport \
+            --require TestModulePathSitsOutsideTheLibraryPrefix \
+            --require TestLibraryChatThroughPublicAPI \
+            --require TestConstructionStartsNoGoroutines \
+            --require TestConstructionMakesZeroRoundTrips \
+            --require TestConstructionAdoptsNoUnnamedProviderKey \
+            --require TestGatewayDependsOnNeitherServerNorUI \
+            --require TestLibraryOnlyHostLinksNoUIBytes \
+            --require TestNoUIBuildDropsTheEmbedAndIsSmaller \
+            --require TestBothBuildStatesServeTheDocumentedUIResponse \
+            -- -count=1 ./...
+
+      # Exercise the gate's own refusal, in the spirit of the verify-script job
+      # above: run it against a package that HAS no tests and require it to
+      # fail. A gate that has quietly stopped failing is indistinguishable, from
+      # a green run, from one that works.
+      - name: Prove the gate still refuses a run that verified nothing
+        run: |
+          if ./scripts/go-test-gate.sh --dir embedtest --min 1 -- ./hosts/libonly; then
+            echo "::error::go-test-gate passed on a package with no tests — it is not a gate"
+            exit 1
+          fi
+          echo "go-test-gate correctly refused a run in which zero tests executed"
+
   # sdks/node is the only package.json in the tree with a `typescript`
   # dependency. Go build/test above never touch it — without this job the TS
   # SDK's type-aware ESLint config (strictTypeChecked) and `tsc --noEmit`
