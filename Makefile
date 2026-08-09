@@ -1,4 +1,4 @@
-.PHONY: build site-docs test cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
+.PHONY: build site-docs test test-embed cover cover-html record smoke vet fmt fmt-check verify-selftest gates run clean sdk-bins sdk-test docker tidy help
 
 BIN := dist/llmux
 PKG := ./cmd/llmux
@@ -15,6 +15,24 @@ build: ## Build the gateway binary (embeds web/ui.html)
 
 test: ## Run all Go tests (race)
 	go test -race ./...
+
+# embedtest is a separate module (github.com/vul-os/llmux-embedtest), so the
+# `test` target above never reaches it. It runs through the gate rather than
+# plain `go test` because `go test` exits 0 when nothing ran — see the
+# embeddability job in .github/workflows/ci.yml, which uses the same command.
+test-embed: ## Run the embeddability guards (separate module, gated)
+	./scripts/go-test-gate.sh --dir embedtest --min 15 \
+		--require TestInternalWallRefusesAnInternalImport \
+		--require TestModulePathSitsOutsideTheLibraryPrefix \
+		--require TestLibraryChatThroughPublicAPI \
+		--require TestConstructionStartsNoGoroutines \
+		--require TestConstructionMakesZeroRoundTrips \
+		--require TestConstructionAdoptsNoUnnamedProviderKey \
+		--require TestGatewayDependsOnNeitherServerNorUI \
+		--require TestLibraryOnlyHostLinksNoUIBytes \
+		--require TestNoUIBuildDropsTheEmbedAndIsSmaller \
+		--require TestBothBuildStatesServeTheDocumentedUIResponse \
+		-- -count=1 ./...
 
 cover: ## Coverage summary (set LLMUX_TEST_POSTGRES/LLMUX_TEST_REDIS to include integration)
 	go test -cover ./...
@@ -45,7 +63,7 @@ verify-selftest: ## Prove scripts/verify.sh still REFUSES every broken-release s
 # The artifact-level gates, in the order CI runs them. `test` is separate
 # because it needs no Node; these are the ones that catch a green build
 # shipping a wrong artifact — or shipping a right artifact nobody can check.
-gates: fmt-check verify-selftest ## Run the artifact gates (gofmt scope + release-verifier failure matrix)
+gates: fmt-check verify-selftest test-embed ## Run the artifact gates (gofmt scope + release-verifier matrix + embeddability)
 
 run: build ## Build and run on :4000
 	$(BIN)
