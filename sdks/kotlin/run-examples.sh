@@ -129,10 +129,39 @@ kotlinc -nowarn -jvm-target 22 \
 [ -f "${classes}/SidecarChatKt.class" ] || fail "SidecarChat.kt did not compile"
 echo "run-examples: compiled"
 
-kotlin_home="$(dirname "$(dirname "$(readlink -f "$(command -v kotlinc)" 2>/dev/null || command -v kotlinc)")")"
-stdlib="${kotlin_home}/libexec/lib/kotlin-stdlib.jar"
-[ -f "${stdlib}" ] || stdlib="${kotlin_home}/lib/kotlin-stdlib.jar"
-[ -f "${stdlib}" ] || fail "could not find kotlin-stdlib.jar under ${kotlin_home}"
+# kotlin-stdlib.jar has to be on the RUN classpath; kotlinc only puts it on the
+# compile one. Finding it means resolving through however kotlinc was installed
+# — a Homebrew symlink, an SDKMAN shim, or a plain unpacked distribution — so
+# each candidate is checked and the failure names every path tried.
+find_stdlib() {
+  local candidates=() c bin real
+  [ -n "${KOTLIN_HOME:-}" ] && candidates+=("${KOTLIN_HOME}/lib/kotlin-stdlib.jar")
+  bin="$(command -v kotlinc)"
+  real="${bin}"
+  # Follow the symlink chain by hand: `readlink -f` is GNU and is absent on
+  # some macOS versions, and a missing tool here would look like a missing jar.
+  while [ -L "${real}" ]; do
+    local target; target="$(readlink "${real}")"
+    case "${target}" in
+      /*) real="${target}" ;;
+      *)  real="$(dirname "${real}")/${target}" ;;
+    esac
+  done
+  for c in "$(dirname "$(dirname "${real}")")" "$(dirname "$(dirname "${bin}")")"; do
+    candidates+=("${c}/lib/kotlin-stdlib.jar" "${c}/libexec/lib/kotlin-stdlib.jar")
+  done
+  if command -v brew >/dev/null 2>&1; then
+    candidates+=("$(brew --prefix kotlin 2>/dev/null)/libexec/lib/kotlin-stdlib.jar")
+  fi
+  for c in "${candidates[@]}"; do
+    if [ -f "${c}" ]; then echo "${c}"; return 0; fi
+  done
+  printf 'run-examples: FAIL — could not find kotlin-stdlib.jar. Tried:\n' >&2
+  printf '  %s\n' "${candidates[@]}" >&2
+  printf 'Set KOTLIN_HOME to the Kotlin distribution root.\n' >&2
+  exit 1
+}
+stdlib="$(find_stdlib)"
 
 cp_run="${classes}:${coroutines}:${stdlib}"
 status=0
