@@ -15,6 +15,36 @@ make run        # build and run on :4000
 make docker     # build the Docker image
 ```
 
+### Building without the console (`noui`)
+
+The admin console is optional in two independent, easily-confused ways:
+
+- **`server.Options{UI: bool}`** (default `true`) is a *runtime* choice made by
+  whatever Go program constructs the `*server.Server` — it decides whether a
+  running server *mounts* `/ui`. The stock `cmd/llmux` binary always uses the
+  default (`UI: true`) and has no flag to change it. Setting it `false` 404s
+  every `/ui*` path, but does **not** shrink the binary: `core/server` imports
+  `web/` unconditionally, so `go:embed` still compiles `ui.html` in either way.
+- **`-tags noui`** is a *build-time* choice. It compiles out `web/ui.html` and
+  the Go-dependency notices file entirely: `webui.Enabled()` reports `false`,
+  `HTML()`/`Licenses()` return `nil`, and `/ui*` serves a small JSON stub saying
+  the console was not built in, rather than 404ing (which reads as "wrong
+  URL") or serving nothing.
+
+```bash
+go build -o dist/llmux ./cmd/llmux                    # console compiled in (default)
+go build -tags noui -o dist/llmux-noui ./cmd/llmux    # console compiled out
+```
+
+Measured in this checkout (darwin/arm64, go1.25.12): `./cmd/llmux` is
+**17,949,410 bytes** with the console, **17,916,098 bytes** with `-tags noui` —
+a **33,312-byte** difference, matching `web/ui.html` (21,509 bytes) plus
+`web/THIRD-PARTY-NOTICES-GO.txt` (15,142 bytes). A binary that imports only
+`core/gateway` (no `core/server`, no HTTP surface at all) never links `web/` in
+the first place, tag or no tag — see
+[Architecture → llmux as a library](architecture.md#llmux-as-a-library) for
+that comparison and the exact numbers.
+
 ## Testing
 
 ```bash
