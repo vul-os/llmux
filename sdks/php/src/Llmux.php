@@ -245,8 +245,9 @@ final class Llmux
         $ctx = stream_context_create(['http' => ['timeout' => 1, 'ignore_errors' => true]]);
         while (microtime(true) < $deadline) {
             $body = @file_get_contents($base . '/health', false, $ctx);
-            if ($body !== false && isset($http_response_header)) {
-                $status = self::parseStatus($http_response_header);
+            $headers = self::lastResponseHeaders($http_response_header ?? null);
+            if ($body !== false && $headers !== null) {
+                $status = self::parseStatus($headers);
                 if ($status === 200) {
                     return;
                 }
@@ -257,6 +258,23 @@ final class Llmux
             usleep(50_000);
         }
         throw new LlmuxException("llmux did not become healthy within {$timeout}s: {$last}");
+    }
+
+    /**
+     * PHP 8.4 deprecated the magic locally-scoped $http_response_header in
+     * favour of http_get_last_response_headers(). Support both so the SDK is
+     * warning-free on 8.4+ and still works on the 7.4 floor in composer.json.
+     *
+     * @param array<int,string>|null $magic
+     * @return array<int,string>|null
+     */
+    private static function lastResponseHeaders(?array $magic): ?array
+    {
+        if (\function_exists('http_get_last_response_headers')) {
+            return \http_get_last_response_headers();
+        }
+
+        return $magic;
     }
 
     /** @param array<int,string> $headers */

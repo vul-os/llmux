@@ -12,7 +12,9 @@
     "phpunit/phpunit": "^9.6 || ^10.5"
   },
   "suggest": {
-    "openai-php/client": "For the Llmux::openai() convenience client pointed at the local gateway"
+    "openai-php/client": "For the Llmux::openai() convenience client pointed at the local gateway",
+    "ext-ffi": "For Llmux\\Ffi, the in-process C-ABI mode. Needs ffi.enable=1 outside the CLI SAPI; see README.md — the sidecar is the recommended default for PHP.",
+    "ext-pcntl": "For examples/fork_probe.php, which demonstrates why the sidecar is the default"
   },
   "autoload": {
     "psr-4": {
