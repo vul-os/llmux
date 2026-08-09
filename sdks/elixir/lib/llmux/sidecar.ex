@@ -75,7 +75,7 @@ defmodule Llmux.Sidecar do
     {:noreply, state}
   end
 
-  def handle_info({port, {:exit_status, _status}}, %{port: port} = state) do
+  def handle_info({port, {:exit_status, _status}}, %{port: port}) do
     {:noreply, %__MODULE__{}}
   end
 
@@ -136,7 +136,9 @@ defmodule Llmux.Sidecar do
     extra =
       opts
       |> Keyword.get(:env, [])
-      |> Enum.map(fn {k, v} -> {String.to_charlist(to_string(k)), String.to_charlist(to_string(v))} end)
+      |> Enum.map(fn {k, v} ->
+        {String.to_charlist(to_string(k)), String.to_charlist(to_string(v))}
+      end)
 
     base ++ extra
   end
@@ -205,7 +207,11 @@ defmodule Llmux.Sidecar do
 
     case :gen_tcp.connect(String.to_charlist(host), port, [:binary, active: false], 1000) do
       {:ok, sock} ->
-        :gen_tcp.send(sock, "GET /health HTTP/1.0\r\nHost: #{hostport}\r\nConnection: close\r\n\r\n")
+        :gen_tcp.send(
+          sock,
+          "GET /health HTTP/1.0\r\nHost: #{hostport}\r\nConnection: close\r\n\r\n"
+        )
+
         result =
           case :gen_tcp.recv(sock, 0, 1000) do
             {:ok, resp} ->
