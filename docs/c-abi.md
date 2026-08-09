@@ -112,6 +112,18 @@ non-zero **stops the stream and is not a failure**: the return is `0` and `*err`
 is untouched. You returned non-zero, so you already know it happened. Tokens
 already served are metered either way.
 
+**Stopping the consumer is not the same as stopping the stream.** This ABI stops
+promptly — the next chunk after your non-zero return is not requested. What does
+not stop promptly is a *buffered* wrapper built on top of it in your language: if
+the callback pushes into a queue that an async iterator drains, the callback runs
+ahead of the consumer and keeps returning zero after the consumer has walked
+away. In one measured case a consumer that took **3 of 10 chunks still caused all
+10 to be generated, and metered**. If you are writing a binding, make the
+consumer's exit visible to the callback and state the measured callback count
+under early exit in your README, the way the packages in
+[`sdks/`](https://github.com/vul-os/llmux/tree/main/sdks) do. If you are choosing
+one, read that number rather than assuming `break` saves money.
+
 **Which thread the callback runs on.** It runs on the thread that called
 `llmux_stream`, synchronously, before `llmux_stream` returns.
 [`ffi/ctest/smoke.c`](../ffi/ctest/smoke.c) asserts this by comparing
@@ -171,24 +183,75 @@ for, at startup. A shared library is resolved off a load path you may not
 control; without that probe, a stale `libllmux` earlier on the path is called
 silently and misbehaves in ways that look like llmux bugs.
 
+## Thirteen bindings already exist
+
+Before you bind these six functions by hand, check whether your language is
+already done. Thirteen of the fifteen packages under
+[`sdks/`](https://github.com/vul-os/llmux/tree/main/sdks) load this exact
+library, each through its own language's FFI:
+
+| Language | How it loads `libllmux` | Streaming across the boundary |
+|---|---|---|
+| [C](https://github.com/vul-os/llmux/tree/main/sdks/c) | links it | C callback |
+| [C++](https://github.com/vul-os/llmux/tree/main/sdks/cpp) | header-only RAII wrapper (`llmux.hpp`) | C callback |
+| [Rust](https://github.com/vul-os/llmux/tree/main/sdks/rust) | `libloading` | iterator |
+| [Swift](https://github.com/vul-os/llmux/tree/main/sdks/swift) | SwiftPM C interop | `AsyncSequence` |
+| [Deno](https://github.com/vul-os/llmux/tree/main/sdks/deno) | `Deno.dlopen` | `for await` |
+| [Bun](https://github.com/vul-os/llmux/tree/main/sdks/bun) | `bun:ffi` | `for await`, worker-backed |
+| [Node](https://github.com/vul-os/llmux/tree/main/sdks/node) | koffi | **callback only** — a Node thread that enters the library never terminates |
+| [Python](https://github.com/vul-os/llmux/tree/main/sdks/python) | `ctypes` | callback, plus `stream_iter` |
+| [Java](https://github.com/vul-os/llmux/tree/main/sdks/java) | FFM (JDK 22+) | callback |
+| [Kotlin](https://github.com/vul-os/llmux/tree/main/sdks/kotlin) | over the Java binding | `Flow` |
+| [.NET](https://github.com/vul-os/llmux/tree/main/sdks/dotnet) | `LibraryImport` + `SafeHandle` | `IAsyncEnumerable` |
+| [Ruby](https://github.com/vul-os/llmux/tree/main/sdks/ruby) | `fiddle` (stdlib) | callback |
+| [PHP](https://github.com/vul-os/llmux/tree/main/sdks/php) | the `FFI` extension | callback |
+
+The two that are not on that list are deliberate, not missing.
+[Go](https://github.com/vul-os/llmux/tree/main/sdks/go) imports
+[`core/gateway`](embedding.md) and never touches a C boundary at all.
+[Elixir](https://github.com/vul-os/llmux/tree/main/sdks/elixir) has **no direct
+mode on purpose**: in-process would mean a NIF, which cannot be killed or
+`Task.await`-timed-out, takes the whole VM down on a segfault, and — as a
+dirty-IO NIF — caps concurrency at the scheduler count.
+
+Every one of those thirteen also keeps a sidecar path, because the shared
+library does not exist on every platform they run on. **Seven of the fifteen
+recommend the sidecar by default** and one more says it depends on your
+deployment, so being on this table is not the same as being told to use it.
+The reasons are measured, per language, in
+[`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md) and
+summarised in [Language packages](sdks.md#which-mechanism-each-language-defaults-to).
+
 ## The costs
 
 `-buildmode=c-shared` is not free, and none of this belongs in a footnote.
 
 1. **The Go runtime lives in your process** — its garbage collector, its
-   scheduler, and its signal handlers. Go installs handlers for `SIGSEGV`,
-   `SIGBUS`, `SIGFPE`, `SIGPROF` and others. A host with its own handling — a
-   JVM, some Python profilers, sanitizers, crash reporters — can conflict with
-   it. Go chains to a pre-existing handler in most cases, but "most" is the
-   honest word.
+   scheduler, and its signal handlers. Measured on a JVM host, loading the
+   library **replaces five handlers** (`SIGSEGV`, `SIGBUS`, `SIGFPE`,
+   `SIGPIPE`, `SIGURG`) and adds `SA_ONSTACK` to three more, including
+   `SIGUSR2`, which HotSpot uses to suspend threads. **`SIGPROF` is not
+   touched**, so the profiler hazard everyone cites does not exist here and JFR
+   keeps working — that is measured by
+   [`sdks/java/signal-probe.sh`](https://github.com/vul-os/llmux/blob/main/sdks/java/signal-probe.sh),
+   not assumed. Go chains to a pre-existing handler in most cases, but "most"
+   is the honest word. On the JVM `libjsig` fixes it cleanly and is a flag on
+   the **java launch command**, which a library cannot add to a process that
+   has already started — hence the sidecar default for Java and Kotlin.
 
 2. **It is not fork-safe.** After `fork()` without `exec()`, the Go runtime in
    the child is broken: its threads did not come across, so the first call into
    the library can hang or crash. This bites:
    - Python `multiprocessing` with the default `fork` start method on Linux —
      use `multiprocessing.set_start_method("spawn")`.
-   - **uWSGI**, **Unicorn**, and any other pre-fork worker model — load the
-     library *after* the fork, in the worker, never in the master.
+   - **uWSGI**, **Unicorn**, **php-fpm**, and any other pre-fork worker model —
+     load the library *after* the fork, in the worker, never in the master.
+
+   **Watch the false green.** Measured in real php-fpm, and again after
+   `os.fork()` in Python: a broken child answers `models` in about 0.1 ms —
+   that call is served from memory and never reaches the scheduler — and then
+   never answers `chat` at all. A readiness probe that lists models reports a
+   healthy worker that will hang on its first real request.
 
 3. **Building it needs cgo and a C toolchain per target platform.** Consumers
    only need the prebuilt artifact, but somebody builds it, per platform, and a

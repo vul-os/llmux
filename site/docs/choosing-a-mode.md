@@ -10,7 +10,7 @@ constraint that rules it out three weeks later.
 | **Server** | `llmux serve` on a host or in a container, shared by many clients | Virtual keys, budgets, rate limits, the admin console, one place to change routing for a fleet | A service to run, a port to secure, an HTTP hop |
 | **Sidecar** | The same binary, spawned and supervised by a language package on `127.0.0.1:<free port>` | Everything the server has, no server to operate; streaming works natively in every language | A child process per host process, a loopback port |
 | **Go library** | `import "github.com/vul-os/llmux/core/gateway"` | No process, no port, no socket; per-request facts (`Result.Provider`, `Result.CacheHit`, `Result.BYOK`) the HTTP shell flattens away | You are inside the trust boundary — auth is yours to call |
-| **C shared library** | `dlopen` `libllmux.dylib` / `.so` from any language | The Go library's benefits from a non-Go host | The Go runtime in your process, ~12–17 MB, no fork-safety, and a platform matrix with real gaps |
+| **C shared library** | `dlopen` `libllmux.dylib` / `.so` from any language — **thirteen packages already do this for you** | The Go library's benefits from a non-Go host | The Go runtime in your process, ~12–17 MB, no fork-safety, and a platform matrix with real gaps |
 
 ## Start here
 
@@ -31,6 +31,48 @@ flowchart TD
 Two of those five questions rule the C shared library out, and that is the
 honest shape of the decision. Choosing the sidecar is a supported outcome of
 reading this page, not a failure.
+
+## Your language has probably already answered this
+
+Before you work the flowchart from first principles, check what the package for
+your language recommends. **All fifteen offer the sidecar; fourteen also offer a
+direct mode**, and each package's default was chosen from a measurement on that
+runtime rather than from taste.
+
+| Default | Count | Languages |
+|---|---|---|
+| **Direct** | 7 | Go, C, C++, Rust, Swift, Deno, Bun |
+| **Sidecar** | 7 | Node (on servers), Python, Java, Kotlin, .NET, PHP, Elixir |
+| Depends on how your server forks | 1 | Ruby |
+
+What pushed seven of them to the sidecar:
+
+- **The Go runtime is not fork-safe**, and Python, PHP and Ruby all have
+  mainstream pre-fork deployments (uWSGI, Gunicorn, Celery; php-fpm in any `pm`
+  mode; Unicorn, Passenger, clustered Puma). **Watch the false green**: measured
+  in real php-fpm and again after `os.fork()` in Python, a broken child answers
+  `models` in 0.1 ms and then never answers `chat` at all — so a health check
+  that lists models reports a worker that will hang on its first real request.
+- **The JVM's signal handlers.** Loading the library replaces five of them
+  (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG`) and adds `SA_ONSTACK` to
+  three more. `SIGPROF` is *not* touched, so JFR keeps working — the hazard
+  everybody cites is not the one that exists. `libjsig` fixes it cleanly, but it
+  is a flag on the **java launch command**, and a library cannot add one to a
+  process that has already started.
+- **Node cannot move the call off the main thread.** A thread that has entered a
+  Go `c-shared` library never terminates, so `worker_threads` and koffi's async
+  pool both leave the process unable to exit. Direct mode there is synchronous
+  and callback-based.
+- **.NET has a coverage problem rather than a runtime one** — there is no
+  Windows shared library, and the signal interference above was measured for the
+  JVM and explicitly *not* for CoreCLR, so those findings are suggestive rather
+  than transferable.
+- **Elixir has no direct mode at all, deliberately** — a NIF cannot be killed or
+  `Task.await`-timed-out, a segfault takes the whole VM, and a dirty-IO NIF caps
+  concurrency at the scheduler count.
+
+→ [Language packages](sdks.md#which-mechanism-each-language-defaults-to) for the
+full per-language table with a first example each.
 
 ## The reason people pick in-process is usually the wrong one
 
@@ -58,6 +100,16 @@ i.e. the sidecar at its best.
 So what is in-process actually for? No second process to supervise, no port to
 bind, no loopback surface to secure, no request bodies crossing a socket, and
 per-request state the HTTP shell has no field for. Latency is the least of it.
+
+**And one cost that surprises people either way: stopping a stream early does
+not reliably stop the spend.** The C ABI itself stops promptly, but a buffered
+async wrapper over it lets the callback run ahead of your consumer — in one
+measured case a consumer taking 3 of 10 chunks still caused all 10 to be
+generated *and metered*. Several packages redesigned their streaming around
+exactly this (Bun added `Atomics.wait` backpressure, Kotlin uses
+`Channel.RENDEZVOUS`, .NET a capacity-1 channel), and each states its measured
+callback count under early exit. Read that number before you rely on
+cancellation to cap a bill.
 
 ## Where authentication lives
 

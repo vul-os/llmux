@@ -60,7 +60,16 @@ provider call is the only socket this program opens.
 `sdks/go/llmux.New(llmux.Options{})` is a three-line wrapper over exactly this;
 use whichever reads better in your codebase. The wrapper's `Options.Addr` and
 `Options.ReadyTimeout` are ignored — they only mean something for the deprecated
-loopback shim.
+loopback shim, which is **not** the sidecar.
+
+**Not writing Go?** This same gateway, in this same in-process shape, is
+reachable from fourteen other languages: thirteen load it through the
+[C ABI](c-abi.md)'s six functions, and all fifteen packages can alternatively
+spawn and supervise the binary as a sidecar. You are unlikely to need to write a
+binding — see [Language packages](sdks.md#a-first-call-in-every-language) for a
+first call in each. Note that the costs on this page are the Go-native ones;
+the C-ABI hosts pay several more, including fork-safety and a platform matrix
+with real gaps.
 
 ## Building a config
 
@@ -325,6 +334,7 @@ relying on `internal/` access. `ffi/` does the same thing for the C ABI.
 
 - [Choosing a mode](choosing-a-mode.md) — library vs sidecar vs server vs C ABI
 - [The C ABI](c-abi.md) — the same in-process gateway, from a non-Go host
+- [Language packages](sdks.md) — the fifteen, with a first call in each
 - [Architecture](architecture.md) — how the packages are laid out
 - [Configuration](configuration.md) — every config field and environment override
 - [Client examples](client-examples.md) — the HTTP path, in 17+ languages

@@ -1,6 +1,6 @@
 # Quickstarts
 
-Four short tracks. Pick the one that matches what you are: each is five minutes,
+Five short tracks. Pick the one that matches what you are: each is five minutes,
 each ends somewhere real, and each links to the page that goes deep.
 
 If you do not yet know which mode you want, read
@@ -46,8 +46,10 @@ Three things worth knowing on day one:
 
 ## B. You are shipping an application and do not want to run a server
 
-Use the package for your language. It resolves and supervises the gateway for
-you — you never start a server by hand, and there is no port to remember.
+Use the package for your language. There are **fifteen** — Go, C, C++, Rust,
+Swift, Deno, Bun, Node, Python, Java, Kotlin, .NET, Ruby, PHP and Elixir — and
+every one of them can resolve and supervise the gateway for you. You never start
+a server by hand, and there is no port to remember.
 
 ```python
 import llmux
@@ -78,8 +80,46 @@ go build -o /tmp/llmux ./cmd/llmux
 export LLMUX_BINARY=/tmp/llmux
 ```
 
-→ [Language packages](sdks.md) for the full list, the resolution order and the
-sidecar contract.
+**No convenience constructor is required.** Where a mature OpenAI client exists
+for the language, the package offers one; otherwise `openai_base_url()` (`…/v1`,
+default key `llmux-local`) plus any HTTP client is always enough. That is the
+whole contract, and it is identical in all fifteen.
+
+→ [Language packages → a first call in every
+language](sdks.md#a-first-call-in-every-language) has the install line, a
+working snippet and a run command for each one.
+
+## B2. Same thing, but with no child process either
+
+Fourteen of the fifteen can also run the gateway **inside your process**: Go
+imports the package, and thirteen others load a C shared library exposing six
+symbols. No port, no listener, no loopback socket.
+
+```rust
+use llmux::direct::Gateway;
+
+let gw = Gateway::open(None)?;               // defaults + environment
+let req = r#"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}"#;
+println!("{}", gw.call("chat", Some(req))?);
+for chunk in gw.stream(req)? { print!("{}", chunk?); }
+```
+
+Read three lines before you commit to it, because they rule it out more often
+than they rule it in:
+
+- **Prebuilt libraries exist for darwin/arm64 and linux/arm64 only.**
+  linux/amd64 is CI-only; **windows/amd64 and darwin/amd64 do not exist.**
+- **There is no authentication on that boundary, by design** — virtual keys and
+  budgets are the sidecar's job.
+- **Latency is not the reason.** ~80–92 µs against ~102–109 µs for a real chat
+  call, which is noise next to the model.
+
+Build the library with `scripts/build-ffi.sh`, then point your package at it —
+`LLMUX_LIBRARY` in Python, Ruby, Rust, Swift, Java, Kotlin, .NET and PHP;
+`LLMUX_LIB` in Node, Bun and Deno; the build-time `LLMUX_LIB_DIR` in C and C++.
+
+→ [Choosing a mode](choosing-a-mode.md#your-language-has-probably-already-answered-this)
+· [The C ABI](c-abi.md)
 
 ## C. You are writing Go and want no process at all
 
@@ -163,6 +203,8 @@ The most common four, with the one-line answer:
 | `402 budget_exceeded` on a key that has barely spent anything | A leaked in-flight reservation — an embedder that did not call `release` |
 | `400` refusing to serve a model on a budgeted key | The catalog cannot price that model, so the spend would go uncounted. Add a price override |
 | The package spawns nothing and hangs, or errors on resolution | No binary found — set `LLMUX_BINARY` |
+| Direct mode cannot find the shared library | Build it with `scripts/build-ffi.sh` and set `LLMUX_LIBRARY` (or `LLMUX_LIB` on Node/Bun/Deno). There is no library at all for Windows or Intel macOS — use the sidecar there |
+| A forked worker passes its health check and then hangs on the first chat | The Go runtime is not fork-safe, and `models` is answered from memory so it **succeeds in a broken child**. Load the library after the fork, in the worker — see [Troubleshooting](TROUBLESHOOTING.md#embedded-and-c-abi-hosts) |
 
 → [Troubleshooting](TROUBLESHOOTING.md) is symptom-by-symptom and much longer.
 

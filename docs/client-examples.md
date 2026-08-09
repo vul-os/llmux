@@ -293,20 +293,28 @@ Streaming (`"stream": true`) returns byte-identical OpenAI SSE for every one of
 these — the same stream parser your SDK already ships works against llmux
 unchanged. A client disconnect cancels the in-flight upstream request.
 
-## Embed it locally — no separate server to run
+## Embed it locally: no separate server to run
 
 llmux is a **library first**: `core/gateway` is the whole dispatch path —
 routing, retries, failover, the sovereignty gate, BYOK, caching, pricing and
 metering — with no HTTP surface of its own. `core/server` (the OpenAI-compatible
 HTTP API plus the embedded admin console) is one shell over that library, for
 when you want a standalone service instead of, or alongside, an embedded
-dependency. Thin per-language packages live in
-[`sdks/`](https://github.com/vul-os/llmux/blob/main/sdks) in the repo:
+dependency.
 
-| Language | Mechanism |
-|---|---|
-| Go (`sdks/go/llmux`, or `core/gateway` directly) | Runs the gateway **in-process** — no listener, no port, no HTTP hop. `llmux.Start()`, which spawns a loopback HTTP sidecar, is kept only for handing an OpenAI-compatible HTTP client a `base_url`; it is deprecated in favor of the direct path. |
-| Python, Node, Ruby, PHP, Rust, Java, .NET, Elixir (`sdks/<lang>`) | Spawn the built `llmux` binary as a local sidecar on `127.0.0.1:<free port>`, wait for `/health`, then hand you a `base_url` |
+**Fifteen language packages live in
+[`sdks/`](https://github.com/vul-os/llmux/tree/main/sdks)**, and each offers up
+to two mechanisms rather than one:
+
+| Mechanism | Who has it | What it is |
+|---|---|---|
+| **Direct** | Go, plus 13 others | The gateway **in-process** — no listener, no port, no HTTP hop. Go imports the package; the other thirteen load the [C ABI](c-abi.md) shared library |
+| **Sidecar** | **all fifteen** | The `llmux` binary spawned and supervised on `127.0.0.1:<free port>`, with a `base_url` handed back to you |
+
+Elixir is sidecar-only on purpose (a NIF cannot be killed or timed out, and a
+segfault would take the VM with it), and Go's direct path is a package import
+with no C boundary at all. Every one of the other thirteen keeps a sidecar path
+too, because the shared library does not exist for every platform they run on.
 
 Every spawning package follows the same contract: resolve the binary
 (`LLMUX_BINARY` env var → a bundled binary → `llmux` on `PATH`), launch it with
@@ -315,6 +323,10 @@ such as `OPENAI_API_KEY` pass straight through), poll `/health`, then expose
 `base_url()` / `openai_base_url()` (`…/v1`, default key `llmux-local`).
 Streaming works natively in every language because each just reads its own
 local socket.
+
+→ **[Language packages](sdks.md#a-first-call-in-every-language) has a working
+first example for each of the fifteen**, with the install line and the run
+command. The rest of this section is the Go path in full.
 
 **Go — the real embedding path: `gateway.New`, no listener at all.**
 `sdks/go/llmux.New` is a thin wrapper over `core/gateway.New`; call either one
@@ -372,11 +384,13 @@ UI bytes in it regardless of build tags. If you embed `core/server` instead
 measured binary-size deltas included.
 
 **Not writing Go?** The same in-process gateway is available as a C shared
-library — six functions, the same JSON the HTTP API uses. Read
-[The C ABI](c-abi.md) and, before you commit to it,
-[Choosing a mode](choosing-a-mode.md): for several hosts the sidecar below is
-the better answer, and prebuilt libraries exist for darwin/arm64 and
-linux/arm64 only.
+library — six functions, the same JSON the HTTP API uses — and **thirteen of
+the fifteen packages already bind it for you**, so check
+[the binding table](c-abi.md#thirteen-bindings-already-exist)
+before you write your own. Read [The C ABI](c-abi.md) and, before you commit to
+it, [Choosing a mode](choosing-a-mode.md): for seven of the fifteen languages
+the sidecar is the measured recommendation, and prebuilt libraries exist for
+darwin/arm64 and linux/arm64 only.
 
 `llmux.Start()` remains for the case where you need to hand an
 OpenAI-compatible **HTTP client** a base URL rather than dispatching in-process:

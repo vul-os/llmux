@@ -1,6 +1,6 @@
 # Language packages
 
-llmux is one Go binary and one Go library. The packages under
+llmux is one Go binary and one Go library. The **fifteen** packages under
 [`sdks/`](https://github.com/vul-os/llmux/tree/main/sdks) are thin wrappers that
 make that reachable from another language without asking you to run a server by
 hand.
@@ -10,30 +10,573 @@ one sovereignty gate, one budget ledger and one price catalog in this project,
 and every package reaches the same one. That is why a fix lands everywhere at
 once, and why no package can drift into having its own idea of what a route is.
 
+> The index that ships with the code is
+> [`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md).
+> It carries the per-language recommendation and the measurement behind each
+> one. This page is the docs-side view: the two mechanisms, and **a working
+> first call in each of the fifteen**.
+
 ## Two mechanisms
 
-Every package uses one of two, and the difference is worth understanding before
-you read a package README:
+Every package offers one or both, and the difference is worth understanding
+before you read a package README:
 
-| | **Sidecar** | **In-process (C ABI)** |
+| | **Sidecar** | **Direct (in-process)** |
 |---|---|---|
-| How | Spawns the `llmux` binary on `127.0.0.1:<free port>` and hands you a `base_url` | `dlopen`s `libllmux` and calls [six C functions](c-abi.md) |
+| How | Spawns the `llmux` binary on `127.0.0.1:<free port>` and hands you a `base_url` | Runs the gateway inside your process — Go imports the package; every other language loads [six C functions](c-abi.md) out of a shared library |
 | Streaming | Native — your language's own HTTP/SSE client reads its own socket | A C callback per chunk, on the calling thread |
 | Auth at the boundary | Full: virtual keys, budgets, per-key model allow-lists | **None** — you are inside the trust boundary |
 | Ships as | A binary inside the package artifact | A shared library, per platform |
 | Fails on | Nothing structural; it is a child process | Pre-fork hosts, hosts with their own signal handling, platforms with no prebuilt library |
 | Platforms | Everywhere the Go binary cross-compiles, which is everywhere | darwin/arm64 and linux/arm64 only, today |
+| Who has it | **all fifteen** | Go natively, plus thirteen through the C ABI |
 
-Go is neither: it imports [`core/gateway`](embedding.md) directly, with no
-port, no listener and no C boundary at all.
+Go is a case of its own: it imports [`core/gateway`](embedding.md) directly, with
+no port, no listener and no C boundary at all. Elixir is the other end — it has
+**no direct mode on purpose**, because in-process would mean a NIF that cannot be
+killed or `Task.await`-timed-out, that takes the whole VM down on a segfault, and
+that as a dirty-IO NIF caps concurrency at the scheduler count (measured on this
+machine: 10 dirty-IO schedulers).
 
 **The platform row is the one that decides most cases.** Prebuilt shared
 libraries exist for darwin/arm64 and linux/arm64. linux/amd64 is built and
 tested in CI only. **windows/amd64 and darwin/amd64 do not exist** — no `.dll`
-and no Intel-macOS library has been produced by anyone. A package that offers an
-in-process path therefore has to keep the sidecar path working anyway, for the
+and no Intel-macOS library has been produced by anyone. A package that offers a
+direct path therefore has to keep the sidecar path working anyway, for the
 platforms where the library is not there. See
 [The C ABI → where it runs](c-abi.md#where-it-runs).
+
+## Which mechanism each language defaults to
+
+**The default column is a real recommendation, not a formality.** Seven default
+to direct, **seven default to the sidecar**, and one depends on your deployment.
+Each of those calls was measured rather than assumed.
+
+| Language | Direct | Sidecar | Default | Streaming (direct) |
+|---|---|---|---|---|
+| [Go](#go) | package import — **no FFI, no shared library** | ✓ | **direct** | `ChunkFunc` callback |
+| [C](#c) | ✓ links `libllmux` | ✓ | **direct** | C callback |
+| [C++](#c-header-only) | ✓ header-only RAII (`llmux.hpp`) | ✓ | **direct** | C callback |
+| [Rust](#rust) | ✓ `libloading` | ✓ | direct | `Iterator` |
+| [Swift](#swift) | ✓ SwiftPM, C interop | ✓ | direct | `AsyncThrowingStream` |
+| [Deno](#deno) | ✓ `Deno.dlopen` | ✓ | direct | `for await` |
+| [Bun](#bun) | ✓ `bun:ffi` | ✓ | direct | `for await`, worker-backed |
+| [Node](#nodejs) | ✓ koffi | ✓ | **sidecar** for servers | callback only |
+| [Python](#python) | ✓ `ctypes` | ✓ | **sidecar** | callback + `stream_iter` |
+| [Java](#java) | ✓ FFM (JDK 22+) | ✓ | **sidecar** | callback |
+| [Kotlin](#kotlin) | ✓ over the Java binding | ✓ | **sidecar** | `Flow` |
+| [.NET / C#](#net-and-c) | ✓ `LibraryImport` + `SafeHandle` | ✓ | **sidecar** | `IAsyncEnumerable` |
+| [Ruby](#ruby) | ✓ `fiddle` (stdlib) | ✓ | depends on your server | callback |
+| [PHP](#php) | ✓ the `FFI` extension | ✓ | **sidecar** | callback |
+| [Elixir](#elixir) | **none, deliberately** | ✓ | **sidecar** | n/a |
+
+The reasons behind the seven sidecar defaults, one family at a time:
+
+- **Java / Kotlin.** Loading the library replaces five of HotSpot's signal
+  handlers (`SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPIPE`, `SIGURG`) and adds
+  `SA_ONSTACK` to three more, including `SIGUSR2`, which HotSpot uses to suspend
+  threads. Both runtimes still work, and `libjsig` fixes it cleanly — but
+  `libjsig` is a flag on the **java launch command**, and a library cannot add
+  one to a process that has already started. A dependency that changes how the
+  JVM is launched is not a drop-in. (`SIGPROF` is *not* touched: JFR profiling
+  is unaffected, and a recording taken with the library loaded collected 428
+  `jdk.ExecutionSample` events. The commonly-cited hazard does not exist here.)
+- **Python / PHP** — and **Ruby**, which is the "depends" row for this same
+  reason. The Go runtime is **not fork-safe**, and all three
+  have mainstream pre-fork deployments — uWSGI, Gunicorn and Celery's prefork
+  pool; php-fpm in any `pm` mode and mod_php under `prefork`; Unicorn, Passenger
+  and clustered Puma. Measured in real php-fpm: a worker that inherited a loaded
+  library answers `models` in 0.1 ms and then never answers `chat` at all. Same
+  shape after `os.fork()` in Python and after Ruby's fork. **Note the trap —
+  `models` succeeds in a broken child**, so a health check that only lists models
+  is a false green for a process that will hang on the first real request.
+- **Node.** A Node thread that has entered a Go `c-shared` library never
+  terminates, so neither `worker_threads` nor koffi's async pool can move
+  streaming off the main thread — the process hangs at exit. Node direct mode is
+  therefore synchronous and takes a callback rather than an async iterator, and
+  every direct call blocks the event loop for the whole upstream round trip.
+  Buffering the answer and replaying it as fake chunks would be worse than an
+  honest HTTP call.
+- **.NET.** Not a runtime hazard but a coverage one: **there is no Windows
+  shared library** — not "untested", not built by anyone, ever. The signal
+  interference above was measured for the JVM and explicitly *not* for CoreCLR,
+  so the Java findings are suggestive rather than transferable.
+- **Elixir.** Sidecar not by default but by construction — there is no direct
+  mode to fall back from, for the reasons in the section above.
+
+Ruby is the one row that genuinely depends on your deployment: single-mode Puma,
+Falcon, Sidekiq, rake tasks and one-shot scripts can use either; anything that
+pre-forks should use the sidecar. Most Ruby ships on linux/amd64, which is
+exactly the row with no locally built and tested library today.
+
+## A first call in every language
+
+Every snippet below is the shortest form the package's own README or examples
+support, and every **Run** line is a command that exists in this repository —
+each drives a runner that boots a fake upstream, so it works offline with no
+provider keys.
+
+**On getting the packages.** Coordinates are given per language, but registry
+publication is uneven and this page will not pretend otherwise: Python's README
+is the only one with a registry install line today (`pip install llmux`), and
+Kotlin's says its artifact is `// not yet published`. **The path that works for
+all fifteen right now is a checkout** — each `sdks/<lang>` is a working package
+directory, and the fake upstream the runners boot is
+[`ffi/fakeupstream`](https://github.com/vul-os/llmux/tree/main/ffi/fakeupstream),
+the same one the C smoke test and the latency benchmark use.
+
+Two environment variables recur, and **they are two different variables** — do
+not conflate them:
+
+- **`LLMUX_BINARY`** — path to the `llmux` binary, for the sidecar. Resolution
+  is the same everywhere: `LLMUX_BINARY` → a binary bundled in the package →
+  `llmux` on `PATH`.
+- The shared library, for direct mode, is named by **`LLMUX_LIBRARY`** in
+  Python, Ruby, Rust, Swift, Java, Kotlin, .NET and PHP — but by **`LLMUX_LIB`**
+  in Node, Bun and Deno, and by the build-time **`LLMUX_LIB_DIR`** in C and C++.
+  C and C++ link against it rather than resolving it at runtime.
+
+### Go
+
+Direct, and not a wrapper in the sense the others are: no FFI, no shared
+library, no platform matrix.
+
+```bash
+go get github.com/vul-os/llmux/core/gateway
+```
+
+```go
+import (
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/sdks/go/llmux"
+)
+
+gw, err := llmux.New(llmux.Options{}) // nil Config ⇒ config.Default()
+if err != nil {
+	log.Fatal(err)
+}
+defer gw.Close()
+
+res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{
+	Model:    "gpt-4o-mini",
+	Messages: []openai.Message{{Role: "user", Content: openai.Str("hi")}},
+})
+fmt.Println(res.Response.Choices[0].Message.Content.String(), res.Provider)
+```
+
+Run: `./sdks/go/examples/run.sh` (both modes), or against a real provider,
+`go run ./sdks/go/examples/direct -model gpt-4o-mini -prompt 'say hi'`.
+Sidecar: the same runner with `sidecar`. `sdks/go` has no `go.mod` of its own —
+it is part of the root module, so `go test ./...` covers it.
+More: [the Go section below](#go-the-one-that-is-not-a-wrapper) ·
+[`sdks/go`](https://github.com/vul-os/llmux/tree/main/sdks/go)
+
+### C
+
+Direct. There is no library to install: the header is
+[`ffi/include/llmux.h`](https://github.com/vul-os/llmux/blob/main/ffi/include/llmux.h)
+and it is the whole surface.
+
+```c
+#include <stdio.h>
+#include <stdlib.h>
+#include "llmux.h"
+
+int main(void) {
+    char *err = NULL;
+    uint64_t h = llmux_new(NULL, &err);            /* NULL = defaults + environment */
+    if (h == 0) { fprintf(stderr, "%s\n", err); llmux_free(err); return 1; }
+
+    char *out = llmux_call(h, "chat",
+        "{\"model\":\"gpt-4o-mini\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}]}", &err);
+    if (out) puts(out); else fprintf(stderr, "%s\n", err);
+
+    llmux_free(out);                               /* llmux_free, never free() */
+    llmux_free(err);
+    llmux_close(h);
+    return 0;
+}
+```
+
+Build: `cc -std=c11 -I<repo>/ffi/include -o direct_chat direct_chat.c -L<libdir> -lllmux -Wl,-rpath,<libdir> -lpthread`.
+Run: `sdks/c/run-demo.sh` (both modes), or `make LLMUX_LIB_DIR=/path/to/dir`.
+
+On macOS there is a wart worth knowing before it costs you an hour:
+`-buildmode=c-shared` gives the dylib the bare install name `libllmux.dylib`
+with no `@rpath/` prefix, so `-rpath` is never consulted and the program dies at
+startup with `Library not loaded: libllmux.dylib`. Fix it on the executable with
+`install_name_tool -change libllmux.dylib @rpath/libllmux.dylib direct_chat`.
+
+The sidecar example is a **separate binary that never links `libllmux`**,
+deliberately: it forks, and a process carrying the Go runtime must not. Do not
+merge the two.
+More: [`sdks/c`](https://github.com/vul-os/llmux/tree/main/sdks/c) ·
+[The C ABI](c-abi.md)
+
+### C++ (header-only)
+
+Direct, through a header-only C++17 RAII wrapper over the same six functions.
+No dependencies beyond the standard library.
+
+```cpp
+#include <iostream>
+#include "llmux.hpp"
+
+int main() {
+    try {
+        llmux::Gateway gw;                              // nullptr config = defaults + env
+        std::cout << llmux::abi_version() << "\n";
+        std::cout << gw.chat(R"({"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]})") << "\n";
+
+        gw.stream(R"({"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]})",
+                  [](std::string_view chunk) { std::cout << chunk; return true; });
+    } catch (const llmux::Error &e) {
+        std::cerr << e.what() << "\n";
+        return 1;
+    }                                                   // ~Gateway closes the handle
+}
+```
+
+Build: `c++ -std=c++17 -I<repo>/ffi/include -o direct_chat direct_chat.cpp -L<libdir> -lllmux -Wl,-rpath,<libdir> -lpthread`.
+Run: `sdks/cpp/run-demo.sh`. `LLMUX_NO_EXCEPTIONS` compiles only the `try_`
+layer, which returns a `Result<T>` instead of throwing. An exception thrown
+inside a stream callback is caught at the C boundary, converted to "stop the
+stream", and rethrown once the C frame has returned — letting it unwind through
+a Go call frame is undefined behaviour.
+More: [`sdks/cpp`](https://github.com/vul-os/llmux/tree/main/sdks/cpp)
+
+### Rust
+
+Direct, via `libloading`. Crate `llmux` 0.1.0, edition 2021; one optional
+feature, `async-openai`.
+
+```rust
+use llmux::direct::{Error, Gateway};
+
+fn main() -> Result<(), Error> {
+    let gw = Gateway::open(None)?;                 // None = defaults + environment
+    println!("abi: {}", gw.abi_version());
+
+    let req = r#"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}"#;
+    println!("{}", gw.call("chat", Some(req))?);
+
+    for chunk in gw.stream(req)? {                 // a real Iterator, rendezvous-fed
+        print!("{}", chunk?);
+    }
+    Ok(())
+}                                                  // Gateway closes on Drop
+```
+
+Run: `./sdks/rust/examples/run.sh` (`direct` or `sidecar` to pick one).
+Tests: `cd sdks/rust && cargo test` — 27 tests, and the direct ones **say which
+way they went** (`--nocapture` prints `direct tests RAN` or `direct tests
+SKIPPED`), because a gated suite that skips silently is a false green.
+Streaming is a rendezvous channel, so nothing is buffered; dropping the iterator
+early stops the stream and joins the worker. Panics are caught at the trampoline
+rather than crossing into Go.
+More: [`sdks/rust`](https://github.com/vul-os/llmux/tree/main/sdks/rust)
+
+### Swift
+
+Direct, via SwiftPM C interop. Package `LLMux`, platform floor macOS 13, zero
+external dependencies — and it is consumable as a dependency of another package,
+which a target carrying `unsafeFlags` would not be.
+
+```swift
+import LLMux
+
+let gw = try Gateway()                             // defaults + environment
+print("abi: \(gw.abiVersion)")
+print(try gw.chat(#"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}"#))
+
+for try await chunk in gw.chunks(
+    #"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}],"stream":true}"#) {
+    print(chunk, terminator: "")
+}                                                  // handle released in deinit
+```
+
+Run: `./sdks/swift/run.sh` (`direct`, `sidecar`, or `test`).
+`chunks` dispatches to `DispatchQueue.global`, **not** to Swift's cooperative
+pool — blocking one of those threads for the length of a model's answer is how a
+Swift concurrency program deadlocks. Note the asymmetry: the sidecar's stream has
+real backpressure via `URLSession.bytes(for:)`, while the direct
+`AsyncThrowingStream` does not propagate backpressure to a non-async producer.
+There is no direct mode on Intel Macs, Windows or iOS; on iOS specifically, talk
+to a remote `llmux serve` over the network, since the platform permits neither
+`dlopen` of an arbitrary dylib nor child processes.
+More: [`sdks/swift`](https://github.com/vul-os/llmux/tree/main/sdks/swift)
+
+### Deno
+
+Direct, via `Deno.dlopen`. Module `@vul-os/llmux`, no third-party dependencies.
+This is the one JavaScript runtime where direct mode is not a compromise —
+`llmux_call_async` keeps the isolate responsive.
+
+```typescript
+import { abiVersion, Gateway } from "./mod.ts";     // module name: @vul-os/llmux
+
+using gw = Gateway.open({ expectVersion: abiVersion() });
+
+const answer = await gw.call("chat", {
+  model: "gpt-4o-mini",
+  messages: [{ role: "user", content: "hi" }],
+});
+console.log(answer);
+```
+
+Run: `deno task example:direct` from `sdks/deno`, or `deno task example:sidecar`.
+Permissions: direct needs `--allow-ffi` (plus `--allow-env=LLMUX_LIB` if you set
+it); sidecar needs `--allow-run --allow-net --allow-env`. `--unstable-ffi` is
+**not** needed on Deno 2. `gw.callSync(...)` is the one entry point that can
+stall the isolate. Early stop is tight: a consumer taking 3 chunks saw 4
+callbacks fire.
+More: [`sdks/deno`](https://github.com/vul-os/llmux/tree/main/sdks/deno)
+
+### Bun
+
+Direct, via `bun:ffi`. Package `@vul-os/llmux-bun`, no runtime dependencies.
+
+```typescript
+import { abiVersion, Gateway } from "./index.ts";   // package name: @vul-os/llmux-bun
+
+await using gw = Gateway.open({ expectVersion: abiVersion() });
+
+const answer = gw.call("chat", {
+  model: "gpt-4o-mini",
+  messages: [{ role: "user", content: "hi" }],
+});
+console.log(answer);
+```
+
+Run: `bun run example:direct` from `sdks/bun`, or `bun run example:sidecar`.
+Note `await using`, not `using`: `Gateway` implements `Symbol.asyncDispose`.
+**`gw.call` is synchronous and blocks the loop for the entire upstream round
+trip** — measured at 373 ms blocked, with the timer firing 0 times. If your
+server makes blocking unary calls on its request path, use the sidecar.
+Streaming is worker-backed with `Atomics.wait` backpressure; that was added
+because the first version generated all 10 chunks for a consumer taking 3.
+More: [`sdks/bun`](https://github.com/vul-os/llmux/tree/main/sdks/bun)
+
+### Node.js
+
+Sidecar by default on servers. Package name `llmux`, Node 16+; `koffi` and
+`openai` are **optional** peer dependencies, needed only for direct mode and for
+the `OpenAI()` convenience constructor respectively.
+
+```javascript
+const llmux = require("llmux");
+
+const client = await llmux.OpenAI();          // spawns the gateway, returns an openai client
+const res = await client.chat.completions.create({
+  model: "anthropic/claude-3-5-sonnet",
+  messages: [{ role: "user", content: "hi" }],
+});
+```
+
+With no dependency at all, use `llmux.openaiBaseURL()` and any HTTP client.
+Direct mode is a separate entry point, `require("llmux/direct")`, and it takes a
+callback rather than returning an async iterator — see
+[the Node paragraph above](#which-mechanism-each-language-defaults-to) for why
+that is not an oversight.
+Run: `npm run example:sidecar` from `sdks/node`. Tests: `npm test`.
+More: [`sdks/node`](https://github.com/vul-os/llmux/tree/main/sdks/node)
+
+### Python
+
+Sidecar by default, because Python forks. Package `llmux`, Python 3.8+.
+
+```bash
+pip install llmux            # or: pip install "llmux[openai]"
+```
+
+```python
+import llmux
+
+client = llmux.OpenAI()                      # spawns the gateway, returns a client
+r = client.chat.completions.create(
+    model="anthropic/claude-3-5-sonnet",
+    messages=[{"role": "user", "content": "hi"}],
+)
+print(r.choices[0].message.content)
+```
+
+Dependency-free, use `llmux.openai_base_url()` with `urllib`. Direct mode is
+`from llmux import Gateway`, always as a context manager, and it needs
+`LLMUX_LIBRARY` pointed at a library you built — the wheels do not bundle one
+today.
+Run: `sdks/python/examples/run-demo.sh` (all three examples, including
+`fork_hazard.py`, which demonstrates the false green directly).
+Tests: `cd sdks/python && python3 -m unittest discover -s tests` — both modes,
+with the direct suite skipping when no library is resolvable.
+More: [`sdks/python`](https://github.com/vul-os/llmux/tree/main/sdks/python)
+
+### Java
+
+Sidecar by default — see the signal-handler paragraph above. Coordinates
+`to.llmux:llmux:0.1.0`; the sidecar path needs only Java 11, direct needs
+Java 22+ and `--enable-native-access=ALL-UNNAMED`.
+
+```java
+import to.llmux.Llmux;
+
+public final class Hello {
+    public static void main(String[] args) {
+        try {
+            System.out.println(Llmux.baseUrl());        // http://127.0.0.1:<port>
+            System.out.println(Llmux.openaiBaseUrl());  // …/v1 — point any client here
+        } finally {
+            Llmux.stop();
+        }
+    }
+}
+```
+
+`com.openai:openai-java` is an optional dependency; without it,
+`openaiBaseUrl()` plus any HTTP client is enough.
+Run: `sdks/java/run-examples.sh sidecar` (or `direct`, which fails closed on a
+JDK older than 22). The signal evidence is reproducible on your own machine with
+`sdks/java/signal-probe.sh`, including `--jsig` and `--checkjni` variants.
+Tests: `cd sdks/java && mvn test`, or `sh run-java-check.sh` with no Maven.
+More: [`sdks/java`](https://github.com/vul-os/llmux/tree/main/sdks/java)
+
+### Kotlin
+
+Sidecar by default, for the same JVM reason. A wrapper over the Java binding,
+not a reimplementation — package `to.llmux.kotlin`, one dependency
+(`kotlinx-coroutines-core`).
+
+```kotlin
+import kotlinx.coroutines.runBlocking
+import to.llmux.kotlin.LlmuxSidecar
+
+fun main() = runBlocking {
+    LlmuxSidecar().use { llmux ->
+        println(llmux.openAiBaseUrl)
+        println(llmux.models())
+    }
+}
+```
+
+Run: `sdks/kotlin/run-examples.sh sidecar` (or `direct`). There is deliberately
+**no `build.gradle.kts` in this package**: nothing in this repo runs Gradle, so a
+build file would be an unexecuted claim about how the module builds. The runner
+compiles the Java SDK first and drives `kotlinc` directly. `Flow` streaming uses
+`Channel.RENDEZVOUS`, which was chosen from measurement — with the default
+64-slot buffer, collecting 2 chunks still ran the whole 5-chunk stream; with
+rendezvous it fired 3. Expect one chunk beyond your last collected one:
+cancellation is prompt, not retroactive.
+More: [`sdks/kotlin`](https://github.com/vul-os/llmux/tree/main/sdks/kotlin)
+
+### .NET and C#
+
+Sidecar by default, because there is no Windows shared library. Package id
+`Llmux`, `net8.0`, namespace `Llmux`.
+
+```csharp
+using System;
+using System.Net.Http;
+using Llmux;
+
+string baseUrl = Sidecar.BaseUrl();          // spawns on first use
+try
+{
+    Console.WriteLine(Sidecar.OpenAIBaseUrl());
+    using var http = new HttpClient();
+    Console.WriteLine(await http.GetStringAsync(baseUrl + "/v1/models"));
+}
+finally { Sidecar.Stop(); }
+```
+
+Direct mode is `LlmuxDirect.Open(...)` with an `IAsyncEnumerable` stream over a
+capacity-1 channel — also a measured choice: an unbounded channel let a consumer
+taking 2 chunks run the whole 5-chunk completion.
+Run: `sdks/dotnet/run-examples.sh sidecar` (or `direct`), or
+`dotnet run --project sdks/dotnet/examples -- sidecar`.
+Tests: `cd sdks/dotnet && dotnet test tests/Llmux.Tests.csproj` (sidecar only).
+More: [`sdks/dotnet`](https://github.com/vul-os/llmux/tree/main/sdks/dotnet)
+
+### Ruby
+
+Either mode, depending on how your server forks. Gem `llmux`, Ruby 2.7+; the
+only dependency is `fiddle`, a default gem present in every supported Ruby.
+
+```ruby
+require "llmux"
+require "json"
+require "net/http"
+require "uri"
+
+uri = URI("#{Llmux.openai_base_url}/chat/completions")   # starts the sidecar on first use
+res = Net::HTTP.post(uri,
+  JSON.generate(model: "openai/gpt-4o-mini",
+                messages: [{ role: "user", content: "hi" }]),
+  "Content-Type" => "application/json", "Authorization" => "Bearer llmux-local")
+puts JSON.parse(res.body).dig("choices", 0, "message", "content")
+Llmux.stop
+```
+
+`Llmux.openai` returns a configured `ruby-openai` client if you have that gem.
+Direct mode is `require "llmux/ffi"` and `Llmux::Ffi.open { |llmux| … }`, which
+closes the handle however the block exits. **Do not raise out of a stream
+block**: an exception inside a `Fiddle::Closure` unwinds by `longjmp` straight
+through the Go call frame, so the binding catches everything, stops the stream
+politely, and re-raises once the frame has unwound.
+Run: `ruby sdks/ruby/examples/sidecar_chat.rb`, `…/direct_chat.rb`, or
+`ruby sdks/ruby/examples/fork_probe.rb before chat` to watch the hazard.
+Tests: `cd sdks/ruby && ruby -Ilib -Itest test/test_llmux.rb`.
+More: [`sdks/ruby`](https://github.com/vul-os/llmux/tree/main/sdks/ruby)
+
+### PHP
+
+Sidecar by default, and this is not a hedge — php-fpm forks in every `pm` mode.
+Composer package `llmux/llmux`, PHP 7.4+, PSR-4 under `Llmux\`.
+
+```php
+<?php
+require 'vendor/autoload.php';
+
+use Llmux\Llmux;
+
+echo Llmux::openaiBaseUrl(), "\n";     // …/v1 — point any OpenAI client here
+Llmux::stop();
+```
+
+`openai-php/client` is a `suggest`, not a requirement. Direct mode is
+`Llmux\Ffi`, and it is gated twice: `ext-ffi`'s `ffi.enable` directive defaults
+to `preload`, which means direct mode works in the CLI SAPI and raises
+`FFI\Exception: FFI API is restricted by "ffi.enable" configuration directive`
+everywhere else. Under php-fpm the only shape that works is `FFI::cdef()` inside
+the worker, after the fork, with `ffi.enable=1` globally. Long-lived CLI
+processes — queue consumers, cron jobs, `artisan` commands — are where direct
+mode is the right call.
+Run: `php sdks/php/examples/sidecar_chat.php`, `…/direct_chat.php`, or
+`php sdks/php/examples/fork_probe.php before models` to see the false green.
+Tests: `cd sdks/php && composer install && vendor/bin/phpunit`.
+More: [`sdks/php`](https://github.com/vul-os/llmux/tree/main/sdks/php)
+
+### Elixir
+
+Sidecar only, deliberately. App `:llmux`, Elixir 1.12+, **no runtime
+dependencies** — the sidecar is a `Port` plus `:gen_tcp` and nothing else.
+
+```elixir
+{:ok, base} = Llmux.start()
+IO.puts(base)                                # http://127.0.0.1:<port>
+
+{:ok, v1} = Llmux.openai_base_url()
+IO.puts(v1)                                  # …/v1
+
+Llmux.stop()
+```
+
+Run: `cd sdks/elixir && mix run examples/sidecar_chat.exs`, or
+`examples/sidecar_stream.exs` for SSE, early stop, and killing a consumer.
+Tests: `cd sdks/elixir && mix test`.
+The eight measured reasons a NIF was rejected are in the package README, and
+they are worth reading even if you are not writing Elixir — they are the
+clearest statement in this repo of what an in-process gateway costs a runtime
+that guarantees isolation.
+More: [`sdks/elixir`](https://github.com/vul-os/llmux/tree/main/sdks/elixir)
 
 ## The sidecar contract
 
@@ -45,7 +588,7 @@ identically and why one bug report usually applies to all of them:
 2. **Pick a free `127.0.0.1` port** and launch with `LLMUX_ADDR=127.0.0.1:<port>`,
    inheriting your environment — so provider keys such as `OPENAI_API_KEY` pass
    straight through and providers auto-detect exactly as they do for the
-   standalone binary.
+   standalone binary. A configured `LLMUX_CONFIG` path is passed too.
 3. **Poll `/health`** until ready, with a timeout.
 4. **Expose `base_url()` and `openai_base_url()`** (`…/v1`), default API key
    `"llmux-local"`.
@@ -57,40 +600,41 @@ constructor returns a client already pointed at the gateway. Nothing forces you
 through it: `openai_base_url()` plus any HTTP client is always enough.
 
 Override the binary anywhere with `LLMUX_BINARY=/path/to/llmux`. For local
-development, `make sdk-bins` builds the binary into each package's `bin/`
-directory (`priv/bin/` for Elixir); those payloads are gitignored, and only the
-wrapper source is committed.
+development, `make sdk-bins` builds the binary into the `bin/` directory of the
+eight packages that bundle one — Python, Node, Ruby, PHP, Rust, Java, .NET and
+Elixir (`priv/bin/` for Elixir). Those payloads are gitignored, and only the
+wrapper source is committed. The other seven resolve a binary from
+`LLMUX_BINARY` or `PATH` instead.
 
-## The packages
+**One behavioural difference worth expecting.** The sidecar syncs the price
+catalog over the network in the background; the shared library does not, because
+a library loaded into someone else's process must not start traffic they did not
+ask for. Against the same config, the sidecar example reports several hundred
+models and the direct example reports seven. That is the two modes being
+correct, not one of them being broken.
 
-Each package's own README is the authority on its current mechanism, install
-instructions and status — this table is the index, not a spec, and the set is
-growing.
+## What every direct binding pays
 
-| Language | Source |
-|---|---|
-| Go — in-process, no wrapper needed | [`sdks/go`](https://github.com/vul-os/llmux/tree/main/sdks/go) · or [`core/gateway`](embedding.md) directly |
-| C | [`sdks/c`](https://github.com/vul-os/llmux/tree/main/sdks/c) |
-| C++ | [`sdks/cpp`](https://github.com/vul-os/llmux/tree/main/sdks/cpp) |
-| Python | [`sdks/python`](https://github.com/vul-os/llmux/tree/main/sdks/python) |
-| Node.js | [`sdks/node`](https://github.com/vul-os/llmux/tree/main/sdks/node) |
-| Deno | [`sdks/deno`](https://github.com/vul-os/llmux/tree/main/sdks/deno) |
-| Bun | [`sdks/bun`](https://github.com/vul-os/llmux/tree/main/sdks/bun) |
-| Rust | [`sdks/rust`](https://github.com/vul-os/llmux/tree/main/sdks/rust) |
-| Swift | [`sdks/swift`](https://github.com/vul-os/llmux/tree/main/sdks/swift) |
-| Java | [`sdks/java`](https://github.com/vul-os/llmux/tree/main/sdks/java) |
-| Kotlin | [`sdks/kotlin`](https://github.com/vul-os/llmux/tree/main/sdks/kotlin) |
-| .NET / C# | [`sdks/dotnet`](https://github.com/vul-os/llmux/tree/main/sdks/dotnet) |
-| Ruby | [`sdks/ruby`](https://github.com/vul-os/llmux/tree/main/sdks/ruby) |
-| PHP | [`sdks/php`](https://github.com/vul-os/llmux/tree/main/sdks/php) |
-| Elixir | [`sdks/elixir`](https://github.com/vul-os/llmux/tree/main/sdks/elixir) |
+These apply to all thirteen C-ABI bindings, whatever the language. The full
+version, with the measurements, is in [The C ABI → the costs](c-abi.md#the-costs).
 
-Every row above is a directory that exists in the repository today. That is the
-only claim this table makes: a package's own README says what mechanism it
-uses, how complete it is, and how to install it, and where the two disagree the
-README is right. If a language you want is not listed, the honest statement is
-that it does not exist yet — the [C ABI](c-abi.md) it would bind to is stable
-and documented, which is a different claim.
+- **The Go runtime lives in your process** — its GC, its scheduler and its signal
+  handlers.
+- **Not fork-safe**, with a false green attached: `models` answers from memory
+  and succeeds in a broken child while `chat` hangs forever.
+- **`dlclose` hangs.** Load the library once per process and leave it mapped;
+  every binding here does, and the Rust one leaks the mapping on purpose after a
+  test that opened and closed 200 gateways hung.
+- **Cancelling a stream does not always stop the upstream call.** A buffered
+  async wrapper can let the callback run ahead — in one measured case a consumer
+  taking 3 of 10 chunks still caused all 10 to be generated **and metered**.
+  Each package README states its own measured callback count under early exit.
+- **Latency is not the reason to embed.** The boundary is ~4 µs in-process
+  versus ~46 µs over loopback, but a real chat call measures ~80–92 µs against
+  ~102–109 µs — noise next to a model answering in hundreds of milliseconds. The
+  reasons are: no second process, no port, no loopback surface.
+- **No authentication on that boundary, by design.** Virtual keys, budgets and
+  per-key model allow-lists are the sidecar's job.
 
 ## Go: the one that is not a wrapper
 
@@ -118,11 +662,13 @@ price-catalog sync, no spend flusher, no background traffic. Call `gw.Run(ctx)`
 if you want that work — and read
 [what that turns on](embedding.md#background-work-is-opt-in-and-it-is-not-free)
 first, because on a default config it includes periodic outbound requests to two
-pricing sources.
+pricing sources. `Options.Addr` and `Options.ReadyTimeout` are ignored by `New`;
+they mean something only to the deprecated loopback shim.
 
 `llmux.Start` still exists for the case where you need to hand an
 OpenAI-compatible **HTTP client** a base URL, but it is a loopback shim, not
-embedding — it costs a port, a listener and a JSON round-trip per call:
+embedding, and **not the sidecar** — it costs a port, a listener and a JSON
+round-trip per call:
 
 ```go
 local, err := llmux.Start(llmux.Options{}) // deprecated; ephemeral loopback port
@@ -133,22 +679,45 @@ cfg.BaseURL = local.OpenAIBaseURL()          // → http://127.0.0.1:<port>/v1
 
 ## Testing the packages
 
-`make sdk-test` from the repo root runs every suite whose toolchain is
-installed, and skips the rest by name. It builds the real binary once, exports
-`LLMUX_BINARY`, and hands it to the integration tests.
+`make sdk-test` from the repo root builds the real binary once, exports
+`LLMUX_BINARY`, and runs the suites it knows about, skipping the rest **by
+name** rather than silently. Be precise about what that covers:
+
+| | Suites |
+|---|---|
+| In `make sdk-test` | Go, Python, Node, Ruby, Rust, Java, PHP, .NET, Elixir — **nine** |
+| Not in it | Bun, Deno, Swift, Kotlin, C, C++ — **six** |
+| In CI | Go (via `go test ./...`), plus dedicated Node and Rust jobs; `make test-ffi` covers the C ABI itself |
+
+The six outside `make sdk-test` are not untested, but they are tested
+differently, and you have to run them by hand:
+
+- **Rust** and **Python** have direct-mode suites; the other packages' tests
+  cover the sidecar only.
+- **Swift**: `./sdks/swift/run.sh test` — 11 cases, swift-testing rather than
+  XCTest, which was forced rather than chosen (XCTest ships with Xcode, not with
+  the Command Line Tools).
+- **Bun**, **Deno** and **Kotlin** have **no test suite at all** today. Bun and
+  Deno have type-check and lint tasks (`bun run check`, `deno task check`);
+  Kotlin's runnable check is `run-examples.sh`, which fails closed on a missing
+  toolchain or a non-zero example.
+- **C** and **C++** have examples, not tests. The test for that surface is
+  [`ffi/ctest/smoke.c`](https://github.com/vul-os/llmux/blob/main/ffi/ctest/smoke.c),
+  run by `make test-ffi`, which asserts 32 named checks **and then asserts that
+  32 checks ran**.
 
 The non-integration tests drive a **fake fixture** — a tiny HTTP server that
 honours `LLMUX_ADDR` and serves `/health` — so they need no real gateway and no
-network beyond localhost. Every package covers the same five things: binary
-resolution (`LLMUX_BINARY` → bundled → `PATH` → clear error), URL formatting
-(`openai_base_url() == base_url() + "/v1"`), health-poll readiness and timeout,
-the lazy singleton (no double-spawn), and cleanup (child terminated, port
-freed).
+network beyond localhost. Every sidecar suite covers the same five things:
+binary resolution (`LLMUX_BINARY` → bundled → `PATH` → clear error), URL
+formatting (`openai_base_url() == base_url() + "/v1"`), health-poll readiness and
+timeout, the lazy singleton (no double-spawn), and cleanup (child terminated,
+port freed).
 
 Integration tests auto-skip when no real binary is resolvable, which is the
 right default and also the classic way a suite goes quietly green having run
 nothing. If you are relying on them, set `LLMUX_BINARY` explicitly and check the
-skip count.
+skip count. Rust's direct suite prints its own verdict for exactly this reason.
 
 Per-package commands live in
 [`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md).
@@ -156,7 +725,8 @@ Per-package commands live in
 ## Related
 
 - [Choosing a mode](choosing-a-mode.md) — sidecar vs in-process, decided in five minutes
-- [The C ABI](c-abi.md) — what the in-process packages bind to
+- [The C ABI](c-abi.md) — what the thirteen direct packages bind to
 - [Embedding llmux](embedding.md) — the Go path in full
 - [Client examples](client-examples.md) — plain HTTP, in 17+ languages, no package required
 - [Quickstarts](quickstarts.md) — the five-minute version
+- [`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md) — the index that ships with the code
