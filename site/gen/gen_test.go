@@ -67,6 +67,67 @@ func TestSiteDocsInSync(t *testing.T) {
 	}
 }
 
+// TestSiteDocsNoscriptListMatchesGenerator guards the one list in the viewer
+// that no script can build, and that therefore cannot self-correct: the
+// <noscript> fallback. It is the whole documentation set for a reader with
+// scripting off, so a page missing from it is a page that reader cannot reach
+// at all — and nothing else in the page would notice.
+//
+// It asserts ORDER as well as membership, against both halves of the viewer:
+// hrefs against the generator's page list, and link text against the titles in
+// the viewer's own DOCS array.
+func TestSiteDocsNoscriptListMatchesGenerator(t *testing.T) {
+	r := root(t)
+	b, err := os.ReadFile(filepath.Join(r, "site", "docs.html"))
+	if err != nil {
+		t.Fatalf("read site/docs.html: %v", err)
+	}
+	html := string(b)
+
+	listRE := regexp.MustCompile(`(?s)<ol class="ns-list">(.*?)</ol>`)
+	m := listRE.FindStringSubmatch(html)
+	if m == nil {
+		t.Fatal("no <ol class=\"ns-list\"> block in site/docs.html — the noscript fallback " +
+			"is gone or was renamed, and this guard verified NOTHING")
+	}
+	itemRE := regexp.MustCompile(`<a href="\./docs/([^"]+)">([^<]+)</a>`)
+	items := itemRE.FindAllStringSubmatch(m[1], -1)
+	if len(items) == 0 {
+		t.Fatal("the noscript list contains no links — this guard verified NOTHING")
+	}
+
+	var gotFiles, gotTitles []string
+	for _, it := range items {
+		gotFiles = append(gotFiles, it[1])
+		gotTitles = append(gotTitles, strings.ReplaceAll(it[2], "&amp;", "&"))
+	}
+
+	var wantFiles []string
+	for _, p := range pages {
+		wantFiles = append(wantFiles, p.dst)
+	}
+	if strings.Join(gotFiles, ",") != strings.Join(wantFiles, ",") {
+		t.Errorf("the <noscript> list and the generator disagree (order matters):\n  noscript:  %v\n  generated: %v\n"+
+			"a document missing from the noscript list is unreachable with scripting off", gotFiles, wantFiles)
+	}
+
+	// The titles the noscript list shows must be the titles the scripted index
+	// shows, or the same document is named two different things depending on
+	// whether JavaScript ran.
+	titleRE := regexp.MustCompile(`"title"\s*:\s*"([^"]+)"\s*,\s*"path"`)
+	var navTitles []string
+	for _, tm := range titleRE.FindAllStringSubmatch(html, -1) {
+		navTitles = append(navTitles, strings.ReplaceAll(tm[1], "&amp;", "&"))
+	}
+	if len(navTitles) == 0 {
+		t.Fatal("found no titles in the DOCS array — the title scan is broken and verified nothing")
+	}
+	if strings.Join(gotTitles, "|") != strings.Join(navTitles, "|") {
+		t.Errorf("noscript link text and the DOCS titles disagree:\n  noscript: %v\n  DOCS:     %v", gotTitles, navTitles)
+	}
+	t.Logf("noscript fallback: %d links checked against %d generated pages", len(gotFiles), len(wantFiles))
+}
+
 // siteLinkRE matches markdown link targets in a generated site doc.
 var siteLinkRE = regexp.MustCompile(`\]\(([^)\s]+)\)`)
 

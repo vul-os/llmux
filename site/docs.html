@@ -344,11 +344,25 @@ img{max-width:100%;display:block}
 }
 
 /* ═══ The document index ═════════════════════════════════════════════════
-   A rack directory: five numbered groups, thirteen ordinals, and the
+   A rack directory: six numbered groups, one ordinal per document, and the
    landing's signal bus running down the left — the document you are reading
    is the channel patched through, marked by a tap node on the bus, a spur
-   into the row, and a teal edge. All thirteen entries are visible at once;
-   nothing is ever nested underneath the one you happen to be on. */
+   into the row, and a teal edge.
+
+   It used to be a flat list on principle: "which document" is one question,
+   and it always got the whole list. That held at thirteen documents. At
+   eighteen it does not — the set now has a four-document EMBED chapter that a
+   reader looking for provider parity has no use for, and the index outran the
+   viewport on a laptop. So two things changed, both narrowly:
+
+   - Groups COLLAPSE, and remember it (localStorage, per group). The group you
+     are reading is always forced open, because an index that hides the page
+     you are on is worse than a long one.
+   - The ACTIVE document — and only that one — expands to its own h2 sections.
+     This is the same argument the depth bar below already makes: "where am I
+     inside this document" is answered where the eye already is. The ON THIS
+     PAGE rail exists only from 1300px up, so between 1024 and 1299, and in the
+     phone sheet, this is the only in-document structure there is. */
 .rail-eyebrow{
   display:flex;align-items:center;gap:10px;margin:0 0 14px;
   font-family:var(--mono);font-size:11px;letter-spacing:.15em;text-transform:uppercase;color:var(--faint);
@@ -360,14 +374,28 @@ img{max-width:100%;display:block}
 .rail-nav::before{content:"";position:absolute;left:0;top:6px;bottom:6px;width:1px;background:var(--line-2)}
 .nav-grp{margin:0 0 6px}
 .nav-grp+.nav-grp{margin-top:16px}
+/* The group header is a real <button>: it toggles its group, so it has to be
+   focusable, activatable by keyboard, and it has to say aria-expanded. The
+   reset is deliberate and complete — a UA button brings its own font, its own
+   background and a border, all three of which would break the rack. */
 .nav-grp-h{
-  display:flex;align-items:center;gap:9px;margin:0 0 4px;
+  display:flex;align-items:center;gap:9px;width:100%;margin:0 0 4px;padding:8px 9px 8px 0;
+  min-height:36px;background:none;border:0;text-align:left;cursor:pointer;
   font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;
+  color:inherit;
 }
-.nav-grp-h .gn{color:var(--teal-ink);font-weight:600;flex:none}
+.nav-grp-h .gn{color:var(--teal-ink);font-weight:600;flex:none;transition:color .16s}
 .nav-grp-h .gl{color:var(--ink);font-weight:500;flex:none}
 .nav-grp-h .gr{flex:1;height:1px;background:var(--line);min-width:10px}
+.nav-grp-h .gt{flex:none;width:12px;height:12px;color:var(--faint);transition:transform .18s var(--ease),color .16s}
+.nav-grp-h:hover .gt,.nav-grp-h:focus-visible .gt{color:var(--teal-ink)}
+.nav-grp-h[aria-expanded="false"] .gt{transform:rotate(-90deg)}
+/* The count only appears once the group is shut — open, the entries are their
+   own count; shut, "4" is the whole information the header can still carry. */
+.nav-grp-h .gc{flex:none;font-size:10.5px;letter-spacing:.06em;color:var(--faint);display:none}
+.nav-grp-h[aria-expanded="false"] .gc{display:inline}
 .nav-list{list-style:none;margin:0;padding:0}
+.nav-grp.shut .nav-list{display:none}
 .nav-item{
   position:relative;display:grid;grid-template-columns:24px minmax(0,1fr);gap:7px;align-items:center;
   min-height:44px;padding:9px;border-left:1px solid transparent;color:var(--muted);
@@ -396,6 +424,36 @@ img{max-width:100%;display:block}
 /* The spur: the run from the bus into this row. */
 .nav-item[aria-current="page"]::after{
   content:"";position:absolute;left:-22px;top:50%;width:22px;height:1px;background:var(--teal-edge);
+}
+
+/* ── The active document's own sections, nested one level under it. h2 only:
+      h3s would turn the index into the second scrolling wall the ON THIS PAGE
+      rail was separated out to avoid. The 24px inset lines these up with the
+      `.nm` column of the entry above, not with its ordinal. */
+.nav-sub{list-style:none;margin:0 0 8px;padding:0 0 0 24px;border-left:1px solid var(--line)}
+.nav-sub a{
+  display:flex;align-items:center;gap:8px;min-height:34px;padding:5px 9px 5px 11px;
+  margin-left:-1px;border-left:1px solid transparent;
+  color:var(--muted);font-size:12.9px;line-height:1.35;
+  transition:color .16s,border-color .16s,background .16s;
+}
+.nav-sub a .sx{font-family:var(--mono);font-size:10px;color:var(--faint);flex:none;transition:color .16s}
+.nav-sub a:hover{color:var(--ink);border-left-color:var(--line-3);background:var(--panel)}
+.nav-sub a.here{color:var(--ink);border-left-color:var(--teal);font-weight:600}
+.nav-sub a.here .sx{color:var(--teal-ink)}
+/* A long document would otherwise push the rest of the index off the bottom of
+   the rail. Past twelve sections the tail is clipped and a "show all" control
+   opens it — the clip is never silent. */
+.nav-sub.clipped li:nth-child(n+13){display:none}
+.nav-sub-more{
+  display:block;width:100%;margin:2px 0 0;padding:7px 9px 7px 11px;min-height:34px;
+  background:none;border:0;border-left:1px solid transparent;text-align:left;cursor:pointer;
+  font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+}
+.nav-sub-more:hover{color:var(--teal-ink)}
+@media (max-width:1023px){
+  .nav-sub a{min-height:44px;font-size:14.5px}
+  .nav-sub-more{min-height:44px}
 }
 
 /* ── Index search — the index is built lazily from the same markdown the
@@ -1019,7 +1077,7 @@ img{max-width:100%;display:block}
       </button>
     </div>
     <div class="rail-body" id="railBody">
-      <div class="rail-eyebrow"><span>llmux docs</span><span class="re-r"></span><span>13 files</span></div>
+      <div class="rail-eyebrow"><span>llmux docs</span><span class="re-r"></span><span id="railCount">18 files</span></div>
       <div class="rail-search">
         <svg class="rs-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.6-3.6"/></svg>
         <input id="docSearch" type="search" placeholder="Search" aria-label="Search documentation" autocomplete="off" spellcheck="false">
@@ -1036,8 +1094,14 @@ img{max-width:100%;display:block}
     <article class="markdown" id="content"><p class="doc-loading">Loading…</p></article>
     <!-- These pages render the repo's own markdown in the browser, so with
          scripting off there is nothing to render it. Rather than leave a
-         permanent "Loading…", hand the reader the thirteen source files
-         directly — same origin, same content, no gateway needed. -->
+         permanent "Loading…", hand the reader every source file directly —
+         same origin, same content, no gateway needed.
+
+         This list is hand-written (it has to be: it exists precisely when no
+         script can build it) and is therefore the one place that can silently
+         drift from DOCS. TestSiteDocsNoscriptListMatchesGenerator in
+         site/gen/gen_test.go asserts, entry for entry and in order, that it
+         does not. -->
     <noscript>
       <style>
         #content .doc-loading,#docRail,.index-tab,.rail,.toc{display:none}
@@ -1049,7 +1113,12 @@ img{max-width:100%;display:block}
           JavaScript. Every document is plain markdown and can be read directly:</p>
         <ol class="ns-list">
           <li><a href="./docs/getting-started.md">Getting started</a></li>
+          <li><a href="./docs/quickstarts.md">Quickstarts</a></li>
           <li><a href="./docs/client-examples.md">Client examples</a></li>
+          <li><a href="./docs/choosing-a-mode.md">Choosing a mode</a></li>
+          <li><a href="./docs/embedding.md">Embedding in Go</a></li>
+          <li><a href="./docs/c-abi.md">The C ABI</a></li>
+          <li><a href="./docs/sdks.md">Language packages</a></li>
           <li><a href="./docs/architecture.md">Architecture</a></li>
           <li><a href="./docs/configuration.md">Configuration</a></li>
           <li><a href="./docs/control-plane.md">Control-plane seam</a></li>
@@ -1078,7 +1147,7 @@ img{max-width:100%;display:block}
 <button class="index-tab" id="navToggle" type="button" aria-expanded="false" aria-controls="docsNav">
   <svg class="it-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16M4 12h16M4 19h16"/><path d="M4 5h4M4 12h4M4 19h4" stroke-width="3"/></svg>
   <span class="it-txt"><span class="it-lbl">Document index</span><span class="it-cur" id="navCurrent">Getting started</span></span>
-  <span class="it-ix" id="navIndex">01/13</span>
+  <span class="it-ix" id="navIndex">01/18</span>
 </button>
 
 <script>
@@ -1088,25 +1157,31 @@ img{max-width:100%;display:block}
 // and that order is also the prev/next path through the set.
 const GROUPS = [
   { n:'01', label:'Start'     },
-  { n:'02', label:'System'    },
-  { n:'03', label:'Reference' },
-  { n:'04', label:'Operate'   },
-  { n:'05', label:'Project'   }
+  { n:'02', label:'Embed'     },
+  { n:'03', label:'System'    },
+  { n:'04', label:'Reference' },
+  { n:'05', label:'Operate'   },
+  { n:'06', label:'Project'   }
 ];
 const DOCS = [
   {"slug":"getting-started","title":"Getting started","path":"./docs/getting-started.md","group":0},
+  {"slug":"quickstarts","title":"Quickstarts","path":"./docs/quickstarts.md","group":0},
   {"slug":"client-examples","title":"Client examples","path":"./docs/client-examples.md","group":0},
-  {"slug":"architecture","title":"Architecture","path":"./docs/architecture.md","group":1},
-  {"slug":"configuration","title":"Configuration","path":"./docs/configuration.md","group":1},
-  {"slug":"control-plane","title":"Control-plane seam","path":"./docs/control-plane.md","group":1},
-  {"slug":"api","title":"API reference","path":"./docs/api.md","group":2},
-  {"slug":"llm-access","title":"LLM access & BYOK","path":"./docs/llm-access.md","group":2},
-  {"slug":"parity","title":"Provider parity","path":"./docs/parity.md","group":2},
-  {"slug":"admin-guide","title":"Admin guide","path":"./docs/admin-guide.md","group":3},
-  {"slug":"operations","title":"Operations","path":"./docs/operations.md","group":3},
-  {"slug":"troubleshooting","title":"Troubleshooting","path":"./docs/troubleshooting.md","group":3},
-  {"slug":"roadmap","title":"Roadmap","path":"./docs/roadmap.md","group":4},
-  {"slug":"changelog","title":"Changelog","path":"./docs/changelog.md","group":4}
+  {"slug":"choosing-a-mode","title":"Choosing a mode","path":"./docs/choosing-a-mode.md","group":1},
+  {"slug":"embedding","title":"Embedding in Go","path":"./docs/embedding.md","group":1},
+  {"slug":"c-abi","title":"The C ABI","path":"./docs/c-abi.md","group":1},
+  {"slug":"sdks","title":"Language packages","path":"./docs/sdks.md","group":1},
+  {"slug":"architecture","title":"Architecture","path":"./docs/architecture.md","group":2},
+  {"slug":"configuration","title":"Configuration","path":"./docs/configuration.md","group":2},
+  {"slug":"control-plane","title":"Control-plane seam","path":"./docs/control-plane.md","group":2},
+  {"slug":"api","title":"API reference","path":"./docs/api.md","group":3},
+  {"slug":"llm-access","title":"LLM access & BYOK","path":"./docs/llm-access.md","group":3},
+  {"slug":"parity","title":"Provider parity","path":"./docs/parity.md","group":3},
+  {"slug":"admin-guide","title":"Admin guide","path":"./docs/admin-guide.md","group":4},
+  {"slug":"operations","title":"Operations","path":"./docs/operations.md","group":4},
+  {"slug":"troubleshooting","title":"Troubleshooting","path":"./docs/troubleshooting.md","group":4},
+  {"slug":"roadmap","title":"Roadmap","path":"./docs/roadmap.md","group":5},
+  {"slug":"changelog","title":"Changelog","path":"./docs/changelog.md","group":5}
 ];
 const bySlug = Object.fromEntries(DOCS.map(d=>[d.slug,d]));
 const byFile = Object.fromEntries(DOCS.map(d=>[d.path.split('/').pop().toLowerCase(),d]));
@@ -1131,15 +1206,41 @@ if (window.marked && marked.setOptions) marked.setOptions({ gfm:true, breaks:fal
 function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 // ---- The document index ----------------------------------------------
-// Built once from DOCS. Five numbered groups, thirteen ordinals, no nesting
-// ever: "which document" is one question and it always gets the whole list.
+// Built once from DOCS: six numbered groups, one ordinal per document. Groups
+// collapse and remember it; the ACTIVE document alone expands to its own
+// sections (see buildNavSub, called once the page has rendered).
+const CHEVRON = '<svg class="gt" viewBox="0 0 24 24" fill="none" stroke="currentColor" '+
+  'stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+// Collapsed groups persist per group label rather than per index, so inserting
+// a group at the front does not silently shuffle everyone's saved state onto
+// the wrong chapters.
+const GRP_KEY = 'llmux-docs-groups-shut';
+function shutGroups(){
+  try { return new Set(JSON.parse(localStorage.getItem(GRP_KEY) || '[]')); } catch(e){ return new Set(); }
+}
+function saveShutGroups(set){
+  try { localStorage.setItem(GRP_KEY, JSON.stringify([...set])); } catch(e){}
+}
+
 function buildIndexNav(){
+  const shut = shutGroups();
   let html = '';
   GROUPS.forEach((g, gi)=>{
     const members = DOCS.map((d,i)=>({d,i})).filter(x=>x.d.group===gi);
     if(!members.length) return;
-    html += '<div class="nav-grp"><div class="nav-grp-h"><span class="gn">'+g.n+'</span>'+
-            '<span class="gl">'+esc(g.label)+'</span><span class="gr"></span></div><ul class="nav-list">';
+    const isShut = shut.has(g.label);
+    const listId = 'navgrp-' + gi;
+    html += '<div class="nav-grp'+(isShut?' shut':'')+'" data-group="'+esc(g.label)+'">'+
+            '<button class="nav-grp-h" type="button" aria-expanded="'+(isShut?'false':'true')+'" '+
+              'aria-controls="'+listId+'">'+
+              '<span class="gn">'+g.n+'</span>'+
+              '<span class="gl">'+esc(g.label)+'</span>'+
+              '<span class="gr"></span>'+
+              '<span class="gc">'+members.length+'</span>'+
+              CHEVRON+
+            '</button>'+
+            '<ul class="nav-list" id="'+listId+'">';
     members.forEach(({d,i})=>{
       html += '<li><a class="nav-item" data-slug="'+d.slug+'" href="#'+d.slug+'">'+
               '<span class="pg" aria-hidden="true"></span>'+
@@ -1148,8 +1249,59 @@ function buildIndexNav(){
     html += '</ul></div>';
   });
   navBody.innerHTML = html;
+  const count = document.getElementById('railCount');
+  if (count) count.textContent = DOCS.length + ' files';
 }
 buildIndexNav();
+
+function setGroupOpen(grp, open, persist){
+  const btn = grp.querySelector('.nav-grp-h');
+  grp.classList.toggle('shut', !open);
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  if (!persist) return;
+  const set = shutGroups();
+  if (open) set.delete(grp.dataset.group); else set.add(grp.dataset.group);
+  saveShutGroups(set);
+}
+navBody.addEventListener('click', (e)=>{
+  const btn = e.target.closest('.nav-grp-h');
+  if (!btn) return;
+  const grp = btn.closest('.nav-grp');
+  setGroupOpen(grp, grp.classList.contains('shut'), true);
+});
+
+// ---- Rail scroll position across page loads --------------------------
+// Reading a set of eighteen documents means coming back to this index over and
+// over. Losing your place in it on every navigation is a small tax charged
+// every single time. sessionStorage, not local: it is a position inside one
+// reading session, not a preference.
+const RAIL_SCROLL_KEY = 'llmux-docs-rail-scroll';
+let railScrollTick = false;
+function rememberRailScroll(){
+  railScrollTick = false;
+  const body = document.getElementById('railBody');
+  if (!body) return;
+  try { sessionStorage.setItem(RAIL_SCROLL_KEY, String(body.scrollTop)); } catch(e){}
+}
+function restoreRailScroll(){
+  const body = document.getElementById('railBody');
+  if (!body) return;
+  let v = null;
+  try { v = sessionStorage.getItem(RAIL_SCROLL_KEY); } catch(e){}
+  if (v === null) return;
+  const n = parseFloat(v);
+  if (!isNaN(n) && n > 0) body.scrollTop = n;
+}
+(function(){
+  const body = document.getElementById('railBody');
+  if (!body) return;
+  body.addEventListener('scroll', ()=>{
+    if (railScrollTick) return;
+    railScrollTick = true;
+    requestAnimationFrame(rememberRailScroll);
+  }, {passive:true});
+  restoreRailScroll();
+})();
 
 function setActive(slug){
   navBody.querySelectorAll('a[data-slug]').forEach(a=>{
@@ -1162,9 +1314,16 @@ function setActive(slug){
   const ix  = document.getElementById('navIndex');
   if (doc && cur) cur.textContent = doc.title;
   if (doc && ix)  ix.textContent = pad2(i+1)+'/'+pad2(DOCS.length);
-  // A 13-entry index can outrun a short viewport, so make sure the entry that
-  // says which document you are in is one of the ones actually on screen.
   const active = navBody.querySelector('a[aria-current="page"]');
+  // An index that hides the page you are on is worse than a long one: opening
+  // the active document's group is not negotiable, and it persists, because a
+  // reader who navigated here plainly wants this chapter.
+  if (active){
+    const grp = active.closest('.nav-grp');
+    if (grp && grp.classList.contains('shut')) setGroupOpen(grp, true, true);
+  }
+  // The index can outrun a short viewport, so make sure the entry that says
+  // which document you are in is one of the ones actually on screen.
   const body = document.getElementById('railBody');
   if (active && body && body.scrollHeight > body.clientHeight + 2){
     const nb = body.getBoundingClientRect(), ab = active.getBoundingClientRect();
@@ -1660,12 +1819,20 @@ function addHeadingAnchors(slug){
 // PAGE rail (>=1240px) is the fine-grained version with h3s and scrollspy.
 // Neither has any business inside the document index.
 let tocLinks = [], tocHeadings = [];
+// The index's nested sections are a THIRD surface off the same headings, and
+// deliberately its own pair of arrays rather than an index into tocLinks: the
+// rail drops h3s on very long documents while this list is h2-only, so the two
+// sets differ and any shared-index scheme is one refactor away from
+// highlighting the wrong row.
+let navSubLinks = [], navSubHeadings = [];
 function headingText(h){ return h.textContent.replace(/#$/,'').trim(); }
 
 function buildToc(slug){
   tocLinks = []; tocHeadings = [];
+  navSubLinks = []; navSubHeadings = [];
   tocListEl.innerHTML = '';
   tocRail.hidden = true;
+  navBody.querySelectorAll('.nav-sub,.nav-sub-more').forEach(n=>n.remove());
   content.querySelectorAll('.contents').forEach(n=>n.remove());
 
   const all = [...content.querySelectorAll('h1,h2,h3')];
@@ -1703,8 +1870,48 @@ function buildToc(slug){
   });
   tocRail.hidden = false;
 
-  // ── CONTENTS ledger, injected into the document itself after the lede.
+  // ── The active entry's own sections, nested into the document index.
   const sections = entries.filter(e=>e.lv===2);
+  const activeItem = navBody.querySelector('a[aria-current="page"]');
+  if (activeItem && sections.length >= 2){
+    const host = activeItem.closest('li');
+    if (host){
+      const ul = document.createElement('ul');
+      ul.className = 'nav-sub';
+      ul.setAttribute('aria-label', 'Sections of ' + (bySlug[slug] ? bySlug[slug].title : 'this document'));
+      sections.forEach((e,i)=>{
+        const li = document.createElement('li');
+        const a = document.createElement('a');
+        a.href = '#' + slug + '~' + e.h.id;
+        a.innerHTML = '<span class="sx" aria-hidden="true"></span><span class="sn"></span>';
+        a.firstElementChild.textContent = pad2(i+1);
+        a.lastElementChild.textContent = headingText(e.h);
+        a.addEventListener('click', go(e.h));
+        li.appendChild(a);
+        ul.appendChild(li);
+        navSubLinks.push(a); navSubHeadings.push(e.h);
+      });
+      host.appendChild(ul);
+      // Clip past twelve, with a control that says how many are hidden. A
+      // silent clip would be a lie about the document's shape.
+      if (sections.length > 12){
+        ul.classList.add('clipped');
+        const more = document.createElement('button');
+        more.type = 'button';
+        more.className = 'nav-sub-more';
+        more.setAttribute('aria-expanded','false');
+        more.textContent = '+ ' + (sections.length - 12) + ' more';
+        more.addEventListener('click', ()=>{
+          const clipped = ul.classList.toggle('clipped');
+          more.setAttribute('aria-expanded', clipped ? 'false' : 'true');
+          more.textContent = clipped ? ('+ ' + (sections.length - 12) + ' more') : 'Show fewer';
+        });
+        host.appendChild(more);
+      }
+    }
+  }
+
+  // ── CONTENTS ledger, injected into the document itself after the lede.
   if (sections.length >= 3){
     const det = document.createElement('details');
     det.className = 'contents';
@@ -1754,18 +1961,39 @@ function updateDepth(){
 // Scrollspy: mark the heading whose section the reader is actually in, and
 // keep that marker inside the rail's own scroll region.
 let spyTicking = false;
+
+// activeHeading returns the index of the last heading in `list` whose top has
+// crossed the reading line, or -1 while the reader is still in the preamble
+// above the first one. At the very bottom of the page it pins to the last
+// entry, so a short final section can still be reached by scrolling.
+//
+// Known trap, recorded because it has cost time before: this is a geometric
+// test run on scroll, NOT an IntersectionObserver — a fast programmatic scroll
+// does not fire IntersectionObserver, so a screenshot taken after an
+// auto-scroll can show a stale or blank highlight that is a capture artifact
+// rather than a bug. Reading the rect on every scroll frame has no such
+// failure mode.
+function activeHeading(list){
+  const line = 110;
+  let idx = -1;
+  for (let i=0;i<list.length;i++){
+    if (list[i].getBoundingClientRect().top <= line) idx = i; else break;
+  }
+  if (list.length && window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) idx = list.length - 1;
+  return idx;
+}
+
 function updateSpy(){
   spyTicking = false;
   updateDepth();
-  if (!tocHeadings.length) return;
-  const line = 110;
-  // -1 until the first section actually crosses the line: at the top of a
-  // document the reader is in the preamble, not in section 1.
-  let idx = -1;
-  for (let i=0;i<tocHeadings.length;i++){
-    if (tocHeadings[i].getBoundingClientRect().top <= line) idx = i; else break;
+  // The index's nested sections track the same reading position as the rail,
+  // over their own (h2-only) list.
+  if (navSubHeadings.length){
+    const nIdx = activeHeading(navSubHeadings);
+    navSubLinks.forEach((a,i)=>a.classList.toggle('here', i === nIdx));
   }
-  if (window.innerHeight + window.scrollY >= document.body.scrollHeight - 4) idx = tocHeadings.length - 1;
+  if (!tocHeadings.length) return;
+  const idx = activeHeading(tocHeadings);
   tocLinks.forEach((a,i)=>a.classList.toggle('here', i === idx));
   const cur = tocLinks[idx];
   if (cur && tocRail.offsetParent !== null && getComputedStyle(tocRail).overflowY === 'auto'){

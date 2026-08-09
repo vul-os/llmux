@@ -33,15 +33,20 @@ web/                 admin console (ui.html, hand-written, no build step), embed
 
 ## llmux as a library
 
+This section is the map. [Embedding llmux in Go](embedding.md) is the territory:
+the whole `core/gateway` surface, the seams, the errors worth handling by type,
+and what to do about each caveat below.
+
 `core/gateway.New(cfg *config.Config, opts ...Option) (*Gateway, error)` builds
 a `Gateway` and holds to five rules: it starts no goroutines (background work is
-opt-in via `Run`); it reads no environment itself (`config.FromEnv` /
-`config.Default()` is an explicit call the caller makes); there is no
-package-level mutable state or package logger, so two gateways in one process
-never interfere; readiness is explicit, never implied; and it is pure core with
-opt-in I/O. Dispatch with `Chat` / `ChatStream` / `Embed`; `Run(ctx)` (or the
-non-blocking `Start(ctx)`) opts into the price-catalog syncer, the file key
-store's spend flusher, and a Redis ping — none of which run otherwise.
+opt-in via `Run`); it reads no environment of its own (`config.Default()` /
+`config.Load(path)` / `config.FromJSON(data)` are explicit calls the caller
+makes, and those are what consult the environment); there is no package-level
+mutable state or package logger, so two gateways in one process never interfere;
+readiness is explicit, never implied; and it is pure core with opt-in I/O.
+Dispatch with `Chat` / `ChatStream` / `Embed`; `Run(ctx)` (or the non-blocking
+`Start(ctx)`) opts into the price-catalog syncer, the file key store's spend
+flusher, and a Redis ping — none of which run otherwise.
 
 Two things happen regardless, and are documented here rather than left to be
 discovered:
@@ -91,6 +96,22 @@ standalone local-sidecar posture, where an in-process host is already trusted.
   the embedded console together). See
   [Operations → building without the console](operations.md#building-without-the-console-noui)
   for the `noui`-specific delta.
+
+### The same library, from a non-Go host
+
+`ffi/` builds `core/gateway` as a C shared library — six functions, JSON in and
+JSON out, the same JSON the HTTP API uses. It is a **separate Go module**
+(`github.com/vul-os/llmux-ffi`) deliberately outside this repo's import prefix,
+so Go's `internal/` rule applies to it exactly as it does to any third-party
+embedder: the C ABI is *evidence* that the exported API is sufficient, not a
+privileged insider. Keeping it out of the main module also keeps cgo out of
+`go build ./...` and out of the `-tags noui` build.
+
+The costs of putting the Go runtime inside someone else's process — signal
+handlers, no fork-safety, a ~12–17 MB artifact, and a platform matrix with two
+targets that do not exist — are in [The C ABI](c-abi.md#the-costs). For several
+hosts the sidecar is the better answer, and
+[Choosing a mode](choosing-a-mode.md) is the page that decides it.
 
 ## The sovereignty gate (where your AI runs)
 
@@ -216,6 +237,9 @@ its own; the same binary and code path serve both self-host and managed.
 
 ## Related
 
+- [Embedding llmux in Go](embedding.md) — the full `core/gateway` API, the seams, and the errors worth handling by type
+- [Choosing a mode](choosing-a-mode.md) — server vs sidecar vs library vs C ABI
+- [The C ABI](c-abi.md) — the same library from a non-Go host
 - [Client examples → embed it locally](client-examples.md#embed-it-locally-no-separate-server-to-run) — copy-paste `gateway.New` / `llmux.New` usage
 - [Operations → building without the console](operations.md#building-without-the-console-noui) — the `noui` tag, `Options.UI`, measured sizes
 - [Connecting providers](getting-started.md#2-connect-providers) — native adapters vs. passthrough, and adapter stability

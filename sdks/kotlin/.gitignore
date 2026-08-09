@@ -1,0 +1,6 @@
+# Kotlin SDK build output. run-examples.sh compiles into a temporary directory,
+# so nothing here is normally produced — these cover an ad-hoc `kotlinc -d out`.
+/out/
+/build/
+/lib/
+*.jar

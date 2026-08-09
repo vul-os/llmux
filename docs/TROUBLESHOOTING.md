@@ -18,6 +18,10 @@ This page maps the symptoms you actually see — a 503 from a Vulos app's `/api/
 | 501 on `/v1/responses`, images, audio, … | Modality route hit a translating adapter | Modality routes returning 501 |
 | `cost_usd` 0 / usage missing from CP | Catalog gap / BYOK / CP retry queue drained | Cost / metering anomalies |
 | Gateway won't start | Bad provider `type`, keyless non-loopback bind | Startup problems |
+| 402 on a key that has barely spent | Leaked `Authorize` reservation in an embedding host | Embedded and C-ABI hosts |
+| Host hangs or crashes on the first library call | `fork()` without `exec()`; the Go runtime did not survive | Embedded and C-ABI hosts |
+| `dlopen` succeeds, symbol lookup fails | Wrong header, or a stale `libllmux` earlier on the load path | Embedded and C-ABI hosts |
+| No library for your platform | windows/amd64 and darwin/amd64 do not exist | Embedded and C-ABI hosts |
 
 ## 503s from `/api/ai/*` (Vulos OS routes)
 
@@ -124,6 +128,34 @@ Knowing what the gateway does on failure saves you from misreading symptoms:
 - Any other 4xx from the upstream is returned to you immediately — no retry, no failover. A 401 from OpenAI will never "fail over" to Anthropic; fix the key.
 - A sovereignty-blocked target is skipped without a dial — so a chain of `[remote, local]` still serves from `local` even when the remote isn't opted in.
 - Upstream `retry-after` and rate-limit headers are relayed to you on the final response — honour them.
+
+## Embedded and C-ABI hosts
+
+These are the failures unique to running llmux *inside* your own process. None of them can happen to an HTTP client, which is why they are easy to misdiagnose. See [Embedding llmux](embedding.md) and [The C ABI](c-abi.md) for the full picture.
+
+**402 `budget_exceeded` on a key whose recorded spend is nowhere near its budget.** Almost always a leaked reservation. `gw.Authorize(ctx, token)` returns `(ctx, release, error)`; `release` frees the in-flight hold the budget gate placed, and it **must be called on every path, including the error paths**. Skip it and the key's outstanding in-flight total only ever rises — once it reaches the budget, every subsequent request on that key is denied while `/admin/keys` shows the spend as low. The fix is `defer release()` on the line after the call, *before* you inspect the error. Confirm the diagnosis by restarting the host: the reservation map is in memory, so a restart clears it and the denials stop until the leak refills it.
+
+**Nothing is enforced at all in an embedded host.** `Authorize` is a no-op when no credential wall is configured — no static keys and no external identity. That is the intended standalone posture, but it also means a test suite that never configures keys cannot tell you whether your auth wiring works. Check `gw.IdentityActive()`.
+
+**Requests ignore the key's model allow-list, cache scope, or BYOK credential.** You authorized and then dispatched with the *original* context. `Authorize` returns a new `ctx` carrying the resolved key and account id, and the dispatch paths read it from there. Passing the pre-authorization context compiles, runs, and silently enforces none of it.
+
+**The host hangs or crashes on its first call into the shared library.** The Go runtime is not fork-safe: after `fork()` without `exec()`, its threads did not come across. Load the library *after* the fork, in the worker, never in the master — this is the uWSGI/Unicorn/Gunicorn-pre-fork case. In Python, `multiprocessing.set_start_method("spawn")` (the default on macOS, *not* on Linux).
+
+**Signal-handling conflicts.** The Go runtime installs handlers for `SIGSEGV`, `SIGBUS`, `SIGFPE`, `SIGPROF` and others. A JVM, a sampling profiler, a sanitizer or a crash reporter with its own handling can conflict. Go chains to a pre-existing handler in most cases; if your host is one where it does not, the sidecar is the answer.
+
+**`dlopen` succeeds but a symbol is missing, or calls behave strangely.** Two causes. Either you are using the cgo-generated `libllmux.h` instead of the hand-written [`ffi/include/llmux.h`](../ffi/include/llmux.h) — use the hand-written one — or a *different* `libllmux` earlier on your load path answered. Call `llmux_abi_version()` at startup and compare it against the version your bindings were generated for; that probe exists precisely for this.
+
+**A crash in the allocator when freeing a result.** Everything the library returns — results *and* error strings — is freed with `llmux_free` and with nothing else. `free()` is not interchangeable with it. The one exception is `llmux_abi_version`, which returns a static string you must not free at all.
+
+**Chunks are garbage after the callback returns.** The `chunk_json` string is owned by the library and valid only for the duration of that call. Copy it if you need it afterwards.
+
+**`llmux_call` refuses a chat request.** A `"chat"` body with `"stream": true` is rejected rather than quietly served as one blob. Use `llmux_stream`.
+
+**There is no library for your platform.** Prebuilt shared libraries exist for darwin/arm64 and linux/arm64. linux/amd64 is built and tested in CI only. **windows/amd64 and darwin/amd64 have never been built by anyone.** Build one yourself with `scripts/build-ffi.sh` if you have the cross toolchain, or use the sidecar for those targets — see [where it runs](c-abi.md#where-it-runs).
+
+**The gateway makes outbound requests you did not expect.** `New`/`llmux_new` makes none. `Run`/`Start` starts the price-catalog syncer, and `config.Default()` ships two remote pricing sources — so calling `Run` on a default config means periodic outbound GETs to those two hosts. Do not call `Run`, or set `cfg.Pricing.Sources` to nil and use overrides instead.
+
+**A library host connects to a database at construction time.** `New` connects and migrates eagerly when `cfg.Postgres` is set, including when it was set by a `LLMUX_POSTGRES` / `DATABASE_URL` / `VULOS_DATABASE_URL` variable in the inherited environment rather than by you. Check the config you actually built, not the one you wrote.
 
 ## Known limitations (as of this writing)
 

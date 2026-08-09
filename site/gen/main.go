@@ -44,17 +44,22 @@ type page struct {
 // pages is the docs the site bundle ships, in nav order.
 var pages = []page{
 	{"docs/GETTING-STARTED.md", "getting-started.md"},
+	{"docs/quickstarts.md", "quickstarts.md"},
 	{"docs/client-examples.md", "client-examples.md"},
+	{"docs/choosing-a-mode.md", "choosing-a-mode.md"},
+	{"docs/embedding.md", "embedding.md"},
+	{"docs/c-abi.md", "c-abi.md"},
+	{"docs/sdks.md", "sdks.md"},
 	{"docs/architecture.md", "architecture.md"},
 	{"docs/configuration.md", "configuration.md"},
+	{"docs/control-plane.md", "control-plane.md"},
 	{"docs/api.md", "api.md"},
 	{"docs/LLM-ACCESS.md", "llm-access.md"},
-	{"docs/control-plane.md", "control-plane.md"},
+	{"docs/parity.md", "parity.md"},
 	{"docs/ADMIN-GUIDE.md", "admin-guide.md"},
 	{"docs/operations.md", "operations.md"},
 	{"docs/TROUBLESHOOTING.md", "troubleshooting.md"},
 	{"ROADMAP.md", "roadmap.md"},
-	{"docs/parity.md", "parity.md"},
 	{"CHANGELOG.md", "changelog.md"},
 }
 

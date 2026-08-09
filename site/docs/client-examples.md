@@ -341,28 +341,19 @@ res, err := gw.Chat(ctx, &openai.ChatCompletionRequest{
 // served (after failover); res.BYOK and res.CacheHit report how.
 ```
 
-`gateway.New` starts **no goroutines** and — with the one exception below —
-opens **no sockets**: no price-catalog sync, no spend flusher, no Redis ping.
-Call `gw.Run(ctx)` (or `gw.Start(ctx)`) to opt into that background work; a
-caller that never does gets zero background traffic. Two things `New` does
-regardless, stated plainly rather than left to be discovered:
-
-- If `cfg.Postgres` is set, `New` builds the Postgres key store, which
-  **connects and migrates eagerly** — an explicitly opted-into remote
-  dependency. With no DSN configured (every default and library configuration),
-  `New` opens nothing.
-- `New` reads `os.Getenv` for any configured provider whose credential is given
-  as `api_key_env` (e.g. `"api_key_env": "OPENAI_API_KEY"`) — that is
-  config-directed, not auto-detected: it only happens for env-var names you put
-  in the config (or that `config.Default()`'s auto-detection wrote there), never
-  for arbitrary environment variables.
+`gateway.New` starts **no goroutines** and, absent a configured Postgres DSN,
+opens **no sockets**. Three things it does anyway — the eager Postgres connect,
+the `api_key_env` environment read, and two optional local file reads — are
+spelled out in
+[Embedding llmux → the five rules](embedding.md#the-five-rules-and-the-three-exceptions).
 
 If you build your own auth layer on top of `gw.Chat`/`gw.ChatStream`/`gw.Embed`,
 route every call through `gw.Authorize(ctx, token)` first — it is the same path
 `core/server`'s HTTP middleware uses, so an embedding host never gets a laxer
 check than a network client. It returns `(ctx, release func(), error)`;
 `release` is **never nil** and **must always be called**, even on error, or a
-budget-gate reservation leaks:
+budget-gate reservation leaks — and the returned `ctx` is the one you must pass
+to the dispatch call:
 
 ```go
 ctx, release, err := gw.Authorize(ctx, token)
@@ -380,6 +371,13 @@ UI bytes in it regardless of build tags. If you embed `core/server` instead
 (for its HTTP surface) and want the console gone too, see
 [noui and Options.UI](operations.md#building-without-the-console-noui) —
 measured binary-size deltas included.
+
+**Not writing Go?** The same in-process gateway is available as a C shared
+library — six functions, the same JSON the HTTP API uses. Read
+[The C ABI](c-abi.md) and, before you commit to it,
+[Choosing a mode](choosing-a-mode.md): for several hosts the sidecar below is
+the better answer, and prebuilt libraries exist for darwin/arm64 and
+linux/arm64 only.
 
 `llmux.Start()` remains for the case where you need to hand an
 OpenAI-compatible **HTTP client** a base URL rather than dispatching in-process:
@@ -434,7 +432,10 @@ for the exact binary-resolution path per language, the full package list
 
 ## Related
 
-- [Architecture → llmux as a library](architecture.md#llmux-as-a-library) — the full `core/gateway` surface, `Authorize`/`release`, and the two things `New` does on its own
+- [Choosing a mode](choosing-a-mode.md) — sidecar vs in-process, and which one your host can actually use
+- [Embedding llmux in Go](embedding.md) — the full `core/gateway` surface, `Authorize`/`release`, and everything `New` does on its own
+- [The C ABI](c-abi.md) · [Language packages](sdks.md)
+- [Architecture → llmux as a library](architecture.md#llmux-as-a-library) — where the library sits in the layout
 - [Getting started](getting-started.md) — deploy the gateway and connect providers
 - [Model routing and selection](admin-guide.md#model-routing-and-selection) — how the `model` string resolves
 - [API reference](api.md) — every endpoint, header, and error code

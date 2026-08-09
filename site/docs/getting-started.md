@@ -265,7 +265,10 @@ Before exposing the gateway beyond your own machine:
 
 ## 8. Where to next
 
-- [client-examples.md](client-examples.md) — copy-paste requests in curl and 17+ languages, plus embedding llmux locally with no server to run.
+- [quickstarts.md](quickstarts.md) — the same ground as this page in five minutes, plus the three non-operator tracks.
+- [choosing-a-mode.md](choosing-a-mode.md) — you have just deployed a server; this is when the sidecar, the Go library or the C ABI would have been the better answer instead.
+- [client-examples.md](client-examples.md) — copy-paste requests in curl and 17+ languages.
+- [embedding.md](embedding.md) — run this gateway in your own Go process, with no server at all.
 - [ADMIN-GUIDE.md](admin-guide.md) — budgets, metering, model routing in depth, logging/privacy posture.
 - [TROUBLESHOOTING.md](troubleshooting.md) — 503s from `/api/ai/*`, provider auth failures, budget exhaustion, streaming issues.
 - [LLM-ACCESS.md](llm-access.md) — BYOK vs central metering, the product consumption contract.
