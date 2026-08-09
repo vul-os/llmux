@@ -304,7 +304,7 @@ times:
 
 | target | status |
 |---|---|
-| **darwin/arm64** | Built and tested on the development machine. 12,769,346 bytes; the C smoke test passes all 32 checks against it |
+| **darwin/arm64** | Built and tested on the development machine. 12,787,504 bytes; the C smoke test passes all 32 checks against it |
 | **linux/arm64** | Built and tested in a `golang:1.25` container on that same machine. 17,348,392 bytes; all 32 checks pass |
 | **linux/amd64** | Built and tested **in CI** (the `ffi` job on `ubuntu-latest`). Not produced on the development machine — no cross toolchain there |
 | **windows/amd64** | **Not built. Not tested. No `.dll` has been produced by anyone yet.** `build-ffi.sh` will attempt it if `x86_64-w64-mingw32-gcc` or `zig` is present; nobody has run that, so treat Windows as unverified |
