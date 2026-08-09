@@ -127,19 +127,27 @@ That said, it is still a callback into your host from inside a Go call frame:
 `-buildmode=c-shared` is not free, and none of this belongs in a footnote.
 
 1. **The Go runtime lives in your process.** Its garbage collector, its
-   scheduler, and its signal handlers. Go installs handlers for `SIGSEGV`,
-   `SIGBUS`, `SIGFPE`, `SIGPIPE` and `SIGURG`. A host with its own handling — a
-   JVM, some Python profilers, sanitizers, crash reporters — can conflict with
-   it. Go chains to a pre-existing handler in most cases, but "most" is the
-   honest word.
+   scheduler, and its signal handlers. Go replaces five — `SIGSEGV`, `SIGBUS`,
+   `SIGFPE`, `SIGPIPE`, `SIGURG` — and leaves three more in place with
+   `SA_ONSTACK` added (`SIGILL`, `SIGXFSZ`, `SIGUSR2`). A host with its own
+   handling — a JVM, sanitizers, crash reporters — can conflict with it. Go
+   chains to a pre-existing handler in most cases, but "most" is the honest
+   word. **`SIGPROF` is not touched**, so sampling profilers are not the hazard
+   here; the measured breakdown is in
+   [`sdks/java/README.md`](../sdks/java/README.md#the-jvm-and-gos-signal-handlers).
 
-2. **It is not fork-safe.** After `fork()` without `exec()`, the Go runtime in
-   the child is broken: its threads did not come across, so the first call into
-   the library can hang or crash. This bites:
+2. **It is not fork-safe, and the failure is a false green.** After `fork()`
+   without `exec()` the Go runtime in the child is broken: its threads did not
+   come across. It does not fail loudly on the first call. Measured in real
+   php-fpm, and again after `os.fork()` in Python, a broken child answers
+   `models` — served from memory — in about 0.1 ms and then never answers `chat`
+   at all. **A health check that only lists models will call a broken worker
+   healthy.** This bites:
    - Python `multiprocessing` with the default `fork` start method on Linux —
      use `spawn` (`multiprocessing.set_start_method("spawn")`).
-   - **uWSGI** and **Unicorn** and any other pre-fork worker model — load the
-     library *after* the fork, in the worker, never in the master.
+   - **php-fpm** in every `pm` mode, **uWSGI**, **Unicorn** and any other
+     pre-fork worker model — load the library *after* the fork, in the worker,
+     never in the master.
 
 3. **Building it needs cgo and a C toolchain for each target platform.**
    Consumers only need the prebuilt artifact, but somebody builds it, per

@@ -28,7 +28,7 @@ before you read a package README:
 | Auth at the boundary | Full: virtual keys, budgets, per-key model allow-lists | **None** — you are inside the trust boundary |
 | Ships as | A binary inside the package artifact | A shared library, per platform |
 | Fails on | Nothing structural; it is a child process | Pre-fork hosts, hosts with their own signal handling, platforms with no prebuilt library |
-| Platforms | Everywhere the Go binary cross-compiles, which is everywhere | darwin/arm64 and linux/arm64 only, today |
+| Platforms | Everywhere the Go binary cross-compiles, which is everywhere | darwin/arm64 and linux/arm64, plus linux/amd64 in CI — and you build it yourself |
 | Who has it | **all fifteen** | Go natively, plus thirteen through the C ABI |
 
 Go is a case of its own: it imports [`core/gateway`](embedding.md) directly, with
@@ -38,10 +38,12 @@ killed or `Task.await`-timed-out, that takes the whole VM down on a segfault, an
 that as a dirty-IO NIF caps concurrency at the scheduler count (measured on this
 machine: 10 dirty-IO schedulers).
 
-**The platform row is the one that decides most cases.** Prebuilt shared
-libraries exist for darwin/arm64 and linux/arm64. linux/amd64 is built and
-tested in CI only. **windows/amd64 and darwin/amd64 do not exist** — no `.dll`
-and no Intel-macOS library has been produced by anyone. A package that offers a
+**The platform row is the one that decides most cases.** No release ships a
+shared library at all, so direct mode always begins by building one —
+`scripts/build-ffi.sh`, or `make ffi` for this host. That build is known to work
+on darwin/arm64 and linux/arm64, and in CI on linux/amd64. **windows/amd64 and
+darwin/amd64 do not exist** — no `.dll` and no Intel-macOS library has been
+produced by anyone. A package that offers a
 direct path therefore has to keep the sidecar path working anyway, for the
 platforms where the library is not there. See
 [The C ABI → where it runs](c-abi.md#where-it-runs).
@@ -125,8 +127,13 @@ directory, and the fake upstream the runners boot is
 [`ffi/fakeupstream`](https://github.com/vul-os/llmux/tree/main/ffi/fakeupstream),
 the same one the C smoke test and the latency benchmark use.
 
-Two environment variables recur, and **they are two different variables** — do
-not conflate them:
+**First, build the library.** No release ships one. `scripts/build-ffi.sh`
+writes it to `dist/ffi/<goos>_<goarch>/`, and `make ffi` does the same for this
+host; [The C ABI](c-abi.md#building-it-yourself) has the cross-compile detail.
+The sidecar needs no such step — only the `llmux` binary.
+
+Then two environment variables recur, and **they are two different variables** —
+do not conflate them:
 
 - **`LLMUX_BINARY`** — path to the `llmux` binary, for the sidecar. Resolution
   is the same everywhere: `LLMUX_BINARY` → a binary bundled in the package →
@@ -309,8 +316,10 @@ More: [`sdks/swift`](https://github.com/vul-os/llmux/tree/main/sdks/swift)
 ### Deno
 
 Direct, via `Deno.dlopen`. Module `@vul-os/llmux`, no third-party dependencies.
-This is the one JavaScript runtime where direct mode is not a compromise —
-`llmux_call_async` keeps the isolate responsive.
+This is the one JavaScript runtime where direct mode is not a compromise: it
+declares `llmux_call` a second time with `nonblocking: true` — `mod.ts` names
+that alias `llmux_call_async`, and it is a Deno-side symbol declaration, not a
+seventh C export — which keeps the isolate responsive.
 
 ```typescript
 import { abiVersion, Gateway } from "./mod.ts";     // module name: @vul-os/llmux
@@ -679,9 +688,10 @@ cfg.BaseURL = local.OpenAIBaseURL()          // → http://127.0.0.1:<port>/v1
 
 ## Testing the packages
 
-`make sdk-test` from the repo root builds the real binary once, exports
-`LLMUX_BINARY`, and runs the suites it knows about, skipping the rest **by
-name** rather than silently. Be precise about what that covers:
+`make sdk-test` from the repo root builds the real binary once, points each
+suite at it — `LLMUX_BINARY` for most, `LLMUX_BINARY_REAL` for PHP, .NET and
+Elixir — and runs the suites it knows about, skipping the rest **by name**
+rather than silently. Be precise about what that covers:
 
 | | Suites |
 |---|---|
@@ -719,7 +729,7 @@ right default and also the classic way a suite goes quietly green having run
 nothing. If you are relying on them, set `LLMUX_BINARY` explicitly and check the
 skip count. Rust's direct suite prints its own verdict for exactly this reason.
 
-Per-package commands live in
+Per-package commands live in each package's own README, indexed from
 [`sdks/README.md`](https://github.com/vul-os/llmux/blob/main/sdks/README.md).
 
 ## Related

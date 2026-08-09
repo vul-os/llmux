@@ -3,8 +3,11 @@
 Use llmux from any of fifteen languages, **two ways**:
 
 - **Direct** — in-process. Go imports the package. Every other language loads a
-  C ABI shared library (`llmux_new`/`call`/`stream`/`close`/`free`), built with
-  `go build -buildmode=c-shared`. See [`../ffi/README.md`](../ffi/README.md).
+  C ABI shared library of six symbols — `llmux_new`, `llmux_call`,
+  `llmux_stream`, `llmux_close`, `llmux_free` and `llmux_abi_version` — built
+  with `go build -buildmode=c-shared`. See
+  [`../ffi/README.md`](../ffi/README.md) and
+  [the C ABI](../docs/c-abi.md).
 - **Sidecar** — the gateway as a separate process, either one you run or one the
   package spawns and manages for you on `127.0.0.1`.
 
@@ -87,9 +90,12 @@ reason is platform coverage, and Elixir's is what a NIF is.
   ~102–109 µs — noise next to a model answering in hundreds of milliseconds. The
   reasons are: no second process, no port, no loopback surface.
 
-## Prebuilt libraries — what actually exists
+## Shared libraries — what actually exists
 
-Direct mode needs a shared library for your platform. Today:
+Direct mode needs a shared library for your platform, and **no release ships
+one.** You build it with [`../scripts/build-ffi.sh`](../scripts/build-ffi.sh),
+or `make ffi` for this host, which writes it to `dist/ffi/<goos>_<goarch>/`.
+Where that build is known to work today:
 
 | Target | Status |
 |---|---|
@@ -99,9 +105,10 @@ Direct mode needs a shared library for your platform. Today:
 | **windows/amd64** | **does not exist — no DLL ships** |
 | **darwin/amd64** | **not built** |
 
-**openrate's matrix is different** (no linux/arm64; an unexecuted darwin/amd64
-build). Do not assume one covers the other. Build your own with
-[`../scripts/build-ffi.sh`](../scripts/build-ffi.sh).
+"Built and smoke-tested" means the maintainer compiled and ran it on that
+target, not that you can download it. **openrate's matrix is different** (no
+linux/arm64; an unexecuted darwin/amd64 build) — do not assume one covers the
+other.
 
 The sidecar path has none of these constraints — it needs only the `llmux`
 binary for your platform.

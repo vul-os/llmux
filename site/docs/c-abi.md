@@ -254,9 +254,11 @@ summarised in [Language packages](sdks.md#which-mechanism-each-language-defaults
    never answers `chat` at all. A readiness probe that lists models reports a
    healthy worker that will hang on its first real request.
 
-3. **Building it needs cgo and a C toolchain per target platform.** Consumers
-   only need the prebuilt artifact, but somebody builds it, per platform, and a
-   cgo cross-compile needs a cross C compiler — not just a `GOOS` variable.
+3. **Building it needs cgo and a C toolchain per target platform.** A consumer
+   only needs the built artifact — but no release publishes one, so "somebody"
+   is you or your build pipeline, per platform, and a cgo cross-compile needs a
+   cross C compiler, not just a `GOOS` variable. See
+   [building it yourself](#building-it-yourself).
 
 4. **It is a big artifact.** Measured: ~12 MB on darwin/arm64, ~17 MB on
    linux/arm64. `-ldflags="-s -w"` takes the darwin build to ~11 MB.

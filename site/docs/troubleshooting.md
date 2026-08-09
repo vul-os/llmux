@@ -156,7 +156,7 @@ These are the failures unique to running llmux *inside* your own process. None o
 
 **`llmux_call` refuses a chat request.** A `"chat"` body with `"stream": true` is rejected rather than quietly served as one blob. Use `llmux_stream`.
 
-**There is no library for your platform.** Prebuilt shared libraries exist for darwin/arm64 and linux/arm64. linux/amd64 is built and tested in CI only. **windows/amd64 and darwin/amd64 have never been built by anyone.** Build one yourself with `scripts/build-ffi.sh` if you have the cross toolchain, or use the sidecar for those targets — see [where it runs](c-abi.md#where-it-runs).
+**There is no library for your platform.** There is no library for *anyone's* platform until it is built: no release ships one. `scripts/build-ffi.sh` builds it, and the build is known to work on darwin/arm64 and linux/arm64, and in CI on linux/amd64. **windows/amd64 and darwin/amd64 have never been built by anyone**, so for those targets you need the cross toolchain — or use the sidecar, which needs only the `llmux` binary. See [where it runs](c-abi.md#where-it-runs) and [building it yourself](c-abi.md#building-it-yourself).
 
 **The gateway makes outbound requests you did not expect.** `New`/`llmux_new` makes none. `Run`/`Start` starts the price-catalog syncer, and `config.Default()` ships two remote pricing sources — so calling `Run` on a default config means periodic outbound GETs to those two hosts. Do not call `Run`, or set `cfg.Pricing.Sources` to nil and use overrides instead.
 

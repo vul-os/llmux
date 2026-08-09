@@ -7,7 +7,7 @@ operate it as a server.
 
 | Guide | What's inside |
 |---|---|
-| [Quickstarts](quickstarts.md) | Four five-minute tracks: point a client at a gateway, ship an app, embed in Go, self-host |
+| [Quickstarts](quickstarts.md) | Five five-minute tracks: point a client at a gateway, ship an app, drop the child process too, embed in Go, self-host |
 | [Getting started](GETTING-STARTED.md) | Deploy the gateway, connect providers, auth and keys, point Vulos OS at it |
 | [Client examples](client-examples.md) | Copy-paste requests in curl and 17+ languages |
 
@@ -40,7 +40,7 @@ operate it as a server.
 | [`llmux.example.json`](../llmux.example.json) | Fully commented example config |
 | [`ffi/include/llmux.h`](../ffi/include/llmux.h) | The normative C header |
 | [`ffi/README.md`](../ffi/README.md) | C-ABI implementation notes, build detail, test strategy |
-| [`sdks/README.md`](../sdks/README.md) | Per-package install and test commands |
+| [`sdks/README.md`](../sdks/README.md) | The package index: each language's modes, default and streaming shape |
 | [Hardening](../HARDENING.md) | Production security posture |
 | [Provider parity](parity.md) | Per-provider feature support matrix |
 | [Testing](../TESTING.md) | Test suites and how to run them |

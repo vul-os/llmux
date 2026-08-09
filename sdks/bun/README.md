@@ -290,6 +290,6 @@ bun run example:sidecar
 ```
 
 `check` deliberately does not add a second `typescript` dependency to this repo:
-`sdks/node` pins it exactly at 6.0.3 and `scripts/check-lint-config.mjs` asserts
+`sdks/node` pins it exactly at 6.0.3 and `sdks/node/scripts/check-lint-config.mjs` asserts
 that pin across every `package.json` in the tree. Borrowing that binary keeps one
 pinned compiler in the repo instead of two that can drift.

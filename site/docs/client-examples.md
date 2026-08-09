@@ -5,7 +5,7 @@ llmux speaks the **OpenAI HTTP API**, so any existing OpenAI client works
 unchanged — point its `base_url` at the gateway and pass a virtual key as the
 API key. The `model` string selects the [route](admin-guide.md#model-routing-and-selection):
 a configured alias, a `provider/model` prefix, or a least-cost strategy alias
-like `"cheapest"`. This page is copy-paste examples in curl and 17 languages,
+like `"cheapest"`. This page is copy-paste examples in curl and 16 languages,
 plus how to run llmux **without a separate server process** at all.
 
 ## Any OpenAI SDK, any language

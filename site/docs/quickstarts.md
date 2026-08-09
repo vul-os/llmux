@@ -108,8 +108,9 @@ for chunk in gw.stream(req)? { print!("{}", chunk?); }
 Read three lines before you commit to it, because they rule it out more often
 than they rule it in:
 
-- **Prebuilt libraries exist for darwin/arm64 and linux/arm64 only.**
-  linux/amd64 is CI-only; **windows/amd64 and darwin/amd64 do not exist.**
+- **You build the library yourself — no release ships one.** The build is known
+  to work on darwin/arm64 and linux/arm64, and in CI on linux/amd64;
+  **windows/amd64 and darwin/amd64 do not exist.**
 - **There is no authentication on that boundary, by design** — virtual keys and
   budgets are the sidecar's job.
 - **Latency is not the reason.** ~80–92 µs against ~102–109 µs for a real chat

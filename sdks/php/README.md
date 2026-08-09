@@ -108,6 +108,11 @@ $ php -d ffi.enable=1 -S 127.0.0.1:19183 ffigate.php
 FFI OK
 ```
 
+`ffigate.php` above is a scratch file, not something this repo ships — it runs
+the same `FFI::cdef` as the first command and prints either `FFI OK` or the
+exception. Write it in one line if you want to repeat the measurement under your
+own SAPI.
+
 So a web deployment needs `ffi.enable=1` in `php.ini` (a global, unrestricted
 native-code capability for every script the interpreter runs) or an
 `opcache.preload` script — and the preload route has its own problem, below.

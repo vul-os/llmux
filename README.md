@@ -291,11 +291,14 @@ for chunk in gw.stream(req)? { print!("{}", chunk?); }
 **Three things to know before you pick direct mode**, all measured rather than
 assumed:
 
-1. **Prebuilt shared libraries exist for darwin/arm64 and linux/arm64.**
-   linux/amd64 is built in CI only, and **windows/amd64 and darwin/amd64 do not
-   exist** — no `.dll` and no Intel-macOS library has been produced by anyone.
-   The sidecar has no such gap: it needs only the `llmux` binary, which
-   cross-compiles everywhere.
+1. **You build the shared library yourself — no release ships one.** A release
+   publishes the `llmux` binary and nothing else, so on the direct path
+   `scripts/build-ffi.sh` (or `make ffi` for this host) is a required step, not
+   an optional one. That build is known to work on darwin/arm64 and linux/arm64,
+   and in CI on linux/amd64; **windows/amd64 and darwin/amd64 do not exist** —
+   no `.dll` and no Intel-macOS library has been produced by anyone. The sidecar
+   has no such gap: it needs only the `llmux` binary, which cross-compiles
+   everywhere.
 2. **Latency is not the reason.** The boundary itself is ~4 µs in-process against
    ~46 µs over loopback, but a real chat call measures ~80–92 µs against
    ~102–109 µs — a rounding error next to a model answering in hundreds of
@@ -400,7 +403,7 @@ Full documentation lives in **[`docs/`](docs/)**, and is also published at
 
 | | |
 |---|---|
-| [Quickstarts](docs/quickstarts.md) | Four five-minute tracks: point a client at a gateway, ship an app, embed in Go, self-host |
+| [Quickstarts](docs/quickstarts.md) | Five five-minute tracks: point a client at a gateway, ship an app, drop the child process too, embed in Go, self-host |
 | [Getting started](docs/GETTING-STARTED.md) | Deploy the gateway, connect providers, auth and keys |
 | [Client examples](docs/client-examples.md) | Copy-paste requests in curl and 17+ languages, plus embedding llmux locally |
 | [Language packages](docs/sdks.md) | All fifteen: a first call, an install line and a run command per language |
