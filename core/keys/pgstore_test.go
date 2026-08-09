@@ -11,8 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/vul-os/llmux/core/config"
 	"github.com/redis/go-redis/v9"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // testDSN is the Postgres integration gate. It records the outcome (see

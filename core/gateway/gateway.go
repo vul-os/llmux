@@ -154,13 +154,13 @@ func New(cfg *config.Config, opts ...Option) (*Gateway, error) {
 	case cfg.Postgres != "":
 		var lim keys.Limiter
 		if g.rdb != nil {
-			lim = keys.NewRedisLimiter(g.rdb)
+			lim = keys.NewRedisLimiter(g.rdb).WithLogger(g.log)
 		}
 		pg, err := keys.NewPGStore(context.Background(), cfg.Postgres, cfg.PostgresSchema, cfg.Keys, lim)
 		if err != nil {
 			return nil, err
 		}
-		g.keys = pg
+		g.keys = pg.WithLogger(g.log)
 		schema := cfg.PostgresSchema
 		if schema == "" {
 			schema = keys.DefaultSchema
@@ -229,7 +229,8 @@ func (g *Gateway) Start(ctx context.Context) error {
 	// Background price-catalog sync (best-effort; built-in/cached catalog meanwhile).
 	if len(g.pricingSources) > 0 {
 		syncer := pricing.NewSyncer(g.catalog, g.pricingSources,
-			time.Duration(g.cfg.Pricing.SyncIntervalMinutes)*time.Minute, g.cfg.Pricing.CatalogPath)
+			time.Duration(g.cfg.Pricing.SyncIntervalMinutes)*time.Minute, g.cfg.Pricing.CatalogPath).
+			WithLogger(g.log)
 		go syncer.Run(ctx)
 	}
 	// Persist key spend periodically when using the file-backed store.

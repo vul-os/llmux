@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -38,6 +38,25 @@ type PGStore struct {
 	// Postgres cannot answer.
 	spendMu sync.Mutex
 	spend   map[string]*spendState
+
+	log *slog.Logger
+}
+
+// WithLogger points the store at a specific logger. nil is ignored.
+func (s *PGStore) WithLogger(l *slog.Logger) *PGStore {
+	if l != nil {
+		s.log = l
+	}
+	return s
+}
+
+// logger returns the store's logger, falling back to slog.Default so a
+// hand-built PGStore (tests) never nil-panics on a degraded-mode warning.
+func (s *PGStore) logger() *slog.Logger {
+	if s.log == nil {
+		return slog.Default()
+	}
+	return s.log
 }
 
 // spendState is the degraded-mode bookkeeping for one key: the spend Postgres is
@@ -85,7 +104,7 @@ func NewPGStore(ctx context.Context, dsn, schema string, cfgs []config.KeyConfig
 	// and DML strings rather than passed as parameters.
 	table := pgx.Identifier{schema, "llmux_keys"}.Sanitize()
 	s := &PGStore{pool: pool, limiter: limiter, schema: schema, table: table,
-		keys: map[string]*Key{}, spend: map[string]*spendState{}}
+		keys: map[string]*Key{}, spend: map[string]*spendState{}, log: slog.Default()}
 	if err := s.migrate(ctx); err != nil {
 		pool.Close()
 		return nil, err
@@ -199,7 +218,8 @@ func (s *PGStore) AddSpend(token string, usd float64) {
 	tag, err := s.pool.Exec(ctx, fmt.Sprintf(`UPDATE %s SET spend_usd = spend_usd + $2 WHERE key=$1`, s.table), HashToken(token), amount)
 	if err != nil {
 		s.holdPending(token, amount)
-		log.Printf("keys: postgres spend write failed for key %q (%v) — holding $%.4f as pending spend, enforced locally until it persists", s.nameFor(token), err, amount)
+		s.logger().Warn("postgres spend write failed — holding as pending spend, enforced locally until it persists",
+			"key", s.nameFor(token), "err", err, "pending_usd", amount)
 		return
 	}
 	if tag.RowsAffected() == 0 {
@@ -271,11 +291,13 @@ func (s *PGStore) degradedSpend(token string, err error) (float64, bool) {
 	defer s.spendMu.Unlock()
 	st := s.spend[token]
 	if st == nil || !st.known {
-		log.Printf("keys: postgres spend read failed for key %q (%v) — no last-known-good spend, failing closed", s.nameFor(token), err)
+		s.logger().Warn("postgres spend read failed — no last-known-good spend, failing closed",
+			"key", s.nameFor(token), "err", err)
 		return 0, false
 	}
 	usd := st.db + st.pending
-	log.Printf("keys: postgres spend read failed for key %q (%v) — enforcing last-known-good spend $%.4f", s.nameFor(token), err, usd)
+	s.logger().Warn("postgres spend read failed — enforcing last-known-good spend",
+		"key", s.nameFor(token), "err", err, "spend_usd", usd)
 	return usd, true
 }
 

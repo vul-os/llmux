@@ -217,7 +217,7 @@ func (g *Gateway) ChatStream(ctx context.Context, req *openai.ChatCompletionRequ
 // see a mid-stream failure as the returned error rather than an SSE event.
 type funcSink struct{ yield provider.ChunkFunc }
 
-func (f funcSink) Open() error                                { return nil }
+func (f funcSink) Open() error                               { return nil }
 func (f funcSink) Chunk(c *openai.ChatCompletionChunk) error { return f.yield(c) }
 func (f funcSink) Failed(*openai.ErrorResponse)              {}
 func (f funcSink) Done()                                     {}

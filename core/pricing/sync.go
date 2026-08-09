@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"log/slog"
 	"strconv"
 	"strings"
 	"time"
@@ -188,12 +188,22 @@ type Syncer struct {
 	sources   []Source
 	interval  time.Duration
 	cachePath string
+	log       *slog.Logger
 }
 
 // NewSyncer builds a Syncer. cachePath (optional) persists the merged catalog
-// for warm starts.
+// for warm starts. It logs through slog.Default until WithLogger points it at
+// the owning gateway's logger — there is no package-level logger here.
 func NewSyncer(cat *Catalog, sources []Source, interval time.Duration, cachePath string) *Syncer {
-	return &Syncer{catalog: cat, sources: sources, interval: interval, cachePath: cachePath}
+	return &Syncer{catalog: cat, sources: sources, interval: interval, cachePath: cachePath, log: slog.Default()}
+}
+
+// WithLogger points the syncer at a specific logger. nil is ignored.
+func (s *Syncer) WithLogger(l *slog.Logger) *Syncer {
+	if l != nil {
+		s.log = l
+	}
+	return s
 }
 
 // SyncOnce fetches every source and updates the catalog per-source.
@@ -202,18 +212,18 @@ func (s *Syncer) SyncOnce(ctx context.Context) error {
 	for _, src := range s.sources {
 		prices, err := src.Fetch(ctx)
 		if err != nil {
-			log.Printf("llmux: pricing source %s: %v", src.Name(), err)
+			s.log.Warn("pricing source failed", "source", src.Name(), "err", err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 		s.catalog.SetSource(src.Name(), src.Priority(), prices)
-		log.Printf("llmux: pricing source %s: %d models", src.Name(), len(prices))
+		s.log.Info("pricing source loaded", "source", src.Name(), "models", len(prices))
 	}
 	if s.cachePath != "" {
 		if err := s.catalog.Save(s.cachePath); err != nil {
-			log.Printf("llmux: pricing cache save: %v", err)
+			s.log.Warn("pricing cache save failed", "path", s.cachePath, "err", err)
 		}
 	}
 	return firstErr
@@ -222,7 +232,7 @@ func (s *Syncer) SyncOnce(ctx context.Context) error {
 // Run does an initial sync then refreshes on the interval until ctx is done.
 func (s *Syncer) Run(ctx context.Context) {
 	if err := s.SyncOnce(ctx); err != nil {
-		log.Printf("llmux: initial pricing sync had errors (using built-in/cached catalog): %v", err)
+		s.log.Warn("initial pricing sync had errors; using the built-in/cached catalog", "err", err)
 	}
 	if s.interval <= 0 {
 		return

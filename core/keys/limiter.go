@@ -3,7 +3,7 @@ package keys
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -47,11 +47,30 @@ type RedisLimiter struct {
 
 	warnMu sync.Mutex
 	warnAt time.Time
+
+	log *slog.Logger
 }
 
 // NewRedisLimiter builds a Redis-backed limiter from an existing client.
 func NewRedisLimiter(rdb *redis.Client) *RedisLimiter {
-	return &RedisLimiter{rdb: rdb, local: NewMemLimiter()}
+	return &RedisLimiter{rdb: rdb, local: NewMemLimiter(), log: slog.Default()}
+}
+
+// WithLogger points the limiter at a specific logger. nil is ignored.
+func (r *RedisLimiter) WithLogger(l *slog.Logger) *RedisLimiter {
+	if l != nil {
+		r.log = l
+	}
+	return r
+}
+
+// logger returns the limiter's logger, falling back to slog.Default so a
+// hand-built RedisLimiter never nil-panics on an outage warning.
+func (r *RedisLimiter) logger() *slog.Logger {
+	if r.log == nil {
+		return slog.Default()
+	}
+	return r.log
 }
 
 // redisOutageLogInterval throttles the outage warning so a sustained Redis
@@ -94,5 +113,5 @@ func (r *RedisLimiter) warnOutage(err error) {
 		return
 	}
 	r.warnAt = time.Now()
-	log.Printf("keys: redis rate limiter unavailable (%v) — degrading to a strict per-replica RPM cap", err)
+	r.logger().Warn("redis rate limiter unavailable — degrading to a strict per-replica RPM cap", "err", err)
 }
