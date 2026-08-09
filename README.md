@@ -10,10 +10,13 @@ default-deny sovereignty gate — as an in-process Go library with **no HTTP
 surface, no port, and nothing started until you ask for it**. Want a
 standalone service instead (or as well)? The same code ships as a single
 binary with an OpenAI-compatible HTTP API and an embedded admin dashboard.
+Not writing Go? **[Fifteen language packages](#fifteen-languages-two-ways)**
+reach the same gateway two ways — in-process through a six-function C ABI, or
+as a sidecar they spawn and supervise for you.
 
 **[MIT OR Apache-2.0](LICENSE-MIT) · Go 1.25 · [Tests](TESTING.md)**
 
-[**Quickstart**](#quick-start) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Sovereignty gate**](#the-sovereignty-gate) · [**Status**](#status)
+[**Quickstart**](#quick-start) · [**Fifteen languages**](#fifteen-languages-two-ways) · [**Docs**](docs/) · [**API**](docs/api.md) · [**Configuration**](docs/configuration.md) · [**Sovereignty gate**](#the-sovereignty-gate) · [**Status**](#status)
 
 </div>
 
@@ -38,7 +41,9 @@ binary and the routing, budgets, caching, and cost accounting happen
 underneath — no new SDK to learn. See [Client examples → embed it
 locally](docs/client-examples.md#embed-it-locally-no-separate-server-to-run)
 for the Go library API, or the [quick start](#quick-start) below for the
-binary.
+binary. If you would rather not hold a `base_url` at all, the
+[fifteen language packages](#fifteen-languages-two-ways) reach this same one
+gateway without one.
 
 It's **self-hosted, open source, has no telemetry, and has no accounts** — no
 login, no email, no sign-up; the binary authenticates callers with an
@@ -189,10 +194,12 @@ license notices from the binary — 33,312 bytes smaller in this checkout. Full
 breakdown: [Operations → building without the
 console](docs/operations.md#building-without-the-console-noui).
 
-> **17+ languages** — copy-paste examples for Python, Node, TypeScript, Go, Ruby,
-> PHP, Java, C#, Rust, C++, C, Swift, Kotlin, Elixir, R, and Dart, plus how to
-> embed llmux as a local dependency with no separate server to run, live in
-> [Client examples](docs/client-examples.md).
+> **17+ languages over plain HTTP** — copy-paste examples for Python, Node,
+> TypeScript, Go, Ruby, PHP, Java, C#, Rust, C++, C, Swift, Kotlin, Elixir, R,
+> and Dart live in [Client examples](docs/client-examples.md). If you would
+> rather not run a server at all, **fifteen of those languages have a package
+> that spawns one for you, or skips the process entirely** — see
+> [fifteen languages, two ways](#fifteen-languages-two-ways).
 
 ### Verify a release before you run it
 
@@ -219,6 +226,95 @@ never implies more than it checked.
 
 `make verify-selftest` runs 24 synthetic-origin cases asserting that each
 refusal still fires; CI runs the same matrix on every push.
+
+## Fifteen languages, two ways
+
+llmux is not a Go-only library with an HTTP port bolted on. There are **fifteen
+language packages** in [`sdks/`](sdks/), and each offers up to **two
+mechanisms**:
+
+- **Direct** — the gateway runs **inside your process**. No port, no listener,
+  no loopback socket. Go imports the package; the other thirteen load a C shared
+  library exposing exactly six symbols — `llmux_new`, `llmux_call`,
+  `llmux_stream`, `llmux_close`, `llmux_free`, `llmux_abi_version`. Requests and
+  responses are the same JSON the HTTP API uses.
+- **Sidecar** — the `llmux` binary as a child process the package spawns,
+  health-checks and supervises for you on `127.0.0.1:<free port>`. You never run
+  a server by hand, and streaming is your own language's HTTP/SSE client reading
+  its own socket.
+
+| Language | Package | Direct | Sidecar | Default |
+|---|---|---|---|---|
+| [Go](docs/sdks.md#go) | `go get github.com/vul-os/llmux/core/gateway` | package import — **no FFI at all** | ✓ | **direct** |
+| [C](docs/sdks.md#c) | `#include "llmux.h"`, link `libllmux` | ✓ | ✓ | **direct** |
+| [C++](docs/sdks.md#c-header-only) | header-only `llmux.hpp` | ✓ RAII | ✓ | **direct** |
+| [Rust](docs/sdks.md#rust) | crate `llmux` | ✓ `libloading` | ✓ | direct |
+| [Swift](docs/sdks.md#swift) | SwiftPM `LLMux` | ✓ C interop | ✓ | direct |
+| [Deno](docs/sdks.md#deno) | `@vul-os/llmux` | ✓ `Deno.dlopen` | ✓ | direct |
+| [Bun](docs/sdks.md#bun) | `@vul-os/llmux-bun` | ✓ `bun:ffi` | ✓ | direct |
+| [Node.js](docs/sdks.md#nodejs) | npm `llmux` | ✓ koffi | ✓ | **sidecar** for servers |
+| [Python](docs/sdks.md#python) | `pip install llmux` | ✓ `ctypes` | ✓ | **sidecar** |
+| [Java](docs/sdks.md#java) | `to.llmux:llmux` | ✓ FFM, JDK 22+ | ✓ | **sidecar** |
+| [Kotlin](docs/sdks.md#kotlin) | `to.llmux:llmux-kotlin` | ✓ over the Java binding | ✓ | **sidecar** |
+| [.NET / C#](docs/sdks.md#net-and-c) | NuGet `Llmux` | ✓ `LibraryImport` | ✓ | **sidecar** |
+| [Ruby](docs/sdks.md#ruby) | gem `llmux` | ✓ `fiddle` (stdlib) | ✓ | depends on your server |
+| [PHP](docs/sdks.md#php) | composer `llmux/llmux` | ✓ ext-`FFI` | ✓ | **sidecar** |
+| [Elixir](docs/sdks.md#elixir) | hex `:llmux` | **none, deliberately** | ✓ | **sidecar** |
+
+Registry publication is uneven and this table will not pretend otherwise —
+Python's is the only package README with a registry install line today, and
+Kotlin's says its artifact is not yet published. **The path that works for all
+fifteen right now is a checkout**: each `sdks/<lang>` is a working package
+directory, and every language has a runnable example that boots a fake upstream,
+so it works offline with no provider keys.
+
+The sidecar, in the language you already use — one call, no server to start:
+
+```python
+import llmux
+client = llmux.OpenAI()                      # spawns and supervises the gateway
+r = client.chat.completions.create(model="anthropic/claude-3-5-sonnet",
+                                   messages=[{"role": "user", "content": "hi"}])
+```
+
+The same gateway in-process, no port and no child process:
+
+```rust
+use llmux::direct::Gateway;
+
+let gw = Gateway::open(None)?;               // defaults + environment
+let req = r#"{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}"#;
+println!("{}", gw.call("chat", Some(req))?);
+for chunk in gw.stream(req)? { print!("{}", chunk?); }
+```
+
+**Three things to know before you pick direct mode**, all measured rather than
+assumed:
+
+1. **Prebuilt shared libraries exist for darwin/arm64 and linux/arm64.**
+   linux/amd64 is built in CI only, and **windows/amd64 and darwin/amd64 do not
+   exist** — no `.dll` and no Intel-macOS library has been produced by anyone.
+   The sidecar has no such gap: it needs only the `llmux` binary, which
+   cross-compiles everywhere.
+2. **Latency is not the reason.** The boundary itself is ~4 µs in-process against
+   ~46 µs over loopback, but a real chat call measures ~80–92 µs against
+   ~102–109 µs — a rounding error next to a model answering in hundreds of
+   milliseconds. The reasons are no second process, no port, and no loopback
+   surface to secure.
+3. **Seven of the fifteen recommend the sidecar, and one says it depends.** The
+   Go runtime is not fork-safe, which rules out pre-fork hosts in Python, PHP and
+   Ruby — and watch the false green there, because `models` succeeds in a broken
+   child while `chat` hangs. On the JVM, loading the library replaces five signal
+   handlers (`SIGPROF` is *not* among them, so JFR is fine); `libjsig` fixes it
+   but is a **java launch flag**, which a library cannot add to a running
+   process. In Node, a thread that enters the library never terminates, so direct
+   streaming is callback-only. In .NET there is simply no Windows library.
+
+→ **[Language packages](docs/sdks.md#a-first-call-in-every-language)** has a
+working first call, the coordinates and a run command for each of the fifteen ·
+**[`sdks/README.md`](sdks/README.md)** is the index that ships with the code ·
+**[The C ABI](docs/c-abi.md)** is the six-function contract ·
+**[Choosing a mode](docs/choosing-a-mode.md)** decides it in five minutes.
 
 ## The sovereignty gate
 
@@ -304,8 +400,13 @@ Full documentation lives in **[`docs/`](docs/)**, and is also published at
 
 | | |
 |---|---|
+| [Quickstarts](docs/quickstarts.md) | Four five-minute tracks: point a client at a gateway, ship an app, embed in Go, self-host |
 | [Getting started](docs/GETTING-STARTED.md) | Deploy the gateway, connect providers, auth and keys |
 | [Client examples](docs/client-examples.md) | Copy-paste requests in curl and 17+ languages, plus embedding llmux locally |
+| [Language packages](docs/sdks.md) | All fifteen: a first call, an install line and a run command per language |
+| [Choosing a mode](docs/choosing-a-mode.md) | Server vs sidecar vs Go library vs C shared library, with the trade-offs |
+| [Embedding llmux in Go](docs/embedding.md) | `core/gateway` in full: dispatch, `Authorize`/`release`, and what `New` does on its own |
+| [The C ABI](docs/c-abi.md) | The six functions, the ownership rules, the costs, and the honest platform matrix |
 | [API reference](docs/api.md) | Endpoints, auth, errors, and cost |
 | [Configuration](docs/configuration.md) | Config file, environment variables, and the sovereignty fields |
 | [Architecture](docs/architecture.md) | How the gateway is laid out, `core/gateway` as a library, and the sovereignty gate in full |
