@@ -801,3 +801,130 @@ func TestNoLocalBackendNoAutoRoute(t *testing.T) {
 		t.Fatalf("expected no auto routes; got %+v", c.Routes)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// FromJSON — the file-less form of Load, used by the C-ABI layer in ffi/
+// ---------------------------------------------------------------------------
+
+// The whole point of FromJSON is that it is Load minus the file: same defaults,
+// same env pass, same Validate. A plain json.Unmarshal into a zero Config would
+// also "work" and would silently drop all of that, so assert the parts that
+// distinguish the two.
+func TestFromJSONAppliesDefaultsAndValidates(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+
+	doc := []byte(`{
+		"providers": [{"name": "fake", "type": "passthrough", "base_url": "http://127.0.0.1:1/v1"}],
+		"routes": [{"model": "demo", "provider": "fake"}]
+	}`)
+	c, err := FromJSON(doc)
+	if err != nil {
+		t.Fatalf("FromJSON: %v", err)
+	}
+	if _, ok := c.ProviderByName("fake"); !ok {
+		t.Fatalf("provider from the document did not survive the merge: %+v", c.Providers)
+	}
+	if len(c.Routes) != 1 || c.Routes[0].Model != "demo" {
+		t.Fatalf("routes = %+v, want the document's single demo route", c.Routes)
+	}
+	// Defaults a bare json.Unmarshal would have left at zero.
+	if c.Retry.MaxRetries != 2 || c.Retry.BackoffMS != 200 {
+		t.Errorf("retry defaults lost: %+v — FromJSON did not start from Default()", c.Retry)
+	}
+	if c.Cache.MaxEntries != 10000 {
+		t.Errorf("cache.max_entries = %d, want the 10000 default", c.Cache.MaxEntries)
+	}
+	if c.Server.Addr != ":4000" {
+		t.Errorf("server.addr = %q, want the :4000 default", c.Server.Addr)
+	}
+	if c.LogLevel != "info" {
+		t.Errorf("log_level = %q, want the info default", c.LogLevel)
+	}
+}
+
+// Empty input is legal and means "defaults only" — the ffi layer passes NULL or
+// "" for a zero-config host.
+func TestFromJSONEmptyMeansDefaults(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+
+	for _, in := range [][]byte{nil, {}, []byte("   \n\t ")} {
+		c, err := FromJSON(in)
+		if err != nil {
+			t.Fatalf("FromJSON(%q): %v", in, err)
+		}
+		if c.Server.Addr != ":4000" || c.Retry.MaxRetries != 2 {
+			t.Fatalf("FromJSON(%q) did not return defaults: %+v", in, c)
+		}
+	}
+}
+
+// Validate must run. Without it, a route naming a provider that does not exist
+// would reach gateway.New and fail much later, with a worse message.
+func TestFromJSONRunsValidate(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+
+	_, err := FromJSON([]byte(`{"routes": [{"model": "demo", "provider": "nope"}]}`))
+	if err == nil {
+		t.Fatal("FromJSON accepted a route pointing at an undefined provider — Validate did not run")
+	}
+	if !strings.Contains(err.Error(), "unknown provider") {
+		t.Errorf("error = %v, want the Validate diagnostic about an unknown provider", err)
+	}
+}
+
+func TestFromJSONRejectsMalformedJSON(t *testing.T) {
+	_, err := FromJSON([]byte(`{"providers": [`))
+	if err == nil {
+		t.Fatal("FromJSON accepted a truncated document")
+	}
+	if !strings.Contains(err.Error(), "parse config") {
+		t.Errorf("error = %v, want a parse diagnostic", err)
+	}
+}
+
+// Load is now implemented on top of FromJSON; prove the two still agree, so the
+// ffi layer's configuration semantics cannot drift from the config file's.
+func TestLoadAndFromJSONAgree(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+
+	doc := `{"providers": [{"name": "p", "type": "passthrough", "base_url": "http://127.0.0.1:1/v1"}],
+	         "routes": [{"model": "m", "provider": "p"}], "log_level": "warn"}`
+	path := filepath.Join(t.TempDir(), "llmux.json")
+	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fromFile, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	fromMem, err := FromJSON([]byte(doc))
+	if err != nil {
+		t.Fatalf("FromJSON: %v", err)
+	}
+	a, _ := json.Marshal(fromFile)
+	b, _ := json.Marshal(fromMem)
+	if string(a) != string(b) {
+		t.Errorf("Load and FromJSON disagree:\n file: %s\n  mem: %s", a, b)
+	}
+}
+
+// A missing path is still not an error, and a genuinely unreadable one still is.
+func TestLoadKeepsItsFileErrorBehaviour(t *testing.T) {
+	clearKnownProviderEnv(t)
+	clearLLMUXEnv(t)
+
+	if _, err := Load(filepath.Join(t.TempDir(), "absent.json")); err != nil {
+		t.Errorf("Load on a missing file returned %v, want defaults", err)
+	}
+	bad := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(bad, []byte("{nope"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, e := Load(bad); e == nil || !strings.Contains(e.Error(), bad) {
+		t.Errorf("Load on malformed JSON returned %v, want an error naming the path", e)
+	}
+}

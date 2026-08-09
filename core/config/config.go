@@ -5,6 +5,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -410,19 +411,47 @@ func localBackendURL() string {
 // Load builds the configuration from defaults, an optional JSON file at path
 // (ignored if path is empty or missing), then environment overrides.
 func Load(path string) (*Config, error) {
-	c := Default()
+	var data []byte
 	if path != "" {
-		data, err := os.ReadFile(path)
-		if err == nil {
-			// A file may omit providers; only overwrite slices it provides.
-			fileCfg := &Config{}
-			if err := json.Unmarshal(data, fileCfg); err != nil {
-				return nil, fmt.Errorf("parse config %s: %w", path, err)
-			}
-			c.merge(fileCfg)
-		} else if !os.IsNotExist(err) {
+		b, err := os.ReadFile(path)
+		switch {
+		case err == nil:
+			data = b
+		case os.IsNotExist(err):
+			// A missing config file is not an error: defaults + env stand alone.
+		default:
 			return nil, fmt.Errorf("read config %s: %w", path, err)
 		}
+	}
+	c, err := FromJSON(data)
+	if err != nil {
+		if path != "" {
+			return nil, fmt.Errorf("config %s: %w", path, err)
+		}
+		return nil, err
+	}
+	return c, nil
+}
+
+// FromJSON builds the configuration from defaults, the given JSON document
+// (empty or nil is allowed and means "defaults only"), then environment
+// overrides — the exact sequence Load performs, without the file.
+//
+// It exists because not every host has a config FILE. The C-ABI layer in ffi/
+// receives its configuration as a JSON string across the boundary, and an
+// in-process Go host may hold one in memory; both need Load's semantics —
+// defaults merged, env applied, validated — rather than a bare json.Unmarshal
+// into a zero Config, which would silently drop every default (no retries, no
+// cache bound, no auto-detected local backend) and skip Validate entirely.
+func FromJSON(data []byte) (*Config, error) {
+	c := Default()
+	if len(bytes.TrimSpace(data)) > 0 {
+		// A document may omit providers; only overwrite slices it provides.
+		fileCfg := &Config{}
+		if err := json.Unmarshal(data, fileCfg); err != nil {
+			return nil, fmt.Errorf("parse config: %w", err)
+		}
+		c.merge(fileCfg)
 	}
 	c.applyEnv()
 	c.applyDefaults()
