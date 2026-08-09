@@ -5,7 +5,7 @@ edition = "2021"
 description = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
 license = "MIT"
 homepage = "https://llmux.to"
-repository = "https://github.com/llmux/llmux"
+repository = "https://github.com/vul-os/llmux"
 keywords = ["llm", "gateway", "openai", "anthropic", "proxy"]
 categories = ["api-bindings"]
 

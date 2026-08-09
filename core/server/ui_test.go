@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // This file covers, in Go, what web/e2e/boot.e2e.js and security.e2e.js used

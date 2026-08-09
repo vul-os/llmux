@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 func TestSetJSONFieldsSinglePass(t *testing.T) {

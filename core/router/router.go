@@ -8,8 +8,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 // Pricer supplies per-MTok rates for least-cost routing.

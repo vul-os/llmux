@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/keys"
+	"github.com/vul-os/llmux/core/keys"
 )
 
 // TestCacheScopeHashesToken verifies that cacheScope returns the SHA-256 hash

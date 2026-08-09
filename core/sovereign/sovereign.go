@@ -57,7 +57,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // Locality classifies where a provider's traffic goes.

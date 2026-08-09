@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // ChunkFunc receives one streaming chunk. Returning an error aborts the stream.

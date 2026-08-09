@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // chatBody is a minimal valid chat-completions payload for the given model.

@@ -4,7 +4,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 func TestBudget(t *testing.T) {

@@ -6,10 +6,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
-	"github.com/llmux/llmux/core/provider/anthropic"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
+	"github.com/vul-os/llmux/core/provider/anthropic"
 )
 
 // install points the provider HTTP clients at tr and returns a restore func.

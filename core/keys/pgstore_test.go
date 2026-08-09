@@ -11,7 +11,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 	"github.com/redis/go-redis/v9"
 )
 

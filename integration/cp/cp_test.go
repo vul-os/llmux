@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/llmux/llmux/core/server"
+	"github.com/vul-os/llmux/core/server"
 )
 
 // --- Identity ---------------------------------------------------------------

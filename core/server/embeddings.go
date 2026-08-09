@@ -5,7 +5,7 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 func (s *Server) handleEmbeddings(w http.ResponseWriter, r *http.Request) {

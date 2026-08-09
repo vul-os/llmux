@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // upstreamChatOK is a fake provider that counts calls and returns a real usage

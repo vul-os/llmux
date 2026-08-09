@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 	"github.com/redis/go-redis/v9"
 )
 

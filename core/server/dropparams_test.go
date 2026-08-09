@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // TestDropParams verifies configured params are stripped before forwarding to an

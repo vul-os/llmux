@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // stubProvider is a minimal Provider implementation for registry tests.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // TestBYOKGuardrailWarning verifies the unauthenticated-/admin/byok warning fires

@@ -10,7 +10,7 @@
     <Description>The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageProjectUrl>https://llmux.to</PackageProjectUrl>
-    <RepositoryUrl>https://github.com/llmux/llmux</RepositoryUrl>
+    <RepositoryUrl>https://github.com/vul-os/llmux</RepositoryUrl>
     <PackageTags>llm;gateway;openai;anthropic;gemini;proxy</PackageTags>
   </PropertyGroup>
 

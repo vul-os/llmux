@@ -3,7 +3,7 @@ package server
 import (
 	"net/http"
 
-	webui "github.com/llmux/llmux/web"
+	webui "github.com/vul-os/llmux/web"
 )
 
 // mountUI serves the embedded admin console at /ui — a single hand-written

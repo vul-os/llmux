@@ -3,7 +3,7 @@ package router
 import (
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // ---------------------------------------------------------------------------

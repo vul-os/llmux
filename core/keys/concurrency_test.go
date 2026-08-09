@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // TestMemLimiterRefillAndBurst covers the previously-untested token-bucket math.

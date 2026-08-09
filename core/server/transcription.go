@@ -9,8 +9,8 @@ import (
 	"net/textproto"
 	"strings"
 
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 // transcriptionRoutes maps OpenAI audio-INPUT routes (speech-to-text) to the

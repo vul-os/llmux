@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 func TestEmbeddedGateway(t *testing.T) {

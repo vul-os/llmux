@@ -7,8 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // TestSemanticCacheWiring proves the server builds the semantic cache, embeds

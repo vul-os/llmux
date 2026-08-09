@@ -27,7 +27,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/llmux/llmux/core/server"
+	"github.com/vul-os/llmux/core/server"
 )
 
 // HeaderRelayAuth is the shared cp authentication header. Its value is the

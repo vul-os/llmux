@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // FileStore is a Store that persists cumulative spend to a JSON file so budgets

@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 const defaultVersion = "2023-06-01"

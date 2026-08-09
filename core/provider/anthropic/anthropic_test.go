@@ -8,9 +8,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 func newTestProvider(url string) *Provider {

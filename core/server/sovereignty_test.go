@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/sovereign"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/sovereign"
 )
 
 // countingUpstream is an OpenAI-compatible upstream that records how many times

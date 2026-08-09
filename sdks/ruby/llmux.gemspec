@@ -18,6 +18,6 @@ Gem::Specification.new do |spec|
   # want `Llmux.openai`. We do not hard-depend on it.
   spec.metadata = {
     "homepage_uri" => "https://llmux.to",
-    "source_code_uri" => "https://github.com/llmux/llmux"
+    "source_code_uri" => "https://github.com/vul-os/llmux"
   }
 end

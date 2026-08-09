@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // TestOpenAIBaseURL: openai_base_url == base_url + "/v1", base is http://127.0.0.1:<port>.

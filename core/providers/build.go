@@ -6,14 +6,14 @@ package providers
 import (
 	"log"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/provider"
-	"github.com/llmux/llmux/core/provider/anthropic"
-	"github.com/llmux/llmux/core/provider/azure"
-	"github.com/llmux/llmux/core/provider/bedrock"
-	"github.com/llmux/llmux/core/provider/cohere"
-	"github.com/llmux/llmux/core/provider/gemini"
-	"github.com/llmux/llmux/core/provider/passthrough"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/provider"
+	"github.com/vul-os/llmux/core/provider/anthropic"
+	"github.com/vul-os/llmux/core/provider/azure"
+	"github.com/vul-os/llmux/core/provider/bedrock"
+	"github.com/vul-os/llmux/core/provider/cohere"
+	"github.com/vul-os/llmux/core/provider/gemini"
+	"github.com/vul-os/llmux/core/provider/passthrough"
 )
 
 // Stability reflects how thoroughly an adapter is verified against the real

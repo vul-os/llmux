@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/llmux/llmux/core/cache"
-	"github.com/llmux/llmux/core/keys"
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/cache"
+	"github.com/vul-os/llmux/core/keys"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // serverEmbedder implements cache.Embedder by calling the gateway's own

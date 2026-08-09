@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 func ptrFloat(f float64) *float64 { return &f }

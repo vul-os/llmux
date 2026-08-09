@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // These tests pin the fail-CLOSED behavior for a keyless gateway (no master key,

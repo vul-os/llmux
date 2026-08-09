@@ -316,7 +316,7 @@ local socket.
 **Go** — embed in-process, no child process at all:
 
 ```go
-import "github.com/llmux/llmux/sdks/go/llmux"
+import "github.com/vul-os/llmux/sdks/go/llmux"
 
 local, err := llmux.Start(llmux.Options{}) // auto-detects providers from env; ephemeral port
 if err != nil {

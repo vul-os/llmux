@@ -28,7 +28,7 @@ defmodule Llmux.MixProject do
   defp package do
     [
       licenses: ["MIT"],
-      links: %{"Homepage" => "https://llmux.to", "GitHub" => "https://github.com/llmux/llmux"},
+      links: %{"Homepage" => "https://llmux.to", "GitHub" => "https://github.com/vul-os/llmux"},
       # priv/bin holds the bundled binary (gitignored; built via `make sdk-bins`).
       files: ~w(lib mix.exs README.md priv)
     ]

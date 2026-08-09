@@ -38,7 +38,7 @@ Go doesn't spawn the binary — it imports the gateway package and runs it
 in-process, no subprocess required. Same `core/` server the binary uses:
 
 ```go
-import "github.com/llmux/llmux/sdks/go/llmux"
+import "github.com/vul-os/llmux/sdks/go/llmux"
 
 local, err := llmux.Start(llmux.Options{}) // auto-detects providers from env; ephemeral port
 if err != nil {

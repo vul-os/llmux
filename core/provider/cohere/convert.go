@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // decodeEmbeddingInput decodes an OpenAI embeddings Input, which may be a JSON

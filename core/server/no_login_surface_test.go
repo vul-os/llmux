@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // llmux is configured by ENDPOINT, not by account: a consumer points an OpenAI

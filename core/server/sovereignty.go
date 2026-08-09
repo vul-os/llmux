@@ -4,9 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
-	"github.com/llmux/llmux/core/sovereign"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
+	"github.com/vul-os/llmux/core/sovereign"
 )
 
 // enforceSovereignty is the dispatch-time gate that makes "nothing leaves the

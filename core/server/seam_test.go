@@ -8,8 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/keys"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/keys"
 )
 
 // keyedServer builds a server with one static key configured.

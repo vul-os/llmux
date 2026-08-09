@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // Entry is a cached response: the pre-serialized JSON body plus its usage. The

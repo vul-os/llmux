@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 // UsageRecord is one logged request's usage and cost.

@@ -7,8 +7,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 func TestCostAttachedToResponse(t *testing.T) {

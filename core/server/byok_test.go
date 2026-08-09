@@ -7,7 +7,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // fakeBYOK is an in-test BYOKStore (the real encrypted store lives in core/byok;

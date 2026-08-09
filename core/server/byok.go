@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 // This file implements the BYOK-vs-central key resolution model.

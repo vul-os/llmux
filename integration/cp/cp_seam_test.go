@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/llmux/llmux/core/server"
+	"github.com/vul-os/llmux/core/server"
 )
 
 // --- 4. Concurrent budget reservation blocks overspend ----------------------

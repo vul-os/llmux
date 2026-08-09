@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
 )
 
 // modalityRoutes maps OpenAI resource routes to the upstream path suffix. These

@@ -15,10 +15,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/llmux/llmux/core/byok"
-	"github.com/llmux/llmux/core/config"
-	"github.com/llmux/llmux/core/server"
-	"github.com/llmux/llmux/integration/cp"
+	"github.com/vul-os/llmux/core/byok"
+	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/server"
+	"github.com/vul-os/llmux/integration/cp"
 )
 
 // Version is the binary version string; set at build time via

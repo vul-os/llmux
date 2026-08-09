@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/router"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/router"
 )
 
 // retryableStatus reports whether an upstream status warrants a retry/fallback.

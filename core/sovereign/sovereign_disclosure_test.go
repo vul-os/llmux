@@ -5,7 +5,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/llmux/llmux/core/config"
+	"github.com/vul-os/llmux/core/config"
 )
 
 // TestLocalityEdgeCasesNotAutoTrusted locks the fail-closed classifier against

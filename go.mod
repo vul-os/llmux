@@ -1,4 +1,4 @@
-module github.com/llmux/llmux
+module github.com/vul-os/llmux
 
 go 1.25.0
 

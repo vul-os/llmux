@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/llmux/llmux/core/openai"
+	"github.com/vul-os/llmux/core/openai"
 )
 
 func TestParseOpenRouter(t *testing.T) {

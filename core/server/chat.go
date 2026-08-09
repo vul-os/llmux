@@ -7,10 +7,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/llmux/llmux/core/cache"
-	"github.com/llmux/llmux/core/openai"
-	"github.com/llmux/llmux/core/provider"
-	"github.com/llmux/llmux/core/router"
+	"github.com/vul-os/llmux/core/cache"
+	"github.com/vul-os/llmux/core/openai"
+	"github.com/vul-os/llmux/core/provider"
+	"github.com/vul-os/llmux/core/router"
 )
 
 // maxBodyBytes caps request bodies (generous for large multimodal/tool payloads).
