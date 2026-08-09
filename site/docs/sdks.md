@@ -71,20 +71,27 @@ growing.
 | Language | Source |
 |---|---|
 | Go — in-process, no wrapper needed | [`sdks/go`](https://github.com/vul-os/llmux/tree/main/sdks/go) · or [`core/gateway`](embedding.md) directly |
+| C | [`sdks/c`](https://github.com/vul-os/llmux/tree/main/sdks/c) |
+| C++ | [`sdks/cpp`](https://github.com/vul-os/llmux/tree/main/sdks/cpp) |
 | Python | [`sdks/python`](https://github.com/vul-os/llmux/tree/main/sdks/python) |
 | Node.js | [`sdks/node`](https://github.com/vul-os/llmux/tree/main/sdks/node) |
+| Deno | [`sdks/deno`](https://github.com/vul-os/llmux/tree/main/sdks/deno) |
+| Bun | [`sdks/bun`](https://github.com/vul-os/llmux/tree/main/sdks/bun) |
 | Rust | [`sdks/rust`](https://github.com/vul-os/llmux/tree/main/sdks/rust) |
+| Swift | [`sdks/swift`](https://github.com/vul-os/llmux/tree/main/sdks/swift) |
 | Java | [`sdks/java`](https://github.com/vul-os/llmux/tree/main/sdks/java) |
+| Kotlin | [`sdks/kotlin`](https://github.com/vul-os/llmux/tree/main/sdks/kotlin) |
 | .NET / C# | [`sdks/dotnet`](https://github.com/vul-os/llmux/tree/main/sdks/dotnet) |
 | Ruby | [`sdks/ruby`](https://github.com/vul-os/llmux/tree/main/sdks/ruby) |
 | PHP | [`sdks/php`](https://github.com/vul-os/llmux/tree/main/sdks/php) |
 | Elixir | [`sdks/elixir`](https://github.com/vul-os/llmux/tree/main/sdks/elixir) |
 
-Bindings for further languages — including C and C++ directly against the
-header, and hosts that reach llmux through an existing runtime's FFI — are in
-progress against the same [C ABI](c-abi.md). Until a package appears under
-`sdks/`, the honest statement is that it does not exist yet; the ABI it will
-bind to is stable and documented, which is a different claim.
+Every row above is a directory that exists in the repository today. That is the
+only claim this table makes: a package's own README says what mechanism it
+uses, how complete it is, and how to install it, and where the two disagree the
+README is right. If a language you want is not listed, the honest statement is
+that it does not exist yet — the [C ABI](c-abi.md) it would bind to is stable
+and documented, which is a different claim.
 
 ## Go: the one that is not a wrapper
 
