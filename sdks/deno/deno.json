@@ -1,0 +1,25 @@
+{
+  "name": "@vul-os/llmux",
+  "version": "0.1.0",
+  "exports": "./mod.ts",
+  "license": "MIT",
+  "tasks": {
+    "check": "deno check mod.ts examples/direct.ts examples/sidecar.ts",
+    "lint": "deno lint",
+    "fmt:check": "deno fmt --check",
+    "example:direct": "deno run --allow-ffi --allow-run --allow-env --allow-read examples/direct.ts",
+    "example:sidecar": "deno run --allow-run --allow-net --allow-env --allow-read --allow-write examples/sidecar.ts"
+  },
+  "fmt": {
+    "lineWidth": 110,
+    "exclude": [
+      "examples/fake-upstream.mjs",
+      "README.md"
+    ]
+  },
+  "lint": {
+    "exclude": [
+      "examples/fake-upstream.mjs"
+    ]
+  }
+}
