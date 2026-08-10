@@ -672,6 +672,73 @@ if (versionRaw === null) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════
+// CH·03's package ledger must agree with sdks/
+// ══════════════════════════════════════════════════════════════════════════
+// "Fifteen languages" is a headline claim, and it is asserted in four places
+// that have no mechanical relationship to each other: the <h2>, the chapter
+// meta, the per-row counters in the ledger, and the number of links under them.
+// Only one of those is checkable against the repo — the links — and the rest
+// have to agree with it.
+//
+// This is the divergence class that keeps turning up here: a claim in prose
+// drifting from the thing it describes, silently, because nothing compares
+// them. Adding a sixteenth SDK and forgetting the landing is a one-line
+// mistake that no other gate in this repo would notice.
+//
+// The counts are compared, not the names: the link slugs are documentation
+// anchors (#sdks~c-header-only is C++) and do not map onto directory names.
+{
+  const SDKS = path.join(root, 'sdks');
+  let dirs = [];
+  try {
+    dirs = fs.readdirSync(SDKS, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && !e.name.startsWith('.'))
+      .map((e) => e.name);
+  } catch {
+    dirs = [];
+  }
+
+  const rowRe = /<span class="n">[\s\S]*?<span class="c">(\d+)<\/span>[\s\S]*?<div class="pkgrow">([\s\S]*?)<\/div>/g;
+  const rows = [...(indexHtml || '').matchAll(rowRe)]
+    .map((m) => ({ declared: Number(m[1]), links: [...m[2].matchAll(/class="pk\b[^"]*"/g)].length }));
+
+  if (dirs.length < 10) {
+    fail('coverage', `only ${dirs.length} package directories under ${rel(SDKS)} — the SDK-ledger check verified NOTHING`);
+  } else if (rows.length < 3) {
+    fail('coverage', `found ${rows.length} ledger rows in ${rel(INDEX_HTML)} (want at least 3) — the SDK-ledger check verified NOTHING`);
+  } else {
+    let listed = 0;
+    for (const [i, r] of rows.entries()) {
+      if (r.links === 0) {
+        fail('coverage', `ledger row ${i + 1} in ${rel(INDEX_HTML)} lists no packages — the SDK-ledger check verified NOTHING for it`);
+      }
+      if (r.declared !== r.links) {
+        fail('sdks', `ledger row ${i + 1} in ${rel(INDEX_HTML)} says ${r.declared} but lists ${r.links} package link(s)`);
+      }
+      listed += r.links;
+    }
+    if (listed !== dirs.length) {
+      fail('sdks', `${rel(INDEX_HTML)} lists ${listed} packages but ${rel(SDKS)} ships ${dirs.length} ` +
+        `(${dirs.sort().join(', ')}) — the landing and the repo disagree about how many languages there are`);
+    }
+
+    // The chapter meta restates the same split ("7 direct · 7 sidecar · 1
+    // either"); if it carries numbers at all they have to add up to the rest.
+    const ch03 = /<span class="ch">CH·03<\/span>[\s\S]{0,400}?<span class="cm">([^<]*)<\/span>/.exec(indexHtml || '');
+    if (ch03) {
+      const nums = [...ch03[1].matchAll(/\d+/g)].map((m) => Number(m[0]));
+      if (nums.length) {
+        const sum = nums.reduce((a, b) => a + b, 0);
+        if (sum !== listed) {
+          fail('sdks', `CH·03's meta reads ${JSON.stringify(ch03[1].trim())} (sums to ${sum}) but the ledger lists ${listed} packages`);
+        }
+      }
+    }
+    counts.sdkPackages = listed;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════
 // Report
 // ══════════════════════════════════════════════════════════════════════════
 const langList = [...counts.languages].sort();

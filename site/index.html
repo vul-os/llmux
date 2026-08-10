@@ -1933,6 +1933,22 @@ html.js .band.hero .hero-side{animation-delay:.28s}
 
          The full argument for the geometry, and the two arrangements it
          reflows between, is in the .mx block of the stylesheet above. -->
+    <!-- CH·01 is the longest band on the page and it ran three movements deep
+         — the request/response pair, this diagram, then the endpoint matrix —
+         before offering the reader its first sub-head 200 lines in. The other
+         bands break every hundred or so. This is the missing seam; the matrix
+         already had one. -->
+    <!-- The label names what the DIAGRAM adds, not what it depicts. The strip
+         inside it already reads "MUX 6:1 · six channels in · one connection
+         out"; a heading forty pixels above saying the same thing in the same
+         casing is furniture, not a seam. What the picture is actually for is
+         the select line: the route arrives off the data path, which is the one
+         claim here a reader cannot get from the request/response panes above. -->
+    <div class="chead sub rv" style="margin-top:44px">
+      <span class="ch">Select</span><span class="cl">The route never touches the data path</span>
+      <span class="cr"></span>
+    </div>
+
     <figure class="flow rv" id="fig-mux">
       <div class="dgm mx" role="img" aria-labelledby="il1t il1d">
         <b class="vh" id="il1t">A six-to-one multiplexer: six provider channels arriving at the core's wide
@@ -2231,8 +2247,13 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
+    <!-- The meta used to read "wrappers, not reimplementations", which the lead
+         two lines below then said again, in bold, verbatim. Every other chapter
+         meta on this page is a short factual spec — "default deny", "six
+         provider types", "go 1.25+, nothing else" — so this is one too, and it
+         is the split the ledger underneath actually reports. -->
     <div class="chead rv"><span class="ch">CH·03</span><span class="cl">The packages</span>
-      <span class="cr"></span><span class="cm">wrappers, not reimplementations</span></div>
+      <span class="cr"></span><span class="cm">7 direct · 7 sidecar · 1 either</span></div>
 
     <h2 class="sec rv">Fifteen languages. One engine behind all of them.</h2>
     <p class="lead rv">Fifteen language packages ship in this repo, and they are

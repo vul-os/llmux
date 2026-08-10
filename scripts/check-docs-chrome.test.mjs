@@ -37,6 +37,21 @@ fs.cpSync(path.join(REPO, 'docs'), path.join(work, 'docs'), { recursive: true })
 // nothing about the real check.
 fs.cpSync(path.join(REPO, 'VERSION'), path.join(work, 'VERSION'));
 
+// Assertion 6 counts the package directories under sdks/ and compares them
+// against the landing's ledger, so the copy needs those directories to exist —
+// otherwise it reports [coverage] on every run and its three mutations prove
+// nothing about the real check, which is the same trap the VERSION copy above
+// exists to avoid.
+//
+// Only the NAMES matter to that assertion, so the copy is fifteen empty
+// directories rather than fifteen SDK trees. Copying the real thing would drag
+// build output and dependency trees through a temp dir on every test run.
+for (const e of fs.readdirSync(path.join(REPO, 'sdks'), { withFileTypes: true })) {
+  if (e.isDirectory() && !e.name.startsWith('.')) {
+    fs.mkdirSync(path.join(work, 'sdks', e.name), { recursive: true });
+  }
+}
+
 const COPY_DOCS_HTML = path.join(work, 'site', 'docs.html');
 const COPY_INDEX_HTML = path.join(work, 'site', 'index.html');
 const COPY_VERSION = path.join(work, 'VERSION');
@@ -196,6 +211,40 @@ const mutations = [
       editFile(COPY_INDEX_HTML, (s2) => {
         const out = s2.replace(/>\s*v\d+\.\d+\.\d+[^<\s]*\s*</i, '><');
         if (out === s2) throw new Error('no version badge found to delete — this mutation would prove nothing');
+        return out;
+      }),
+  },
+
+  // ── assertion 6: CH·03's package ledger agrees with sdks/ ───────────────
+  // "Fifteen languages" is a headline claim stated in four unrelated places.
+  // Each of these breaks one of the joins between them.
+  {
+    name: "assertion 6 — a ledger row's counter disagrees with the links under it",
+    expect: 'sdks',
+    apply: () =>
+      editFile(COPY_INDEX_HTML, (s2) => {
+        const out = s2.replace(/(Direct by default<span class="c">)\d+(<\/span>)/, '$1' + '6' + '$2');
+        if (out === s2) throw new Error('no "Direct by default" counter found — this mutation would prove nothing');
+        return out;
+      }),
+  },
+  {
+    name: 'assertion 6 — a package the repo ships is missing from the landing',
+    expect: 'sdks',
+    apply: () =>
+      editFile(COPY_INDEX_HTML, (s2) => {
+        const out = s2.replace(/<a class="pk" href="\.\/docs\.html#sdks~swift">Swift<\/a>\s*/, '');
+        if (out === s2) throw new Error('no Swift package link found to remove — this mutation would prove nothing');
+        return out;
+      }),
+  },
+  {
+    name: "assertion 6 — CH·03's meta stops adding up to the ledger",
+    expect: 'sdks',
+    apply: () =>
+      editFile(COPY_INDEX_HTML, (s2) => {
+        const out = s2.replace(/(<span class="ch">CH·03<\/span>[\s\S]{0,400}?<span class="cm">)(\d+)/, (_m, head) => head + '8');
+        if (out === s2) throw new Error("CH·03's meta carries no leading number — this mutation would prove nothing");
         return out;
       }),
   },
