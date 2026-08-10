@@ -10,6 +10,51 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-08-10
+
+### Added
+
+- **`llmux_cancel` is now bound in all fourteen direct-mode SDKs**, each through
+  that language's native construct rather than the raw symbol: `context.Context`
+  (Go), `AbortSignal` (node/deno/bun), `CancellationToken` (.NET), coroutine
+  cancellation including `withTimeout` (Kotlin), `Task` cancellation via
+  `onTermination` (Swift), `Thread.interrupt`/`Future.cancel(true)` (Java),
+  generator abandonment (Python, and PHP through a Fiber-backed `Generator`),
+  `Drop` plus a `Send + Sync` `CancelHandle` (Rust), `std::stop_token` (C++), a
+  pthread (C), `Enumerator` + `break` (Ruby). Elixir has no direct mode.
+- **`sdks/fake-upstream.py`** — a chunk-counting fake upstream serving
+  `GET /generated`. It peeks for a FIN before each write, so it stops counting
+  into a dead connection. Without that, every language would have reported the
+  full run and the measurement below would have been fiction.
+
+### Fixed
+
+- **Cancelling a buffered stream now stops upstream generation, and the spend
+  with it.** Previously a consumer that took 3 of 10 chunks still caused all 10
+  to be generated and metered — invisible from the consumer's side, and the
+  reason `llmux_cancel` was added in 0.1.5. Measured, consumer stopping at 3 of
+  12: **3 generated** for C, C++, Rust, Swift, Python, .NET, Ruby, PHP, Go and
+  Kotlin.
+
+### Notes
+
+- `llmux_cancel` is per-**handle**, not per-call: cancelling one stream aborts
+  every call on that gateway. Every README offering a per-stream idiom says so.
+- Two honest exceptions, both printed by the examples rather than hidden.
+  **Java's `Future.cancel(true)` reaches 4**, because a blocking native call
+  only notices an interrupt at the next chunk callback. **Node's timer-driven
+  abort never fires** while the event loop is blocked; only an abort raised
+  inside the callback works.
+- **The Bun binding is unmeasured.** It is written and type-checks, but there is
+  no Bun runtime on the build machine, so no number was invented for it. Its
+  README names the command.
+- The PHP fork probe's documented trap — `before models # expect: exited 0` —
+  changed shape in 0.1.5 and is now correct again. `models` still succeeds in a
+  fork-broken child, but the blocking `llmux_close` cannot complete its drain
+  there, so the child hangs on the way out instead of exiting 0. The false green
+  is gone. That a fix for something else removed it is luck, not design: use the
+  `spawn` start method or the sidecar.
+
 ## [0.1.5] - 2026-08-10
 
 A security release. Two changes are **breaking for embedders** — both correct
@@ -418,7 +463,8 @@ section before upgrading anyway.
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/vul-os/llmux/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/vul-os/llmux/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/vul-os/llmux/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/vul-os/llmux/compare/v0.1.2...v0.1.3
