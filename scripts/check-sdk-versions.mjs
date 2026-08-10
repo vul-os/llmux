@@ -181,7 +181,12 @@ function check(root) {
   // one we must never tell anyone to install. The bare name is not merely
   // unpublished — on PyPI and crates.io it belongs to unrelated projects, so
   // documenting it hands the reader somebody else's code.
-  const NAME = `(?:vulos[-_.]?)?${PROJECT}`;
+  // Every spelling of the prefix, because the rename from `vulos` to `vul-os`
+  // silently narrowed this: the pattern still said `vulos` and quietly stopped
+  // covering the name we had just adopted. It matches vulos-, vul-os-, vul_os_
+  // and the bare name — which must stay covered hardest of all, since on PyPI
+  // and crates.io the bare name is somebody else's package.
+  const NAME = `(?:vul[-_]?os[-_.]?)?${PROJECT}`;
   const UNPUBLISHED = [
     { re: new RegExp(`pip install\\s+${NAME}\\b`, 'g'), registry: 'PyPI' },
     { re: new RegExp(`npm i(?:nstall)?\\s+(?:@vul-?os/)?${NAME}\\b`, 'gi'), registry: 'npm' },
