@@ -119,11 +119,13 @@ support, and every **Run** line is a command that exists in this repository —
 each drives a runner that boots a fake upstream, so it works offline with no
 provider keys.
 
-**On getting the packages.** Coordinates are given per language, but registry
-publication is uneven and this page will not pretend otherwise: Python's README
-is the only one with a registry install line today (`pip install llmux`), and
-Kotlin's says its artifact is `// not yet published`. **The path that works for
-all fifteen right now is a checkout** — each `sdks/<lang>` is a working package
+**On getting the packages.** Coordinates are given per language, and **none of
+them is published** — checked 2026-08-10 against npm, PyPI, crates.io, RubyGems
+and NuGet. This page used to say Python's was the one working registry install
+line, which was exactly backwards: `llmux` on PyPI is an unrelated project, and
+so is the `llmux` crate on crates.io (2.4.0, "hook-driven LLM model
+multiplexer"). Following that line installed somebody else's code. **The path
+that works for all fifteen right now is a checkout** — each `sdks/<lang>` is a working package
 directory, and the fake upstream the runners boot is
 [`ffi/fakeupstream`](https://github.com/vul-os/llmux/tree/main/ffi/fakeupstream),
 the same one the C smoke test and the latency benchmark use.
@@ -395,8 +397,14 @@ More: [`sdks/node`](https://github.com/vul-os/llmux/tree/main/sdks/node)
 
 Sidecar by default, because Python forks. Package `llmux`, Python 3.8+.
 
+**`llmux` on PyPI is not this project** — it is "LLM inference for power users"
+by another author, so the `pip install llmux` that used to be here installed a
+stranger's package. Nothing of ours is published to PyPI yet. Install from a
+checkout:
+
 ```bash
-pip install llmux            # or: pip install "llmux[openai]"
+git clone https://github.com/vul-os/llmux
+pip install -e llmux/sdks/python          # or: pip install -e "llmux/sdks/python[openai]"
 ```
 
 ```python

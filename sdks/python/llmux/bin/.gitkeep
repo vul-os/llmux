@@ -1,0 +1,2 @@
+# Kept so the directory exists in a checkout: pyproject.toml force-includes
+# llmux/bin, and hatchling fails if it is absent. The binary itself is ignored.

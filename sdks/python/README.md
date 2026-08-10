@@ -42,12 +42,28 @@ chose the sidecar and was right to.
 
 ## Install
 
+> **Not `pip install llmux`.** That name on PyPI belongs to an unrelated
+> project — "LLM inference for power users", by another author — so the
+> instruction that used to be here installed a stranger's package and then had
+> you call this API on it. This package is not published to PyPI at all yet
+> (checked 2026-08-10).
+
+Install it from a checkout:
+
 ```bash
-pip install llmux
+git clone https://github.com/vul-os/llmux
+pip install -e llmux/sdks/python
 ```
 
-Sidecar mode also needs the binary. Platform wheels bundle it at
-`llmux/bin/llmux`; otherwise put `llmux` on `PATH` or set `LLMUX_BINARY`.
+That editable install is tested, including on a tree that has never been built:
+`llmux/bin/` is a build artifact, and because `pyproject.toml` force-includes it
+into the wheel, hatchling used to raise `FileNotFoundError` and fail the install
+outright on a fresh clone. The directory is now kept in the checkout.
+
+Sidecar mode also needs the binary. A platform wheel bundles it at
+`llmux/bin/llmux` — but no wheel is published, so from a checkout build it with
+`go build -o sdks/python/llmux/bin/llmux ./cmd/llmux`, or put `llmux` on `PATH`,
+or set `LLMUX_BINARY`.
 
 Direct mode also needs the shared library, which is **not** bundled today. Build
 it from a checkout (`scripts/build-ffi.sh`) and point `LLMUX_LIBRARY` at the

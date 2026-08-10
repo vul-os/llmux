@@ -165,6 +165,61 @@ function check(root) {
       'the release-pin check verified NOTHING');
   }
 
+  // No documented command may install THIS project from a registry it is not
+  // published to.
+  //
+  // The Python README said `pip install llmux`, which 404s. llmux's said
+  // `pip install llmux`, which is worse: that name on PyPI belongs to an
+  // unrelated project, so the documented first step installed a stranger's
+  // package and then had the reader call our API on it. crates.io `llmux` is
+  // taken too, by a same-category crate at 2.4.0.
+  //
+  // UNPUBLISHED is the claim being held, and it is meant to shrink: when a
+  // package really is published, delete its entry here and the command becomes
+  // legal. Checked 2026-08-10 against every registry below.
+  const UNPUBLISHED = [
+    { re: new RegExp(`pip install\\s+${PROJECT}\\b`, 'g'), registry: 'PyPI' },
+    { re: new RegExp(`npm i(?:nstall)?\\s+(?:@vul-os/)?${PROJECT}\\b`, 'g'), registry: 'npm' },
+    { re: new RegExp(`gem install\\s+${PROJECT}\\b`, 'g'), registry: 'RubyGems' },
+    { re: new RegExp(`cargo add\\s+${PROJECT}\\b`, 'g'), registry: 'crates.io' },
+    { re: new RegExp(`dotnet add package\\s+${PROJECT}\\b`, 'gi'), registry: 'NuGet' },
+    { re: new RegExp(`composer require\\s+${PROJECT}/${PROJECT}\\b`, 'g'), registry: 'Packagist' },
+  ];
+  const sdkDocs = [...docs];
+  const sdksRoot = join(root, 'sdks');
+  if (existsSync(sdksRoot)) {
+    for (const d of readdirSync(sdksRoot, { withFileTypes: true })) {
+      if (!d.isDirectory()) continue;
+      const rp = join(sdksRoot, d.name, 'README.md');
+      if (existsSync(rp)) sdkDocs.push([`sdks/${d.name}/README.md`, readFileSync(rp, 'utf8')]);
+    }
+  }
+  if (sdkDocs.length <= docs.length) problems.push('no sdks/*/README.md was read — the registry-claim check verified NOTHING');
+  let mentioned = 0; // prose mentions, deliberately not flagged
+  for (const [name, text] of sdkDocs) {
+    for (const { re, registry } of UNPUBLISHED) {
+      for (const m of text.matchAll(re)) {
+        // A command being DISCUSSED is not a command being prescribed, and the
+        // difference is not a word list. The fix for this defect is a doc that
+        // says "Not `pip install llmux`", and patala's says "There is no
+        // `cargo add patala-core`" — both contain the exact string being
+        // searched for. Matching on nearby negations caught the first and
+        // missed the second, because "no" is not "not".
+        //
+        // What separates them is form, not vocabulary: an instruction is a
+        // command in a fenced block, or a line that begins with the command.
+        // A mention inside a sentence is prose about the command.
+        const lineStart = text.lastIndexOf('\n', m.index) + 1;
+        const fencesBefore = (text.slice(0, m.index).match(/^```/gm) || []).length;
+        const inFence = fencesBefore % 2 === 1;
+        const startsLine = /^\s*$/.test(text.slice(lineStart, m.index));
+        if (!inFence && !startsLine) { mentioned += 1; continue; }
+        problems.push(`${name} tells the reader to run "${m[0].trim()}", but ${PROJECT} is not published to ${registry}. ` +
+          `If it now is, remove that registry from UNPUBLISHED in this file.`);
+      }
+    }
+  }
+
   // Completeness: no SDK may be silently outside this check.
   const dirs = readdirSync(join(root, 'sdks'), { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith('.'))

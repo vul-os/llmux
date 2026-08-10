@@ -7,7 +7,12 @@
 /sdks/node/test/sidecar.test.js
 /sdks/node/test/sidecar.test.d.ts
 # Bundled binaries placed into language packages for local dev / CI release
-/sdks/python/llmux/bin/
+# The sidecar binary is a build artifact, but the DIRECTORY must survive a
+# clean checkout: pyproject.toml force-includes llmux/bin into the wheel, and
+# hatchling raises FileNotFoundError if the path is missing — which made
+# `pip install -e sdks/python` fail on a fresh clone.
+/sdks/python/llmux/bin/*
+!/sdks/python/llmux/bin/.gitkeep
 /sdks/node/bin/
 /sdks/ruby/bin/
 /sdks/php/bin/
