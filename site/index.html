@@ -549,9 +549,10 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    with the desktop's cell divider kept as an inline hairline between clauses.
    Nothing is hidden, nothing is stranded, there are no cell heights left to
    disagree, and the whole strip costs about a third of the height the grid
-   did. It also stops floating: with no top rule it hangs directly off the
-   header's own bottom edge and reads as a second tier of chrome rather than as
-   an orphaned box between the nav and the headline.
+   did. (It used to hang off the header's bottom edge, which was the point of
+   dropping its top rule. It now sits under the call to action instead — see
+   the note above — where running text set as one line of fine print is if
+   anything a better fit than it was as a header tier.)
 
    The separator is a middot in the CONTENT, not the desktop's drawn hairline,
    and it is glued to the clause in front of it with a no-break space. Both of
