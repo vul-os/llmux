@@ -202,8 +202,8 @@ no care at all.
    `prefork`/`event` MPM, **`pcntl_fork()`** in your own code, and Swoole /
    RoadRunner / FrankenPHP worker pools that fork. `exec()`-based process
    managers are fine, because `exec` replaces the image.
-3. **The shared library is 12–17 MB** — 12,787,504 bytes on darwin/arm64,
-   17,348,392 bytes on linux/arm64. Per worker that loads it.
+3. **The shared library is 12–17 MB** — 12,823,104 bytes on darwin/arm64,
+   17,356,264 bytes on linux/arm64. Per worker that loads it.
 4. **Prebuilt libllmux binaries exist for darwin/arm64 and linux/arm64 only.**
    linux/amd64 is built in CI and has never been produced on a developer
    machine here; **windows/amd64 and darwin/amd64 do not exist — no `.dll` has

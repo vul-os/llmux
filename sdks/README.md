@@ -3,9 +3,9 @@
 Use llmux from any of fifteen languages, **two ways**:
 
 - **Direct** — in-process. Go imports the package. Every other language loads a
-  C ABI shared library of six symbols — `llmux_new`, `llmux_call`,
-  `llmux_stream`, `llmux_close`, `llmux_free` and `llmux_abi_version` — built
-  with `go build -buildmode=c-shared`. See
+  C ABI shared library of seven symbols — `llmux_new`, `llmux_call`,
+  `llmux_stream`, `llmux_cancel`, `llmux_close`, `llmux_free` and
+  `llmux_abi_version` — built with `go build -buildmode=c-shared`. See
   [`../ffi/README.md`](../ffi/README.md) and
   [the C ABI](../docs/c-abi.md).
 - **Sidecar** — the gateway as a separate process, either one you run or one the

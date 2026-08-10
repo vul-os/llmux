@@ -24,7 +24,7 @@ Everything below was executed on this machine, not inferred:
 | macOS | **15.7.3** (build 24G419), Apple silicon |
 | Xcode | **not installed** — Command Line Tools only. See [Testing](#testing) |
 | Package | SwiftPM, tools-version 5.9, platform floor macOS 13 |
-| llmux | 0.1.2 at capture time, whose `libllmux.dylib` was 12,769,346 bytes. Today's darwin/arm64 build is 12,787,504 — see [Platforms](#platforms) |
+| llmux | 0.1.2 at capture time, whose `libllmux.dylib` was 12,769,346 bytes. Today's darwin/arm64 build is 12,823,104 — see [Platforms](#platforms) |
 
 ## Run the examples
 
@@ -227,8 +227,8 @@ llmux's:
 
 | target | status | Swift? |
 | --- | --- | --- |
-| darwin/arm64 | built, smoke-tested (32/32 C checks), 12,787,504 bytes | **yes — this is the tested combination** |
-| linux/arm64 | built and smoke-tested in a `golang:1.25` container, 17,348,392 bytes | should work; not tried here |
+| darwin/arm64 | built, smoke-tested (40/40 C checks), 12,823,104 bytes | **yes — this is the tested combination** |
+| linux/arm64 | built and smoke-tested in a `golang:1.25` container, 17,356,264 bytes | should work; not tried here |
 | linux/amd64 | CI only, never built locally | untested from Swift |
 | darwin/amd64 | **not built** | **direct mode unavailable** |
 | windows/amd64 | **not built — no `llmux.dll` exists** | **direct mode unavailable** |

@@ -31,7 +31,11 @@ throw. So:
   is a raw pointer, so there is no throw that can leak it.
 - **The handle is owned by `llmux::Gateway`**, which is move-only and closes in
   its destructor. `close()` is `noexcept` and `llmux_close` is idempotent, so
-  double-close and close-during-unwinding are both fine.
+  double-close and close-during-unwinding are both fine. Since 0.1.5 that
+  destructor can **block up to 5 s**: `llmux_close` cancels the calls in flight
+  and waits for them to return before releasing the Redis client and Postgres
+  pool. Do not destroy a `Gateway` from inside a stream callback — that would
+  wait on the call running the callback. Return from the callback first.
 - **An exception thrown inside your stream callback is caught at the C
   boundary**, turned into "stop the stream", and rethrown once the C frame has
   returned. Letting it unwind through a Go call frame is undefined behaviour.
@@ -136,8 +140,8 @@ GIL. Prefer direct mode, **unless**:
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested (32/32 checks). 12,787,504 bytes |
-| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes |
+| darwin/arm64 | built and smoke-tested (40/40 checks). 12,823,104 bytes |
+| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,356,264 bytes |
 | linux/amd64 | built in CI only |
 | windows/amd64 | **not built. No DLL exists.** |
 | darwin/amd64 | **not built.** |

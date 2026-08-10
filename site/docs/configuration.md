@@ -23,16 +23,46 @@ keys, and the pricing catalog.
 | `LLMUX_CONFIG` | Path to the JSON config file |
 | `LLMUX_ADDR` | Listen address (default `:4000`) |
 | `LLMUX_MASTER_KEY` | Admin/master key for `/admin`, `/metrics` |
-| `VULOS_DATABASE_URL` | Shared Postgres DSN (Vulos-specific; **preferred**). Virtual keys + spend live under schema `llmux`. See below. |
-| `DATABASE_URL` | Shared Postgres DSN (standard). Same effect as `VULOS_DATABASE_URL`; lower precedence. |
-| `LLMUX_POSTGRES` | Postgres DSN (virtual keys + spend). Legacy fallback — used only if no shared DSN is set. |
+| `VULOS_DATABASE_URL` | Shared Postgres DSN (Vulos-specific; **preferred**). **Sidecar only** — not read in library mode. See below. |
+| `DATABASE_URL` | Shared Postgres DSN (standard). Same effect as `VULOS_DATABASE_URL`; lower precedence. **Sidecar only** — not read in library mode. |
+| `LLMUX_POSTGRES` | Postgres DSN (virtual keys + spend). The **only** DSN variable honoured in library mode. |
+| `LLMUX_POSTGRES_CONNECT_TIMEOUT_SECONDS` | Bounds the eager connect-and-migrate `gateway.New` performs when Postgres is configured. Negative means no deadline, which is what it used to be unconditionally. |
 | `LLMUX_POSTGRES_SCHEMA` | Postgres schema for llmux's tables (default `llmux`). |
 | `LLMUX_REDIS` | Redis address (rate limits + shared cache) |
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, … | Provider credentials, referenced by `api_key_env` in config |
 | `LLMUX_CP_URL`, `LLMUX_CP_SECRET` | Optional control-plane URL + shared secret (see [Control-plane seam](control-plane.md)) |
 | `LLMUX_BYOK_KEK` | 32-byte key-encryption key (raw / 64-hex / base64) enabling per-account BYOK keys, encrypted at rest. Empty = BYOK off (see [LLM access](llm-access.md)) |
 | `LLMUX_BYOK_STORE` | Path to persist the encrypted BYOK store (omit for in-memory only) |
+| `LLMUX_STREAM_FIRST_BYTE_TIMEOUT_SECONDS` | Seconds a stream waits for its first chunk (default `60`; negative disables). See [Timeouts](#timeouts-nothing-may-block-a-caller-forever). |
+| `LLMUX_STREAM_IDLE_TIMEOUT_SECONDS` | Largest permitted gap between chunks, re-armed per chunk (default `120`; negative disables). |
 | `LLMUX_LOG_LEVEL` | Log verbosity |
+
+## Timeouts: nothing may block a caller forever
+
+Four config-file fields, all with `0` = built-in default and a negative value =
+no bound.
+
+| Field | Env var | Default | Bounds |
+|---|---|---|---|
+| `upstream_timeout_seconds` | — | none beyond the client's 600 s | one **non-streaming** upstream call |
+| `postgres_connect_timeout_seconds` | `LLMUX_POSTGRES_CONNECT_TIMEOUT_SECONDS` | 30 | the eager connect-and-migrate `gateway.New` performs when `postgres` is set |
+| `stream_first_byte_timeout_seconds` | `LLMUX_STREAM_FIRST_BYTE_TIMEOUT_SECONDS` | 60 | how long a stream waits for its **first** chunk |
+| `stream_idle_timeout_seconds` | `LLMUX_STREAM_IDLE_TIMEOUT_SECONDS` | 120 | the largest gap **between** chunks, re-armed on every chunk |
+
+The last two are new in 0.1.5 and replace having no bound at all. **A stream
+deliberately gets no wall-clock deadline** — a long generation is a correct
+stream, not a hung one, and a total timeout would truncate it. The two things
+that *can* distinguish "still working" from "gone" are time-to-first-chunk and
+the gap between chunks, so those are what llmux enforces; because the idle clock
+restarts on every chunk, a stream that keeps producing is never cut off however
+long it runs in total. When one fires, the call ends with `llmux: streaming
+upstream stopped responding` and the tokens already served are metered.
+
+Before this there was neither, and a streaming call against an upstream that
+accepted the connection and then said nothing blocked its caller forever: a
+leaked request goroutine in the sidecar, a parked **host thread** in library
+mode. C-ABI hosts also get [`llmux_cancel`](c-abi.md#the-rules) for the other
+direction — when it is *your* side that has lost interest.
 
 ## Postgres & Redis are optional
 
@@ -44,11 +74,58 @@ consistent across them:
 - **Postgres** — persists virtual keys and per-key spend.
 - **Redis** — backs per-key rate limits and the shared response cache.
 
-## Postgres DSN & shared-database (cloud consolidation)
+## Configuration precedence depends on who is asking
 
-llmux resolves its Postgres DSN from several sources so it can either run with its
-own database or share one database (e.g. a single Neon database) with the other
-Vulos products. Resolution order (**later wins**):
+> **Breaking for embedders in 0.1.5.** If you load `libllmux` or import
+> `core/gateway`, read this section — both rules below changed, and one of them
+> could have been writing tables into your production database.
+
+There are two entry points and they now resolve the environment differently,
+because "the environment" means two different things depending on who set it.
+
+| | Sidecar — `config.Load`, `llmux serve` | Library — `config.FromJSON`, `llmux_new`, `core/gateway` |
+|---|---|---|
+| Order | defaults → config file → **env wins** | defaults → **document wins** → env fills the gaps |
+| `LLMUX_*` | honoured | honoured |
+| `DATABASE_URL` | honoured | **not read** |
+| `VULOS_DATABASE_URL` | honoured | **not read** |
+
+**The sidecar is unchanged.** `llmux serve` reads a file the operator wrote, in
+a process the operator started, whose variables the operator set for llmux.
+Env-overrides-file is a deliberate deployment pattern there — one image,
+per-environment variables — and it stays exactly as it was.
+
+**Library mode changed, twice.**
+
+1. **The configuration document now wins over the environment.** `applyEnv` used
+   to run *after* the caller's document and override it, so an explicit config
+   could be silently replaced by whatever the host process happened to have
+   exported. A value you state in the document is the value you get; the
+   environment only fills in what you left unstated.
+2. **`DATABASE_URL` and `VULOS_DATABASE_URL` are no longer read at all.** They
+   are the *host application's* variable names, not llmux's. `LLMUX_POSTGRES` is
+   namespaced — setting it can only have been meant for llmux — so it is still
+   honoured, and an embedder can always state `"postgres"` in the document.
+
+The second one is why this is a security fix and not a preference. `postgres` is
+the single field that turns an otherwise inert `gateway.New` into remote I/O:
+the Postgres key store connects and **migrates eagerly**, `CREATE SCHEMA` and
+`CREATE TABLE`. So a Rails or Django application with `DATABASE_URL` exported
+that loaded `libllmux` with an explicit provider-only config got llmux's tables
+created in its production database — while
+[`ffi/include/llmux.h`](https://github.com/vul-os/llmux/blob/main/ffi/include/llmux.h) promised the gateway was inert
+"unless **your configuration** names a Postgres DSN". A library does not get to
+reinterpret its host's variables as an instruction to migrate their database.
+
+**What to do if you were relying on the old behaviour.** An embedder that wants
+llmux to use the same database as its host must now say so explicitly — either
+put the DSN in the config document you pass to `llmux_new`, or export it as
+`LLMUX_POSTGRES`. Nothing silently changes database; a library that finds no DSN
+falls back to the in-memory store.
+
+### Sidecar DSN resolution
+
+For `llmux serve`, resolution is unchanged (**later wins**):
 
 1. `postgres` in the config file
 2. `LLMUX_POSTGRES` — legacy, product-specific fallback (kept working)
@@ -56,8 +133,14 @@ Vulos products. Resolution order (**later wins**):
 4. `VULOS_DATABASE_URL` — the Vulos-specific shared DSN (highest precedence)
 
 A shared DSN (`DATABASE_URL` / `VULOS_DATABASE_URL`) is therefore **preferred**
-over `LLMUX_POSTGRES`. With **no** DSN set at all, llmux uses its in-memory /
-embedded default (single-replica; no external dependency) — unchanged.
+over `LLMUX_POSTGRES` *for the sidecar*. With **no** DSN set at all, llmux uses
+its in-memory / embedded default (single-replica; no external dependency) —
+unchanged.
+
+The eager connect is also bounded now, rather than running on
+`context.Background()` where a black-holed DSN could park the calling thread
+forever — a host thread, in library mode. See
+`postgres_connect_timeout_seconds` / `LLMUX_POSTGRES_CONNECT_TIMEOUT_SECONDS`.
 
 **Dedicated schema.** Whenever Postgres is in use, all of llmux's tables live
 under a dedicated schema (default **`llmux`**, override with

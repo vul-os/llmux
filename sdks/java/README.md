@@ -315,7 +315,7 @@ Not a footnote. Full detail in [`ffi/README.md`](../../ffi/README.md).
    neither is a container init or supervisor that forks the JVM after the
    library is loaded. If you use `-Djdk.lang.Process.launchMechanism=fork`,
    note it is still `fork`+`exec` and therefore fine.
-3. **The library is 12–17 MB** — 12,787,504 bytes on darwin/arm64.
+3. **The library is 12–17 MB** — 12,823,104 bytes on darwin/arm64.
 4. **Platform coverage is narrow.** See below.
 5. **Latency is not the reason to embed.** ~4 µs in-process versus ~46 µs over
    loopback for the boundary itself; ~80–92 µs versus ~102–109 µs for a real
@@ -335,8 +335,8 @@ For the **shared library** (the direct path only):
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested. 12,787,504 bytes. The measurements on this page are from here. |
-| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes. |
+| darwin/arm64 | built and smoke-tested. 12,823,104 bytes. The measurements on this page are from here. |
+| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,356,264 bytes. |
 | linux/amd64 | built and tested in CI only; not produced on a development machine. |
 | **windows/amd64** | **not built. No DLL exists. Nobody has produced one.** |
 | **darwin/amd64** | **not built.** |

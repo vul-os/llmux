@@ -8,23 +8,35 @@ really owns a pointer, read the C.
 
 There is no library to install for C. The header is
 [`ffi/include/llmux.h`](../../ffi/include/llmux.h) and it is the whole surface:
-six functions.
+seven functions.
 
 ```c
 const char* llmux_abi_version(void);
 uint64_t    llmux_new(const char* config_json, char** err);
 void        llmux_close(uint64_t h);
+void        llmux_cancel(uint64_t h);
 char*       llmux_call(uint64_t h, const char* method, const char* request_json, char** err);
 void        llmux_free(char* p);
 int         llmux_stream(uint64_t h, const char* method, const char* request_json,
                          llmux_chunk_cb cb, void* user_data, char** err);
 ```
 
+`llmux_cancel` is the seventh symbol, added in 0.1.5: it aborts every call in
+flight on a handle **without closing it**, which is the only way to abandon a
+blocked `llmux_call` or `llmux_stream`. Before it, the only escape was
+`llmux_close`, which destroys the gateway and every other stream on it.
+
+Two things about `llmux_close` also changed in 0.1.5, and both matter to a C
+host: it **drains**, waiting up to a 5 s grace for in-flight calls to return
+before releasing the Redis client and Postgres pool, so it can block; and it
+**must not be called from inside a chunk callback**, which would be waiting on
+the call that is running it. Return from the callback first.
+
 ## The two examples
 
 | file | mode | what it shows |
 |---|---|---|
-| `direct_chat.c` | direct | libllmux linked into the program: version probe, `models`, `chat`, streaming, aborting a stream, the error path, one cleanup label |
+| `direct_chat.c` | direct | libllmux linked into the program: version probe, `models`, `chat`, streaming, stopping a stream early, cancelling one from another thread and from inside the callback, the error path, one cleanup label |
 | `sidecar_chat.c` | sidecar | spawn `llmux` on a free loopback port, poll `/health`, unary chat, SSE streaming, HTTP errors, kill the child on every path |
 
 ```bash
@@ -40,8 +52,8 @@ if they are not in `dist/` yet (that part needs a Go toolchain).
 
 **These are examples, not tests.** The test is
 [`ffi/ctest/smoke.c`](../../ffi/ctest/smoke.c): it `dlopen()`s the library,
-resolves all six symbols **by name**, and asserts 32 checks and then asserts
-that 32 checks ran. That is what catches a missing `//export`, a renamed symbol
+resolves all seven symbols **by name**, and asserts 40 checks and then asserts
+that 40 checks ran. That is what catches a missing `//export`, a renamed symbol
 or a header that has drifted from the library — a different job from showing
 someone how to call this. If you change the ABI, that file is the one that must
 fail. These examples deliberately link the library instead of `dlopen`ing it,
@@ -131,8 +143,8 @@ marshalling layer, no runtime to attach, no GIL. Prefer it, **unless**:
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested (32/32 checks). 12,787,504 bytes |
-| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes |
+| darwin/arm64 | built and smoke-tested (40/40 checks). 12,823,104 bytes |
+| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,356,264 bytes |
 | linux/amd64 | built in CI only; not produced on a development machine |
 | windows/amd64 | **not built. No DLL exists.** `build-ffi.sh` will attempt it with mingw or zig; nobody has run that |
 | darwin/amd64 | **not built.** |

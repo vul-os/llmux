@@ -98,7 +98,7 @@ standalone local-sidecar posture, where an in-process host is already trusted.
 
 ### The same library, from a non-Go host
 
-`ffi/` builds `core/gateway` as a C shared library — six functions, JSON in and
+`ffi/` builds `core/gateway` as a C shared library — seven functions, JSON in and
 JSON out, the same JSON the HTTP API uses. It is a **separate Go module**
 (`github.com/vul-os/llmux-ffi`) deliberately outside this repo's import prefix,
 so Go's `internal/` rule applies to it exactly as it does to any third-party

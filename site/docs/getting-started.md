@@ -58,7 +58,7 @@ open http://localhost:4000/ui              # embedded dashboard (usage, keys, li
 
 Everything works in-memory on one replica. For multiple replicas, add:
 
-- **Postgres** — persists virtual keys and per-key spend. Set `VULOS_DATABASE_URL` or `DATABASE_URL` (shared DSN; llmux's tables live under their own schema, default `llmux`, override with `LLMUX_POSTGRES_SCHEMA`), or the legacy `LLMUX_POSTGRES`. Key tokens are stored as `sha256(token)`, never plaintext.
+- **Postgres** — persists virtual keys and per-key spend. Set `VULOS_DATABASE_URL` or `DATABASE_URL` (shared DSN; llmux's tables live under their own schema, default `llmux`, override with `LLMUX_POSTGRES_SCHEMA`), or `LLMUX_POSTGRES`. Key tokens are stored as `sha256(token)`, never plaintext. This page is about running the sidecar; **an embedder loading `libllmux` gets different rules** — the two shared DSN variables are not read there at all. See [configuration](configuration.md#configuration-precedence-depends-on-who-is-asking).
 - **Redis** — backs per-key rate limits and the shared response cache. Set `LLMUX_REDIS` (`host:port`).
 
 ### Response caching (optional)
@@ -239,7 +239,7 @@ Gateway (all read at startup; config-file values noted where different):
 | `LLMUX_MASTER_KEY` | Admin/master key |
 | `LLMUX_INSECURE_KEYLESS` | `1`/`true`: allow keyless bind on a non-loopback address (dangerous) |
 | `LLMUX_LOG_LEVEL` | Log verbosity |
-| `VULOS_DATABASE_URL` / `DATABASE_URL` / `LLMUX_POSTGRES` | Postgres DSN (that order of precedence, highest first) |
+| `VULOS_DATABASE_URL` / `DATABASE_URL` / `LLMUX_POSTGRES` | Postgres DSN, that order of precedence, highest first — **for the sidecar**. In library mode only `LLMUX_POSTGRES` is read and the config document outranks it; see [configuration](configuration.md#configuration-precedence-depends-on-who-is-asking) |
 | `LLMUX_POSTGRES_SCHEMA` | Schema for llmux's tables (default `llmux`) |
 | `LLMUX_REDIS` | Redis `host:port` |
 | `LLMUX_SYNC_INTERVAL_MIN` | Pricing-catalog sync interval (minutes) |

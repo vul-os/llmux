@@ -63,7 +63,7 @@ loopback shim, which is **not** the sidecar.
 
 **Not writing Go?** This same gateway, in this same in-process shape, is
 reachable from fourteen other languages: thirteen load it through the
-[C ABI](c-abi.md)'s six functions, and all fifteen packages can alternatively
+[C ABI](c-abi.md)'s seven functions, and all fifteen packages can alternatively
 spawn and supervise the binary as a sidecar. You are unlikely to need to write a
 binding — see [Language packages](sdks.md#a-first-call-in-every-language) for a
 first call in each. Note that the costs on this page are the Go-native ones;
@@ -77,8 +77,21 @@ Three constructors, all in `core/config`:
 | Call | Source | Reads the environment |
 |---|---|---|
 | `config.Default()` | Built-in defaults, providers auto-detected | **Yes** — detection plus `LLMUX_*` overrides |
-| `config.Load(path)` | Defaults, then the JSON file at `path` (a missing file is not an error), then env | **Yes** |
-| `config.FromJSON(data)` | Defaults, then the JSON document, then env — `Load` without a file | **Yes** |
+| `config.Load(path)` | Defaults, then the JSON file at `path` (a missing file is not an error), **then env — env wins**. The sidecar's loader. | **Yes**, including `DATABASE_URL` / `VULOS_DATABASE_URL` |
+| `config.FromJSON(data)` | Defaults, then the JSON document — **the document wins**, env only fills gaps. The library loader. | **Yes**, but `LLMUX_*` only |
+
+> **`Load` and `FromJSON` stopped being the same call in 0.1.5**, and if you
+> embed llmux the difference is breaking. `FromJSON` is the library entry point —
+> it is what `llmux_new` calls — so the process environment belongs to *your*
+> application, not to llmux. Two consequences: a field your document states now
+> wins over any variable (`applyEnv` used to run after the merge and override
+> it), and `DATABASE_URL` / `VULOS_DATABASE_URL` are not read at all. Those are
+> your application's variable names; `cfg.Postgres` is the one field that makes
+> `New` connect *and migrate*, so adopting them meant running `CREATE SCHEMA`
+> against a host's production database. `LLMUX_POSTGRES` is namespaced and is
+> still honoured. `Load` — an operator's file, in a process the operator
+> started — is unchanged. Full table:
+> [configuration](configuration.md#configuration-precedence-depends-on-who-is-asking).
 
 All three apply defaults and run `Validate` before returning. Do not
 `json.Unmarshal` into a zero `config.Config` yourself: you would silently drop
@@ -112,6 +125,12 @@ discovered:
   configured, which is every default and every library configuration, `New`
   opens nothing. A Redis address is *not* an exception: `redis.NewClient` does
   not dial, the pool connects on first use, and `Start` is what pings it.
+
+  Since 0.1.5 that connect is **bounded** by
+  `cfg.PostgresConnectTimeoutSeconds` (30 s by default; negative means no
+  deadline, which is what it used to be unconditionally). It ran on
+  `context.Background()`, so a black-holed DSN could park the calling thread
+  forever — and in library mode that thread is the host's.
 - **`New` reads `os.Getenv` for any provider configured with `api_key_env`.**
   Each provider adapter resolves its credential at construction
   (`config.ProviderConfig.ResolveKey`), so an entry naming

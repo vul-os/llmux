@@ -24,7 +24,7 @@ before you read a package README:
 
 | | **Sidecar** | **Direct (in-process)** |
 |---|---|---|
-| How | Spawns the `llmux` binary on `127.0.0.1:<free port>` and hands you a `base_url` | Runs the gateway inside your process — Go imports the package; every other language loads [six C functions](c-abi.md) out of a shared library |
+| How | Spawns the `llmux` binary on `127.0.0.1:<free port>` and hands you a `base_url` | Runs the gateway inside your process — Go imports the package; every other language loads [seven C functions](c-abi.md) out of a shared library |
 | Streaming | Native — your language's own HTTP/SSE client reads its own socket | A C callback per chunk, on the calling thread |
 | Auth at the boundary | Full: virtual keys, budgets, per-key model allow-lists | **None** — you are inside the trust boundary |
 | Ships as | A binary inside the package artifact | A shared library, per platform |
@@ -223,7 +223,7 @@ More: [`sdks/c`](https://github.com/vul-os/llmux/tree/main/sdks/c) ·
 
 ### C++ (header-only)
 
-Direct, through a header-only C++17 RAII wrapper over the same six functions.
+Direct, through a header-only C++17 RAII wrapper over the same seven functions.
 No dependencies beyond the standard library.
 
 ```cpp
@@ -643,6 +643,20 @@ version, with the measurements, is in [The C ABI → the costs](c-abi.md#the-cos
   versus ~46 µs over loopback, but a real chat call measures ~80–92 µs against
   ~102–109 µs — noise next to a model answering in hundreds of milliseconds. The
   reasons are: no second process, no port, no loopback surface.
+- **`llmux_close` drains, so it blocks** — up to a 5 s grace while the calls in
+  flight return, before the Redis client and Postgres pool are released. Since
+  0.1.5. It **must not be called from inside a chunk callback**, which would be
+  waiting on the very call that is running it; return from the callback first.
+  A binding that closes in a finalizer, destructor, `Drop` or `Dispose` should
+  know that path can now take seconds.
+- **`llmux_cancel` is the way out of a blocked call.** It aborts everything in
+  flight on a handle without destroying the gateway. Before 0.1.5 the only
+  escape was `llmux_close`, which takes every other stream on the handle with
+  it. Check your language's README for whether its package surfaces it.
+- **A stream has liveness bounds, not a deadline** — 60 s to the first chunk,
+  120 s between chunks, re-armed per chunk. New in 0.1.5; before it, an upstream
+  that accepted the connection and then said nothing parked one of your threads
+  forever.
 - **No authentication on that boundary, by design.** Virtual keys, budgets and
   per-key model allow-lists are the sidecar's job.
 
@@ -714,8 +728,8 @@ differently, and you have to run them by hand:
   toolchain or a non-zero example.
 - **C** and **C++** have examples, not tests. The test for that surface is
   [`ffi/ctest/smoke.c`](https://github.com/vul-os/llmux/blob/main/ffi/ctest/smoke.c),
-  run by `make test-ffi`, which asserts 32 named checks **and then asserts that
-  32 checks ran**.
+  run by `make test-ffi`, which asserts 40 named checks **and then asserts that
+  40 checks ran**.
 
 The non-integration tests drive a **fake fixture** — a tiny HTTP server that
 honours `LLMUX_ADDR` and serves `/health` — so they need no real gateway and no

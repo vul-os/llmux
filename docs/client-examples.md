@@ -384,7 +384,7 @@ UI bytes in it regardless of build tags. If you embed `core/server` instead
 measured binary-size deltas included.
 
 **Not writing Go?** The same in-process gateway is available as a C shared
-library — six functions, the same JSON the HTTP API uses — and **thirteen of
+library — seven functions, the same JSON the HTTP API uses — and **thirteen of
 the fifteen packages already bind it for you**, so check
 [the binding table](c-abi.md#thirteen-bindings-already-exist)
 before you write your own. Read [The C ABI](c-abi.md) and, before you commit to

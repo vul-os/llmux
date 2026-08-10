@@ -84,7 +84,23 @@ How enforcement behaves:
 Global request guards, independent of keys:
 
 - Request bodies are capped at **32 MiB**.
-- `upstream_timeout_seconds` adds a per-request deadline for non-streaming calls (streaming has none by design).
+- `upstream_timeout_seconds` adds a per-request deadline for non-streaming calls.
+- **Streaming has liveness bounds, not a deadline** (since 0.1.5):
+  `stream_first_byte_timeout_seconds` (default **60**) bounds the wait for the
+  first chunk, and `stream_idle_timeout_seconds` (default **120**) bounds the
+  gap *between* chunks, re-armed on every chunk — so a stream that keeps
+  producing is never cut off however long it runs in total. Set either to a
+  negative number to disable it; `0` selects the default.
+
+  This is deliberately not a wall-clock deadline, and the reason is the whole
+  point: a total timeout cannot tell a long generation from a dead connection,
+  and would truncate the correct one. Time-to-first-chunk and inter-chunk gap
+  can tell them apart, so those are what llmux enforces. Previously there were
+  neither — a streaming call against an upstream that accepted the connection
+  and then said nothing blocked its caller forever, which is a leaked request
+  goroutine in the sidecar and a **parked host thread** in library mode. When a
+  bound fires the call ends with `llmux: streaming upstream stopped responding`;
+  tokens already served are metered.
 - `max_response_bytes` bounds non-streaming upstream response bodies (0 = unlimited).
 - `drop_params[]` strips named request fields before forwarding to OpenAI-shaped upstreams.
 

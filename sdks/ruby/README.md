@@ -81,7 +81,9 @@ end
 
 Requests and responses are the **same JSON the HTTP API uses**, so moving a call
 site between the two modes is a transport change, not a rewrite. Return `:stop`
-(or `false`) from a stream block to end it early — that is not an error.
+(or `false`) from a stream block to end it early — that is not an error, and
+(measured, see [Cancellation](#cancellation)) it already stops the provider
+too, not just delivery to your block.
 
 ```sh
 ruby sdks/ruby/examples/direct_chat.rb
@@ -136,6 +138,93 @@ does not crash — measured — but llmux's own cleanup for that stream never ru
 politely, and re-raises once the Go frame has unwound. You get your exception;
 llmux gets to clean up.
 
+### Cancellation
+
+llmux 0.1.5 added a seventh ABI function, `llmux_cancel(h)`, alongside the six
+`Ffi` already bound (`llmux_abi_version`, `llmux_new`, `llmux_close`,
+`llmux_call`, `llmux_free`, `llmux_stream`). It aborts every call in flight on
+a handle without closing the handle itself — the gateway stays open, and the
+next call starts on a fresh context. Before it, the only way out of a blocked
+call was `close`, which tears down the gateway and every other stream running
+on it.
+
+**Ruby has real threads, and the GVL question was measured, not assumed: a
+second thread CAN cancel a blocked stream.** `Fiddle::Function#call` releases
+the GVL by default (see [The GVL, measured](#the-gvl-measured) above), so a
+call blocked in `llmux_stream` does not stop another thread from calling
+`llmux.cancel`. Measured against `sdks/fake-upstream.py` (100 ms/chunk, ten
+words), cancelling from a second thread after the streaming thread had
+delivered exactly 3 chunks:
+
+```
+rc=-1 err="context canceled"
+consumer chunk count=3
+cancel-call-to-thread-join elapsed=0.0015s
+```
+
+and the upstream's own count, queried at `GET /generated` after the fact —
+the number that matters, because it is what the provider actually produced and
+metered, not what your callback happened to see — read **3**, against **12**
+for a run left to finish (ten word chunks, one finish chunk, one usage chunk;
+the JS runtimes' harness has no usage frame, so their equivalent full count is
+11 — see `sdks/fake-upstream.py`'s own docstring).
+
+**The idiomatic construct is `#stream_enum`, a real `Enumerator`, because
+`break` on it is safe in a way `break` inside `#stream`'s own block is not.**
+`#stream` calls your block directly from inside the FFI trampoline that Go
+invokes per chunk, so a bare `break` there would have to unwind past that
+trampoline and the blocked `llmux_stream` C frame to reach `#stream`'s call
+site — the same family of hazard as raising out of the block, above, and not
+one this SDK tries to make safe. Use `#stream_enum` instead:
+
+```ruby
+llmux.stream_enum("chat", model: "…", messages: [...]).each do |chunk, _raw|
+  print chunk.dig("choices", 0, "delta", "content")
+  break if enough?
+end
+```
+
+`stream_enum` wraps `#stream` in `Enumerator.new`, and the `break` above targets
+`each`, not `stream` — the block you write runs inside `Enumerator::Yielder#<<`,
+one level further out than the FFI trampoline, not inside it. `stream_enum`'s
+`ensure` calls `cancel` unconditionally (a no-op on a stream that already ran to
+completion). Measured on Ruby 4.0.5: breaking after 3 chunks ran that `ensure`
+**immediately** — not on garbage collection, right there as `each` unwound —
+and the upstream's `/generated` read exactly **3**, matching the 3-vs-12 numbers
+above. `examples/cancel_demo.rb` runs this end to end and prints both numbers.
+
+**`llmux.cancel` is also safe to call from inside a stream block**, on the same
+thread that is blocked in `llmux_stream` — that path is what a host with no
+threads at all (PHP, Node's main thread) has to rely on instead, and it was
+verified safe there before this ABI function shipped. In Ruby it is mostly
+useful when you want `stream`'s call to come back as the `context canceled`
+error rather than a quiet `:stop`.
+
+**`llmux_cancel` is per HANDLE, not per call.** It aborts every call in flight
+on that gateway, not just the one you meant to stop. If you need independent
+cancellation for concurrent streams, give each its own `Llmux::Ffi` handle.
+
+**`Thread#kill` does not stop generation — measured, and it is the opposite of
+safe to assume otherwise.** Killing the thread running a blocked `stream` call
+(no `cancel`, just `Thread#kill`) does make the `Thread` object die — `alive?`
+turns false, `join` returns — but the native call underneath keeps running
+disconnected from any Ruby code that could observe or await it:
+
+```
+thread dead? true  consumer saw 3 chunks at kill time
+t+0.5s: generated=8
+t+1.0s: generated=12     <- ran to completion in the background, unread
+t+1.5s: generated=12
+```
+
+`Thread#kill` cannot preempt a blocked native call any more than a `pcntl`
+signal can in PHP — Ruby can only deliver the kill at a safe point, and there
+is no such point inside `libllmux`'s blocked read. What actually happened here
+is worse than a hang: the thread *looks* gone while the provider keeps
+generating and metering on your behalf, silently, for as long as the response
+takes. If you must be able to abandon a streaming thread, call `cancel` before
+(or instead of) killing it — never rely on `kill` alone to stop the provider.
+
 ### It is not fork-safe
 
 After `fork()` without `exec()`, the Go runtime in the child is broken: its
@@ -178,8 +267,8 @@ Concrete victims in Ruby, and the fix in each:
 
 ### Platforms
 
-Prebuilt `libllmux` exists for **darwin/arm64** (12,787,504 bytes, C smoke test
-32/32) and **linux/arm64** (17,348,392 bytes, same test in a `golang:1.25`
+Prebuilt `libllmux` exists for **darwin/arm64** (12,823,104 bytes, C smoke test
+40/40) and **linux/arm64** (17,356,264 bytes, same test in a `golang:1.25`
 container). **linux/amd64** is built in CI only and has never been produced on a
 developer machine here. **windows/amd64 and darwin/amd64 do not exist — no
 `.dll` has ever been built by anyone.**

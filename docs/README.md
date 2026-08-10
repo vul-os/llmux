@@ -17,7 +17,7 @@ operate it as a server.
 |---|---|
 | [Choosing a mode](choosing-a-mode.md) | Server vs sidecar vs Go library vs C shared library — the trade-offs, decided in five minutes |
 | [Embedding llmux in Go](embedding.md) | The `core/gateway` API in full: construction, dispatch, `Authorize`/`release`, seams, and what `New` does on its own |
-| [The C ABI](c-abi.md) | Six functions, the ownership rules, the costs, the honest platform matrix, and the thirteen bindings that already exist |
+| [The C ABI](c-abi.md) | Seven functions, the ownership rules, the costs, the honest platform matrix, and the thirteen bindings that already exist |
 | [Language packages](sdks.md) | All **fifteen**: which mechanism each defaults to and why, a working first call per language, and how each is tested |
 
 ## Understand and operate

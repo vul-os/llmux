@@ -186,7 +186,7 @@ They compose, and doing so is normal:
 ## Related
 
 - [Embedding llmux](embedding.md) — the `core/gateway` API in full, and the two things `New` does on its own
-- [The C ABI](c-abi.md) — the six functions, the ownership rules, and the costs
+- [The C ABI](c-abi.md) — the seven functions, the ownership rules, and the costs
 - [Language packages](sdks.md) — what ships per language and which mechanism it uses
 - [Quickstarts](quickstarts.md) — five-minute paths for each audience
 - [Architecture](architecture.md) — how the gateway is laid out

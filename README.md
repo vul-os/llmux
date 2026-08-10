@@ -410,7 +410,7 @@ Full documentation lives in **[`docs/`](docs/)**, and is also published at
 | [Language packages](docs/sdks.md) | All fifteen: a first call, an install line and a run command per language |
 | [Choosing a mode](docs/choosing-a-mode.md) | Server vs sidecar vs Go library vs C shared library, with the trade-offs |
 | [Embedding llmux in Go](docs/embedding.md) | `core/gateway` in full: dispatch, `Authorize`/`release`, and what `New` does on its own |
-| [The C ABI](docs/c-abi.md) | The six functions, the ownership rules, the costs, and the honest platform matrix |
+| [The C ABI](docs/c-abi.md) | The seven functions, the ownership rules, the costs, and the honest platform matrix |
 | [API reference](docs/api.md) | Endpoints, auth, errors, and cost |
 | [Configuration](docs/configuration.md) | Config file, environment variables, and the sovereignty fields |
 | [Architecture](docs/architecture.md) | How the gateway is laid out, `core/gateway` as a library, and the sovereignty gate in full |

@@ -13,13 +13,14 @@ directory layout and the test strategy live in
 **Read [the costs](#the-costs) before you commit to this.** For several hosts
 the sidecar is the better answer, and saying so is part of the job.
 
-## Six functions
+## Seven functions
 
 ```c
 const char* llmux_abi_version(void);
 
 uint64_t llmux_new(const char* config_json, char** err);
 void     llmux_close(uint64_t h);
+void     llmux_cancel(uint64_t h);
 
 char*    llmux_call(uint64_t h, const char* method, const char* request_json, char** err);
 void     llmux_free(char* p);
@@ -28,6 +29,8 @@ typedef int (*llmux_chunk_cb)(const char* chunk_json, void* user_data); /* 0 = c
 int llmux_stream(uint64_t h, const char* method, const char* request_json,
                  llmux_chunk_cb cb, void* user_data, char** err);
 ```
+
+`llmux_cancel` is new in 0.1.5 and is the seventh symbol.
 
 That is the whole surface. `go build -buildmode=c-shared` also emits a
 `libllmux.h` next to the library, but it drags in Go's typedefs and drops the
@@ -48,6 +51,7 @@ stays stable as llmux grows methods.
 | `llmux_call` | `"embed"` | OpenAI embeddings body | an embeddings response |
 | `llmux_call` | `"models"` | ignored — pass `NULL` | an OpenAI model list |
 | `llmux_stream` | `"chat"` | OpenAI chat-completions body | one chunk per callback |
+| `llmux_cancel` | — | — | aborts everything in flight on the handle, without closing it |
 
 A `"chat"` request with `"stream": true` is **refused** by `llmux_call` rather
 than quietly served as one blob after the fact. Use `llmux_stream`.
@@ -56,27 +60,74 @@ than quietly served as one blob after the fact. Use `llmux_stream`.
 
 **Ownership.** Every non-const `char*` this library returns — results *and*
 error messages — is freed with `llmux_free`, and with nothing else.
-`llmux_abi_version` is the single exception: it returns a static string you must
-not free. `llmux_free(NULL)` is safe.
+`llmux_abi_version` is the single exception: it returns **the same pointer on
+every call**, allocated once when the library loads and never freed. You must
+not free it, and freeing it corrupts the allocator for everything else in your
+process. `llmux_free(NULL)` is safe.
 
-**Errors.** Fallible functions take a trailing `char** err`. On failure they
-write a malloc'd, human-readable UTF-8 message there; pass `NULL` if you do not
-want it. The message is **not** JSON — do not parse it.
+**Errors.** Fallible functions take a trailing `char** err`. **On entry they set
+`*err` to `NULL`**; on failure they write a malloc'd, human-readable UTF-8
+message there. So `*err != NULL` after a call always means *that* call failed,
+and one `char *err = NULL;` is safe to reuse across calls. Before 0.1.5 `*err`
+was only ever written on failure, so a success left the previous failure's
+message in place and a binding that reused the variable freed it twice, in the
+host's allocator. Clearing does not free what was there — ownership passed to
+you when it was written, so free it before you reuse the variable. Pass `NULL`
+if you do not want the message. It is **not** JSON — do not parse it.
 
 **Handles are integers in a registry inside the library, never pointers**, and
 they are never reused. Calling with a closed or invented handle is a clean error
 string, not a segfault in your process. `llmux_close` is idempotent.
+
+**Panics never reach you.** A Go panic anywhere inside the library — including
+one thrown by *your own chunk callback*, which runs inside the stream call frame
+— is recovered at the entry point and returned as an ordinary error with its
+stack in the message. This matters because in `c-shared` mode a panic does not
+unwind into C: an escaping one is a Go runtime fatal error that ends your
+process. The HTTP shell has had this backstop since before v0.1.0, so until
+0.1.5 the same bug was a logged 500 as a sidecar and a dead uWSGI or JVM worker
+as a library — the two modes this documentation presents as interchangeable.
 
 **`llmux_stream` requires a non-NULL callback.** The latitude `err` gets does not
 extend to `cb`: a NULL callback returns `-1` and sets `*err` to
 `llmux: llmux_stream requires a non-NULL chunk callback`, because a stream with
 nowhere to put its chunks is a bug rather than a way to discard them.
 
-**Threading.** A handle is safe to use from several threads at once — and
-`llmux_close` is the deliberate way to interrupt one. Closing cancels the
-instance's context, which **aborts any `llmux_stream` still running on that
-handle from another thread**; that call returns as if the consumer had stopped
-it. If you close while a stream is live, that is what you get.
+**Threading.** A handle is safe to use from several threads at once.
+
+**`llmux_cancel` is how you abandon a blocked call.** `llmux_call` and
+`llmux_stream` are synchronous and block until they finish; calling
+`llmux_cancel(h)` from another thread aborts everything in flight on that
+handle and **leaves the handle open** — the next call starts on a fresh context.
+Cancelling an unknown handle, or one with nothing running, is a no-op. A
+cancelled stream that had already delivered chunks returns `-1` with `*err` set,
+and tokens already served are still metered.
+
+Before 0.1.5 the only escape from a blocked call was `llmux_close`, which
+destroys the gateway *and every other stream on it*. That is why `llmux_cancel`
+exists: "I have lost interest in this request" and "tear the whole instance
+down" were the same button.
+
+`llmux_cancel` is also not a substitute for the liveness bounds llmux applies to
+a stream on its own (see [Streaming](#streaming)). Those are for when the
+*upstream* goes quiet; this is for when *your* side loses interest.
+
+**`llmux_close` drains, so it can block.** It cancels the calls in flight and
+then **waits up to a 5 s grace** for them to return before releasing the Redis
+client and Postgres pool — releasing those under a running call would be a
+use-after-close inside your process. Closing also aborts any `llmux_stream`
+still running on the handle from another thread; that call returns as if the
+consumer had stopped it.
+
+> **`llmux_close` must not be called from inside a chunk callback.** That would
+> be waiting on the very call that is running it. Return from your callback
+> first — return non-zero to stop the stream — and close afterwards. The 5 s
+> bound is deliberate rather than generous: `llmux_close` is `void`, so it has
+> no way to report a failure, and an unbounded drain would deadlock exactly that
+> case instead of merely being slow.
+
+Closing an unknown or already-closed handle is still a no-op, so cleanup paths
+can be idempotent.
 
 **No authentication on this boundary, by design.** Virtual keys, budgets and
 per-key model allow-lists are enforced by the HTTP shell's auth middleware. An
@@ -95,19 +146,44 @@ for. If you want that, run the sidecar.
 
 `config_json` is an llmux configuration document — the same JSON `llmux serve`
 reads from `llmux.json`. `NULL` or `""` means built-in defaults plus the
-environment (auto-detected providers, `LLMUX_*` overrides), exactly as a missing
-config file does. It goes through `config.FromJSON`, so the caveats from the Go
-side apply verbatim across this boundary:
+`LLMUX_`-namespaced environment (auto-detected providers, `LLMUX_*` overrides).
+It goes through `config.FromJSON`:
 
 - **A configuration naming a Postgres DSN connects and migrates eagerly** during
   `llmux_new`. That is the one thing that makes construction non-inert, and it
-  is an explicit opt-in you wrote into the config you passed.
+  is an explicit opt-in you wrote into the config you passed. The connect is
+  bounded by `postgres_connect_timeout_seconds` (30 s by default) rather than
+  able to park your thread forever against a black-holed DSN.
 - **Any provider configured with `api_key_env` is read from the environment**
   during `llmux_new`, because that is what the field means. If your host process
   scrubs or rewrites its environment before loading the library, the credential
   is not there to read.
 - **`LLMUX_*` environment overrides apply** whether or not you passed a config
   document — a `NULL` config is "defaults plus environment", not "nothing".
+
+### Two precedence rules changed in 0.1.5, and both are breaking
+
+Both correct the same mistake: a library reading its host's environment.
+
+**Your document wins over the environment.** A field your document states is
+never overwritten by an environment variable — including one you set to `""` or
+`0`, which is a statement and not a gap. Variables fill in only what the
+document is silent about. `applyEnv` used to run *after* the merge and override
+it unconditionally. The sidecar (`config.Load`) resolves the other way round and
+is unchanged: there the operator owns the file *and* the environment, whereas
+here the environment belongs to your application and llmux is a guest in it.
+
+**`DATABASE_URL` and `VULOS_DATABASE_URL` are ignored in library mode.** They
+are your application's variable names, not llmux's. Since `postgres` is the one
+field that turns an inert construction into remote I/O, adopting a DSN llmux was
+never handed meant **migrating your production database because you loaded a
+shared library**: a Rails or Django app with `DATABASE_URL` exported got
+`CREATE SCHEMA` and `CREATE TABLE` run in it, while the header promised
+inertness "unless *your configuration* names a Postgres DSN". `LLMUX_POSTGRES`
+is namespaced, unambiguous and still honoured; to use a database from a host
+that sets `DATABASE_URL`, put the DSN in your document.
+
+Full table: [configuration](configuration.md#configuration-precedence-depends-on-who-is-asking).
 
 ## Streaming
 
@@ -119,8 +195,28 @@ the duration of the callback; copy it if you need it afterwards.**
 
 Returns `0` on success, `-1` on failure with `*err` set. A callback that returns
 non-zero **stops the stream and is not a failure**: the return is `0` and `*err`
-is untouched. You returned non-zero, so you already know it happened. Tokens
+is left `NULL`. You returned non-zero, so you already know it happened. Tokens
 already served are metered either way.
+
+**A stream has liveness bounds, not a deadline** (new in 0.1.5).
+`stream_first_byte_timeout_seconds` (default **60**) bounds the wait for the
+first chunk; `stream_idle_timeout_seconds` (default **120**) bounds the gap
+between chunks and is **re-armed on every chunk**, so a generation that runs for
+an hour is never truncated while a connection that went quiet is caught in
+seconds. A negative value disables either; `0` selects the default. When a bound
+fires, `llmux_stream` returns `-1` with `*err` set to `llmux: streaming upstream
+stopped responding`.
+
+There is deliberately no wall-clock deadline, and that is why there used to be
+no bound at all: a total timeout cannot distinguish a long generation from a
+dead connection, so it would have to truncate the correct case to catch the
+broken one. Time-to-first-chunk and inter-chunk gap can tell them apart. Before
+0.1.5 a stream against an upstream that accepted the connection and then said
+nothing blocked its caller forever — and in library mode that caller is one of
+**your** threads.
+
+These bounds are about the upstream going quiet. When *you* want out, call
+[`llmux_cancel`](#the-rules) from another thread.
 
 **Stopping the consumer is not the same as stopping the stream.** This ABI stops
 promptly — the next chunk after your non-zero return is not requested. What does
@@ -195,7 +291,7 @@ silently and misbehaves in ways that look like llmux bugs.
 
 ## Thirteen bindings already exist
 
-Before you bind these six functions by hand, check whether your language is
+Before you bind these seven functions by hand, check whether your language is
 already done. Thirteen of the fifteen packages under
 [`sdks/`](https://github.com/vul-os/llmux/tree/main/sdks) load this exact
 library, each through its own language's FFI:
@@ -315,8 +411,8 @@ times:
 
 | target | status |
 |---|---|
-| **darwin/arm64** | Built and tested on the development machine. 12,787,504 bytes; the C smoke test passes all 32 checks against it |
-| **linux/arm64** | Built and tested in a `golang:1.25` container on that same machine. 17,348,392 bytes; all 32 checks pass |
+| **darwin/arm64** | Built and tested on the development machine. 12,823,104 bytes; the C smoke test passes all 40 checks against it |
+| **linux/arm64** | Built and tested in a `golang:1.25` container on that same machine. 17,356,264 bytes; all 40 checks pass |
 | **linux/amd64** | Built and tested **in CI** (the `ffi` job on `ubuntu-latest`). Not produced on the development machine — no cross toolchain there |
 | **windows/amd64** | **Not built. Not tested. No `.dll` has been produced by anyone yet.** `build-ffi.sh` will attempt it if `x86_64-w64-mingw32-gcc` or `zig` is present; nobody has run that, so treat Windows as unverified |
 | **darwin/amd64** | **Not built** — no Intel macOS machine or SDK here |
@@ -364,11 +460,11 @@ Two layers, and neither replaces the other:
 - **`ffi/abi_test.go`** — 14 tests in pure Go, no cgo: handle registry,
   use-after-close, method dispatch, streaming, abort semantics, two independent
   gateways in one process, and the version constant against `VERSION`.
-- **`ffi/ctest/smoke.c`** — dlopens the built library, resolves all six symbols
+- **`ffi/ctest/smoke.c`** — dlopens the built library, resolves all seven symbols
   by name, and runs one unary call and one streaming call end to end. This is
   the layer that catches a missing `//export`, a renamed symbol, or a header
   that has drifted from the library — none of which any Go test would notice. It
-  asserts 32 named checks **and then asserts that 32 checks ran**, because a C
+  asserts 40 named checks **and then asserts that 40 checks ran**, because a C
   program that returns 0 having executed three of them looks identical to one
   that executed all of them.
 
