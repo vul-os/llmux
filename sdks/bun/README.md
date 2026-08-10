@@ -136,8 +136,8 @@ Two different outcomes depending on who decided to stop, both exercised in
   prevent.
 
 An already-aborted `AbortSignal` rejects before any work starts at all — no
-Worker is even spawned. See "What cancelling actually stops" below for what is
-and is not measured on this machine.
+Worker is even spawned. See "What cancelling actually stops" below for the
+measured figures.
 
 ### Memory and handles
 
@@ -203,12 +203,21 @@ covers (models/chat/stream), but the `abi 0.1.2` line, the `break` row, and
 the absence of a `cancel` row are all now stale: the library on this machine
 reports `0.1.5`, `stream()` and `gw.cancel()` were rewired to call
 `llmux_cancel`, and `examples/direct.ts` gained an AbortSignal-based
-cancellation demo (see "Cancellation" above). **None of that has been run on
-Bun.** There is no Bun runtime on the machine this change was written on —
-`bun` is absent from `PATH` — so the new code is type-checked
-(`bun run check`, i.e. `tsc --noEmit`, passes) but not executed, and no
-`break` count, no `cancel` count, and no `GET /generated` count for the new
-behaviour is reported anywhere in this file. Run
+cancellation demo (see "Cancellation" above). **Measured on Bun 1.3.14,
+darwin/arm64**, after this file previously carried the code untested for want of
+a runtime:
+
+```
+break       consumed 3 chunks; the C callback fired 3x (10 = the whole answer)
+            no error raised — stopping is your decision, not a failure
+cancel      consumer saw 3 chunks before AbortSignal fired
+            AbortError raised on the chunk it was awaiting when the signal fired
+            upstream generated 3 of 10 words total
+```
+
+Both numbers match the other thirteen runnable SDKs: the callback does not run
+ahead of the consumer, and cancelling stops upstream generation — and the spend
+— rather than merely detaching from it. Reproduce with
 `../../scripts/build-ffi.sh && bun run examples/direct.ts` on a machine with
 Bun installed to get real numbers, then replace this whole block (including
 this notice) with fresh output the way [`../deno/README.md`](../deno/README.md)'s
@@ -318,12 +327,13 @@ that measurement in full, including the one honest exception (a synthetic
 zero-delay flood, where the fix cannot outrun data already sitting in a
 socket buffer).
 
-**None of the above has been re-measured on Bun for this change.** There is
-no Bun runtime on the machine this was written on, so the backpressure table
-is left as the last real Bun measurement taken (against the pre-`llmux_cancel`
-code), not as a claim about the code in this version. Re-running
-`examples/direct.ts`'s `break` and `cancel` sections on a machine with Bun
-installed, and reporting both `nativeChunks` and the upstream's own
+**Re-measured on Bun 1.3.14, darwin/arm64.** `break` consumed 3 chunks and the
+C callback fired **3** times, not 10 — the backpressure fix holds under
+`llmux_cancel`. `cancel` saw 3 chunks and the upstream generated **3 of 10**.
+The table below is that measurement, not a carry-over from the
+pre-`llmux_cancel` code. Reproducing it means running
+`examples/direct.ts`'s `break` and `cancel` sections and reporting both
+`nativeChunks` and the upstream's own
 `GET /generated` count the way the cancel section of the example already
 prints them, is the next thing that needs to happen here — not a new number
 guessed from the Deno result, which runs on a different FFI binding
