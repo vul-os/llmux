@@ -210,8 +210,8 @@ key, so there is none to leak or rotate). `scripts/verify.sh` is what you run
 before executing the bytes:
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/vul-os/llmux/v0.1.4/scripts/verify.sh
-bash verify.sh --tag v0.1.4 --attest llmux_0.1.4_linux_amd64.zip
+curl -fsSLO https://raw.githubusercontent.com/vul-os/llmux/v0.1.5/scripts/verify.sh
+bash verify.sh --tag v0.1.5 --attest llmux_0.1.5_linux_amd64.zip
 ```
 
 It fetches the manifest, looks up the **exact** entry for that asset (names are
@@ -371,7 +371,7 @@ for the full mechanism, and
 
 ## Status
 
-llmux is pre-1.0 (`v0.1.4`) and under active development. Two things are
+llmux is pre-1.0 (`v0.1.5`) and under active development. Two things are
 honestly not "everything works, fully hardened":
 
 **Provider adapters are on a stability ladder**, promoted only once verified

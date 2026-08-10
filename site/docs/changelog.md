@@ -10,6 +10,57 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-08-10
+
+A security release. Two changes are **breaking for embedders** — both correct
+the same mistake, that a library was reading its host's environment.
+
+### Breaking
+
+- **The configuration document now wins over the environment.** `applyEnv` ran
+  *after* the caller's document and overrode it, so an explicit config could be
+  silently replaced by whatever the host had exported.
+- **Library mode no longer reads `DATABASE_URL` or `VULOS_DATABASE_URL`.** Those
+  are the host application's variable names; in library mode the environment
+  belongs to the host, not to llmux. `LLMUX_POSTGRES` is namespaced, so
+  honouring it can only be intentional, and it is still honoured. The sidecar
+  (`config.Load`) is unchanged.
+- **`llmux_close` now blocks**, up to a 5 s grace, and must not be called from
+  inside a chunk callback. The bound is deliberate: `llmux_close` is `void`, so
+  an unbounded drain would deadlock exactly that case.
+
+### Security
+
+- **`llmux_new` adopted the host's `DATABASE_URL` and ran DDL against it.** A
+  Rails or Django application with `DATABASE_URL` set that loaded `libllmux`
+  with an explicit provider-only config got `CREATE SCHEMA` and `CREATE TABLE`
+  executed in its production database — while `ffi/include/llmux.h` promised
+  inertness "unless **your configuration** names a Postgres DSN". Fixed by the
+  two precedence changes above.
+- **A Go panic at any `//export` killed the host process.** In `c-shared` mode a
+  panic does not unwind into C. The HTTP shell has had this backstop since
+  before v0.1.0, so the same bug was a logged 500 as a sidecar and a dead uWSGI
+  or JVM worker as a library — the two modes the README presents as
+  interchangeable. All seven exports and the four pure-Go entry points now
+  recover, **including panics thrown by the host's own chunk callback**, which
+  runs inside the stream call frame.
+
+### Added
+
+- **`llmux_cancel(uint64_t h)`** — the ABI's seventh symbol. Previously the only
+  way out of a blocked call was `llmux_close`, which destroys the gateway and
+  every other stream on it. No SDK binds it yet.
+- **Liveness bounds on streaming**: 60 s to first byte, 120 s idle, re-armed per
+  chunk. Deliberately not a wall-clock deadline — that cannot distinguish a long
+  generation from a dead connection, which is why there was none.
+
+### Fixed
+
+- `Gateway.Close` wrote `g.rdb = nil` unsynchronised — a data race under `-race`.
+- `*err` is now cleared on entry, so a binding reusing one `err` across calls
+  cannot see a previous failure's string and double-free it.
+- The Postgres connect is bounded rather than `context.Background()`.
+
 ## [0.1.4] - 2026-08-10
 
 ### Fixed
@@ -367,7 +418,8 @@ section before upgrading anyway.
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/vul-os/llmux/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/vul-os/llmux/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/vul-os/llmux/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/vul-os/llmux/compare/v0.1.1...v0.1.2

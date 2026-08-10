@@ -21,7 +21,7 @@ import (
 // VERSION file — the point of the probe is that a host can compare the loaded
 // library against the version it was built for and refuse a stale .so on the
 // load path instead of calling into it and guessing.
-const Version = "0.1.4"
+const Version = "0.1.5"
 
 // main exists because -buildmode=c-shared requires package main. It never runs:
 // loading a c-shared library initialises the Go runtime and the package's init
