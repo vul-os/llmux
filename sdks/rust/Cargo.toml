@@ -1,8 +1,8 @@
 [package]
-# Published as vulos-llmux: crates.io has no namespaces, and plain `llmux` is
+# Published as vul-os-llmux: crates.io has no namespaces, and plain `llmux` is
 # an unrelated crate at 2.4.0 ("hook-driven LLM model multiplexer"), so this
 # name was never available. See [lib] below — the library is still `llmux`.
-name = "vulos-llmux"
+name = "vul-os-llmux"
 version = "0.1.7"
 edition = "2021"
 description = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
@@ -12,7 +12,7 @@ repository = "https://github.com/vul-os/llmux"
 keywords = ["llm", "gateway", "openai", "anthropic", "proxy"]
 categories = ["api-bindings"]
 
-# The PUBLISHED name is vulos-llmux; the LIBRARY is llmux. `use llmux::...` in
+# The PUBLISHED name is vul-os-llmux; the LIBRARY is llmux. `use llmux::...` in
 # every example, test and downstream file is unchanged by the rename.
 [lib]
 name = "llmux"

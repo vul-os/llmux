@@ -1,5 +1,5 @@
 {
-  "name": "@vulos/llmux-bun",
+  "name": "@vul-os/llmux-bun",
   "version": "0.1.7",
   "description": "llmux for Bun \u2014 the C ABI in-process, or the sidecar over loopback.",
   "type": "module",

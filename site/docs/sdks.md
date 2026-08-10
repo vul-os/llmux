@@ -322,14 +322,14 @@ More: [`sdks/swift`](https://github.com/vul-os/llmux/tree/main/sdks/swift)
 
 ### Deno
 
-Direct, via `Deno.dlopen`. Module `@vulos/llmux` on JSR, no third-party dependencies.
+Direct, via `Deno.dlopen`. Module `@vul-os/llmux` on JSR, no third-party dependencies.
 This is the one JavaScript runtime where direct mode is not a compromise: it
 declares `llmux_call` a second time with `nonblocking: true` — `mod.ts` names
 that alias `llmux_call_async`, and it is a Deno-side symbol declaration, not a
 seventh C export — which keeps the isolate responsive.
 
 ```typescript
-import { abiVersion, Gateway } from "./mod.ts";     // module name: @vulos/llmux
+import { abiVersion, Gateway } from "./mod.ts";     // module name: @vul-os/llmux
 
 using gw = Gateway.open({ expectVersion: abiVersion() });
 
@@ -350,10 +350,10 @@ More: [`sdks/deno`](https://github.com/vul-os/llmux/tree/main/sdks/deno)
 
 ### Bun
 
-Direct, via `bun:ffi`. Package `@vulos/llmux-bun` on npm, no runtime dependencies.
+Direct, via `bun:ffi`. Package `@vul-os/llmux-bun` on npm, no runtime dependencies.
 
 ```typescript
-import { abiVersion, Gateway } from "./index.ts";   // package name: @vulos/llmux-bun
+import { abiVersion, Gateway } from "./index.ts";   // package name: @vul-os/llmux-bun
 
 await using gw = Gateway.open({ expectVersion: abiVersion() });
 
@@ -399,7 +399,7 @@ More: [`sdks/node`](https://github.com/vul-os/llmux/tree/main/sdks/node)
 
 ### Python
 
-Sidecar by default, because Python forks. PyPI `vulos-llmux` (the import is
+Sidecar by default, because Python forks. PyPI `vul-os-llmux` (the import is
 still `llmux`), Python 3.8+.
 
 **`llmux` on PyPI is not this project** — it is "LLM inference for power users"
@@ -553,7 +553,7 @@ More: [`sdks/ruby`](https://github.com/vul-os/llmux/tree/main/sdks/ruby)
 ### PHP
 
 Sidecar by default, and this is not a hedge — php-fpm forks in every `pm` mode.
-Composer package `vulos/llmux`, PHP 7.4+, PSR-4 under `Llmux\` (the namespace
+Composer package `vul-os/llmux`, PHP 7.4+, PSR-4 under `Llmux\` (the namespace
 is unchanged; only the published name is scoped).
 
 ```php

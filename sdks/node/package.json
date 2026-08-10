@@ -1,5 +1,5 @@
 {
-  "name": "@vulos/llmux",
+  "name": "@vul-os/llmux",
   "version": "0.1.7",
   "description": "The LLM multiplexer, embedded locally \u2014 one OpenAI-compatible client for every provider.",
   "main": "index.js",

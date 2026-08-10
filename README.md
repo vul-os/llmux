@@ -266,18 +266,18 @@ mechanisms**:
 | [Go](docs/sdks.md#go) | `go get github.com/vul-os/llmux/core/gateway` | package import — **no FFI at all** | ✓ | **direct** |
 | [C](docs/sdks.md#c) | `#include "llmux.h"`, link `libllmux` | ✓ | ✓ | **direct** |
 | [C++](docs/sdks.md#c-header-only) | header-only `llmux.hpp` | ✓ RAII | ✓ | **direct** |
-| [Rust](docs/sdks.md#rust) | crate `vulos-llmux` | ✓ `libloading` | ✓ | direct |
+| [Rust](docs/sdks.md#rust) | crate `vul-os-llmux` | ✓ `libloading` | ✓ | direct |
 | [Swift](docs/sdks.md#swift) | SwiftPM `LLMux` | ✓ C interop | ✓ | direct |
-| [Deno](docs/sdks.md#deno) | JSR `@vulos/llmux` | ✓ `Deno.dlopen` | ✓ | direct |
-| [Bun](docs/sdks.md#bun) | npm `@vulos/llmux-bun` | ✓ `bun:ffi` | ✓ | direct |
-| [Node.js](docs/sdks.md#nodejs) | npm `@vulos/llmux` | ✓ koffi | ✓ | **sidecar** for servers |
-| [Python](docs/sdks.md#python) | PyPI `vulos-llmux` | ✓ `ctypes` | ✓ | **sidecar** |
+| [Deno](docs/sdks.md#deno) | JSR `@vul-os/llmux` | ✓ `Deno.dlopen` | ✓ | direct |
+| [Bun](docs/sdks.md#bun) | npm `@vul-os/llmux-bun` | ✓ `bun:ffi` | ✓ | direct |
+| [Node.js](docs/sdks.md#nodejs) | npm `@vul-os/llmux` | ✓ koffi | ✓ | **sidecar** for servers |
+| [Python](docs/sdks.md#python) | PyPI `vul-os-llmux` | ✓ `ctypes` | ✓ | **sidecar** |
 | [Java](docs/sdks.md#java) | `org.vulos:llmux` | ✓ FFM, JDK 22+ | ✓ | **sidecar** |
 | [Kotlin](docs/sdks.md#kotlin) | `org.vulos:llmux-kotlin` | ✓ over the Java binding | ✓ | **sidecar** |
-| [.NET / C#](docs/sdks.md#net-and-c) | NuGet `Vulos.Llmux` | ✓ `LibraryImport` | ✓ | **sidecar** |
-| [Ruby](docs/sdks.md#ruby) | gem `vulos-llmux` | ✓ `fiddle` (stdlib) | ✓ | depends on your server |
-| [PHP](docs/sdks.md#php) | composer `vulos/llmux` | ✓ ext-`FFI` | ✓ | **sidecar** |
-| [Elixir](docs/sdks.md#elixir) | hex `vulos_llmux` | **none, deliberately** | ✓ | **sidecar** |
+| [.NET / C#](docs/sdks.md#net-and-c) | NuGet `VulOs.Llmux` | ✓ `LibraryImport` | ✓ | **sidecar** |
+| [Ruby](docs/sdks.md#ruby) | gem `vul-os-llmux` | ✓ `fiddle` (stdlib) | ✓ | depends on your server |
+| [PHP](docs/sdks.md#php) | composer `vul-os/llmux` | ✓ ext-`FFI` | ✓ | **sidecar** |
+| [Elixir](docs/sdks.md#elixir) | hex `vul_os_llmux` | **none, deliberately** | ✓ | **sidecar** |
 
 Those are the coordinates each package will publish under, and they are all
 scoped to Vulos. **None of them is published yet** — every one was checked free
@@ -296,8 +296,8 @@ The bare name was never available, which is why the scoping is not cosmetic:
 
 The rename is to the PUBLISHED coordinates only. `import llmux`, `use llmux::`,
 `require "llmux"`, the `:llmux` OTP application and the `llmux_*` C symbols are
-all unchanged — the Rust crate publishes as `vulos-llmux` with its library still
-named `llmux`, and the Python distribution is `vulos-llmux` with its import
+all unchanged — the Rust crate publishes as `vul-os-llmux` with its library still
+named `llmux`, and the Python distribution is `vul-os-llmux` with its import
 package still `llmux`.
 
 **The path that works for all fifteen is a checkout**: each `sdks/<lang>` is a
