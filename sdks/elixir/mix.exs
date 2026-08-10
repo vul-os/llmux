@@ -1,10 +1,15 @@
 defmodule Llmux.MixProject do
   use Mix.Project
 
+  # Read from the workspace's VERSION file so this package cannot drift
+  # from the engine it binds. Six of these manifests sat at 0.1.0 behind a
+  # shipped release because each carried its own literal.
+  @version Path.join(__DIR__, "../../VERSION") |> File.read!() |> String.trim()
+
   def project do
     [
       app: :llmux,
-      version: "0.1.0",
+      version: @version,
       elixir: "~> 1.12",
       start_permanent: Mix.env() == :prod,
       description:

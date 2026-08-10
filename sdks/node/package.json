@@ -1,6 +1,6 @@
 {
   "name": "llmux",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "description": "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.",
   "main": "index.js",
   "types": "index.d.ts",

@@ -113,6 +113,22 @@ jobs:
       - name: Prove the site-chrome gate still fails when its assertions are broken
         run: node scripts/check-docs-chrome.test.mjs
 
+      # Every package manifest under sdks/ must declare the version in
+      # /VERSION. They were checked by nobody until now, and it showed: llmux
+      # shipped 0.1.7 with all six of its literal-carrying manifests still at
+      # 0.1.0, openrate shipped 0.1.8 with its Rust crate at 0.1.0. A manifest
+      # that lies about its version is what a registry, a lockfile and a
+      # consumer's resolver all believe.
+      #
+      # --selftest first: it drifts a manifest, drifts a lockfile, deletes a
+      # version field and adds an unlisted SDK, and requires each to be
+      # refused. It mutates the real tree and restores it, because a copy would
+      # not prove it reads the tree that ships.
+      - name: SDK manifests all declare the released version
+        run: |
+          node scripts/check-sdk-versions.mjs --selftest
+          node scripts/check-sdk-versions.mjs
+
       # The admin console is optional: `-tags noui` drops the go:embed and
       # core/server mounts a JSON stub instead. Only ONE tag state is exercised
       # by the steps above, so without this the untagged build could rot for a

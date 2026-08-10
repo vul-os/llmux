@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |spec|
   spec.name = "llmux"
-  spec.version = "0.1.0"
+  spec.version = "0.1.7"
   spec.summary = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
   spec.description = "Thin Ruby wrapper that bundles the llmux gateway binary, " \
     "starts it on a local port, and hands your existing OpenAI client a base_url."

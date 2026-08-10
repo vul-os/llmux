@@ -1,6 +1,6 @@
 {
   "name": "@vul-os/llmux-bun",
-  "version": "0.1.0",
+  "version": "0.1.7",
   "description": "llmux for Bun — the C ABI in-process, or the sidecar over loopback.",
   "type": "module",
   "module": "index.ts",

@@ -6,7 +6,7 @@
 
   <groupId>to.llmux</groupId>
   <artifactId>llmux</artifactId>
-  <version>0.1.0</version>
+  <version>0.1.7</version>
   <packaging>jar</packaging>
 
   <name>llmux</name>

@@ -1,6 +1,6 @@
 [package]
 name = "llmux"
-version = "0.1.0"
+version = "0.1.7"
 edition = "2021"
 description = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
 license = "MIT"
