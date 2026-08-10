@@ -66,10 +66,49 @@ var newGateway = gateway.New
 // ---------------------------------------------------------------------------
 
 // instance is one live gateway behind one handle.
+//
+// The context is swappable, not fixed for the life of the handle. llmux_call
+// and llmux_stream block until they finish, so a host that decides mid-call
+// that it no longer wants the answer — a web request whose client went away, a
+// job that was cancelled, a shutdown in progress — previously had exactly one
+// lever: llmux_close, which destroys the gateway. llmux_cancel cancels the
+// in-flight work and installs a fresh context, so the handle is immediately
+// usable again.
 type instance struct {
-	gw     *gateway.Gateway
+	gw *gateway.Gateway
+
+	mu     sync.Mutex
 	ctx    context.Context
 	cancel context.CancelFunc
+}
+
+// callCtx returns the context in force right now. Reading it under the lock is
+// what makes a concurrent llmux_cancel safe: the swap replaces the field, and a
+// call that already took the old context simply gets cancelled.
+func (i *instance) callCtx() context.Context {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	return i.ctx
+}
+
+// cancelInflight aborts every call currently running on this handle and arms a
+// fresh context for the next one. Calling it with nothing in flight is a no-op
+// from the host's point of view.
+func (i *instance) cancelInflight() {
+	i.mu.Lock()
+	old := i.cancel
+	i.ctx, i.cancel = context.WithCancel(context.Background())
+	i.mu.Unlock()
+	old()
+}
+
+// shutdown cancels whatever is running and releases the gateway's resources.
+func (i *instance) shutdown() {
+	i.mu.Lock()
+	cancel := i.cancel
+	i.mu.Unlock()
+	cancel()
+	_ = i.gw.Close()
 }
 
 // The registry is why handles are uint64s and not pointers. A host that calls
@@ -147,8 +186,19 @@ func closeGateway(h uint64) {
 	if !ok {
 		return
 	}
-	inst.cancel()
-	_ = inst.gw.Close()
+	inst.shutdown()
+}
+
+// cancelGateway aborts the calls in flight on h and leaves the handle open and
+// usable. An unknown handle is a no-op: a host racing its own cleanup against
+// its own cancel must not be punished for the order they landed in.
+func cancelGateway(h uint64) {
+	defer func() { _ = recover() }()
+	inst, err := lookup(h)
+	if err != nil {
+		return
+	}
+	inst.cancelInflight()
 }
 
 // liveHandles reports how many handles are open. Tests use it to prove close
@@ -220,7 +270,7 @@ func chatCall(inst *instance, requestJSON string) (string, error) {
 	}
 	// ChatRaw, not Chat: the caller's ORIGINAL bytes reach the provider, so
 	// fields llmux does not model survive the hop exactly as they do over HTTP.
-	res, err := inst.gw.ChatRaw(inst.ctx, &req, raw)
+	res, err := inst.gw.ChatRaw(inst.callCtx(), &req, raw)
 	if err != nil {
 		return "", err
 	}
@@ -235,7 +285,7 @@ func embedCall(inst *instance, requestJSON string) (string, error) {
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return "", fmt.Errorf("llmux: invalid embeddings request JSON: %w", err)
 	}
-	resp, err := inst.gw.EmbedRaw(inst.ctx, &req, raw)
+	resp, err := inst.gw.EmbedRaw(inst.callCtx(), &req, raw)
 	if err != nil {
 		return "", err
 	}
@@ -324,9 +374,12 @@ func streamMethod(h uint64, method, requestJSON string, emit func(string) error)
 	}
 	req.Stream = true
 
-	res, err := inst.gw.Prepare(inst.ctx, req.Model)
+	// One context for the whole call: taking it twice could straddle an
+	// llmux_cancel and stream on a context the host already abandoned.
+	cctx := inst.callCtx()
+	res, err := inst.gw.Prepare(cctx, req.Model)
 	if err != nil {
 		return err
 	}
-	return inst.gw.ChatStreamSink(inst.ctx, &req, raw, res, emitSink{emit: emit})
+	return inst.gw.ChatStreamSink(cctx, &req, raw, res, emitSink{emit: emit})
 }

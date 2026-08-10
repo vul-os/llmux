@@ -18,7 +18,7 @@ saying so is part of the job.
 
 ## The ABI
 
-Six functions. The header is [`include/llmux.h`](include/llmux.h) and it is the
+Seven functions. The header is [`include/llmux.h`](include/llmux.h) and it is the
 supported surface — `go build -buildmode=c-shared` also emits a `libllmux.h`
 next to the library, but it drags in Go's typedefs and drops the `const`
 qualifiers.
@@ -28,6 +28,7 @@ const char* llmux_abi_version(void);
 
 uint64_t llmux_new(const char* config_json, char** err);
 void     llmux_close(uint64_t h);
+void     llmux_cancel(uint64_t h);   /* abort calls in flight, keep the handle */
 
 char*    llmux_call(uint64_t h, const char* method, const char* request_json, char** err);
 void     llmux_free(char* p);
@@ -73,9 +74,26 @@ string, not a segfault in your process. `llmux_close` is idempotent.
 
 **Threading.** A handle is safe to use from several threads at once.
 
+**Nothing blocks forever.** `llmux_call` and `llmux_stream` are synchronous: while
+one runs, that thread is yours no longer. Three bounds keep it finite — a
+Postgres connect deadline (`postgres_connect_timeout_seconds`, 30 s), and, for a
+stream, time-to-first-chunk (`stream_first_byte_timeout_seconds`, 60 s) and the
+gap between chunks (`stream_idle_timeout_seconds`, 120 s). The stream bounds are
+liveness, not a deadline: every chunk restarts the clock, so a generation that
+runs for an hour is never truncated while a connection that went quiet is caught
+in seconds. A negative value turns any of them off. When *you* are the one who
+wants out, call `llmux_cancel` from another thread: it aborts the calls in flight
+on that handle and leaves the handle open (`llmux_close` destroys the gateway,
+which is a different thing).
+
+**Panics never reach you.** A Go panic inside the library is caught at every
+entry point and returned as an ordinary error with its stack in the message. If
+one escaped it would not be an exception your language could catch — it is a Go
+runtime fatal error, and it would end your process.
+
 **Construction is inert.** `llmux_new` starts no goroutines and — unless your
-configuration names a Postgres DSN, which connects and migrates eagerly — opens
-no sockets. There is no background price-catalog sync and no spend flusher in
+configuration names a Postgres DSN, which connects and migrates eagerly, bounded
+by `postgres_connect_timeout_seconds` (30 s by default) — opens no sockets. There is no background price-catalog sync and no spend flusher in
 library mode: a shared library loaded into someone else's process must not start
 background traffic they did not ask for. If you want that, run the sidecar.
 
@@ -279,15 +297,18 @@ make test-ffi     # gated Go unit tests + the C smoke test
 
 Two layers, and neither replaces the other:
 
-- **[`abi_test.go`](abi_test.go)** — 14 tests in pure Go, no cgo. Handle
-  registry, use-after-close, method dispatch, streaming, abort semantics, two
-  independent gateways in one process, and the version constant against
-  `../VERSION`.
+- **[`abi_test.go`](abi_test.go)**, **[`panic_test.go`](panic_test.go)**,
+  **[`hostenv_test.go`](hostenv_test.go)** and
+  **[`timeout_test.go`](timeout_test.go)** — pure Go, no cgo. Handle registry,
+  use-after-close, method dispatch, streaming, abort semantics, two independent
+  gateways in one process, the version constant against `../VERSION`, the panic
+  backstop at every entry point, the refusal to adopt the host's `DATABASE_URL`,
+  and the three ways a call used to be able to block a host thread forever.
 - **[`ctest/smoke.c`](ctest/smoke.c)** — dlopens the built library, resolves all
-  six symbols by name, and runs one unary call and one streaming call end to
+  seven symbols by name, and runs one unary call and one streaming call end to
   end. This is the layer that catches a missing `//export`, a renamed symbol, or
   a header that has drifted from the library — none of which any Go test would
-  notice. It asserts 32 named checks **and then asserts that 32 checks ran**,
+  notice. It asserts 34 named checks **and then asserts that 34 checks ran**,
   because a C program that returns 0 having executed three of them looks
   identical to one that executed all of them.
 

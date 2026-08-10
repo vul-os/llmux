@@ -1,7 +1,7 @@
 /*
  * smoke.c — the C smoke test for libllmux.
  *
- * It dlopens the built shared library, resolves the six exported symbols by
+ * It dlopens the built shared library, resolves the seven exported symbols by
  * name, and drives one unary call and one streaming call end to end against a
  * fake OpenAI upstream. Without this, the ABI would be unverified: every Go
  * test in ffi/ passes just as well with a missing //export directive, a
@@ -58,6 +58,7 @@ static void check(int cond, const char *what, const char *detail) {
 static llmux_abi_version_fn p_abi_version;
 static llmux_new_fn         p_new;
 static llmux_close_fn       p_close;
+static llmux_cancel_fn      p_cancel;
 static llmux_call_fn        p_call;
 static llmux_free_fn        p_free;
 static llmux_stream_fn      p_stream;
@@ -135,6 +136,7 @@ int main(int argc, char **argv) {
 		{"llmux_abi_version", (void **)&p_abi_version},
 		{"llmux_new",         (void **)&p_new},
 		{"llmux_close",       (void **)&p_close},
+		{"llmux_cancel",      (void **)&p_cancel},
 		{"llmux_call",        (void **)&p_call},
 		{"llmux_free",        (void **)&p_free},
 		{"llmux_stream",      (void **)&p_stream},
@@ -271,7 +273,19 @@ int main(int argc, char **argv) {
 		if (err) p_free(err);
 	}
 
-	/* --- 10. close, twice -------------------------------------------------- */
+	/* --- 10. cancel with nothing in flight is a no-op, and the handle lives -- */
+	{
+		p_cancel(h);
+		p_cancel(999999); /* an invented handle must not be a crash either */
+		err = NULL;
+		char *out = p_call(h, "models", NULL, &err);
+		check(out != NULL, "the handle still works after llmux_cancel",
+		      err ? err : "NULL with no error — cancel closed the handle");
+		if (out) p_free(out);
+		if (err) p_free(err);
+	}
+
+	/* --- 11. close, twice -------------------------------------------------- */
 	p_close(h);
 	p_close(h); /* must be a no-op, not a double free */
 	ok("llmux_close is idempotent");
@@ -291,7 +305,7 @@ int main(int argc, char **argv) {
 	/* Update this when checks are added. It exists because a C test that
 	 * exits 0 having run three of its thirty-two checks looks exactly like
 	 * one that ran them all. */
-	const int EXPECTED_CHECKS = 32;
+	const int EXPECTED_CHECKS = 34;
 	printf("\n%d checks ran, %d failed (expected %d checks)\n", checks_run, failures, EXPECTED_CHECKS);
 	if (checks_run != EXPECTED_CHECKS) {
 		printf("FAIL: the smoke test ran %d checks, not %d — it took an early exit "

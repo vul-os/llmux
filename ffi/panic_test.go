@@ -174,8 +174,8 @@ func TestEveryExportHasAPanicBackstop(t *testing.T) {
 	}
 	// Coverage floor: without it, a rename of the //export convention would make
 	// the loop above examine nothing and still pass.
-	if found != 6 {
-		t.Fatalf("found %d //export functions in cshared.go, expected 6 — the scan is wrong, or "+
+	if found != 7 {
+		t.Fatalf("found %d //export functions in cshared.go, expected 7 — the scan is wrong, or "+
 			"the ABI grew a symbol and this floor was not updated", found)
 	}
 }

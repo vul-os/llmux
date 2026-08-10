@@ -156,7 +156,20 @@ func New(cfg *config.Config, opts ...Option) (*Gateway, error) {
 		if g.rdb != nil {
 			lim = keys.NewRedisLimiter(g.rdb).WithLogger(g.log)
 		}
-		pg, err := keys.NewPGStore(context.Background(), cfg.Postgres, cfg.PostgresSchema, cfg.Keys, lim)
+		// Bounded, not context.Background(). This connects AND migrates, and it
+		// is synchronous inside New: against a DSN that resolves but never
+		// answers — a firewalled host, a database that is up but wedged — an
+		// unbounded context parks the calling thread for as long as the process
+		// lives. That thread is a request goroutine in the sidecar and one of the
+		// HOST's threads in library mode, where llmux_new has no cancellation of
+		// its own to offer. See config.PostgresConnectTimeout.
+		pgCtx := context.Background()
+		if d := cfg.PostgresConnectTimeout(); d > 0 {
+			var cancel context.CancelFunc
+			pgCtx, cancel = context.WithTimeout(pgCtx, d)
+			defer cancel()
+		}
+		pg, err := keys.NewPGStore(pgCtx, cfg.Postgres, cfg.PostgresSchema, cfg.Keys, lim)
 		if err != nil {
 			return nil, err
 		}

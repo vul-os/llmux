@@ -251,6 +251,17 @@ func (g *Gateway) ChatStreamSink(ctx context.Context, req *openai.ChatCompletion
 	req.StreamOptions.IncludeUsage = true
 	raw = g.popts.SetJSONFields(raw, map[string]any{"stream_options": map[string]any{"include_usage": true}})
 
+	// Liveness bounds. A stream gets no wall-clock deadline (that would truncate
+	// a legitimately long generation); it gets a time-to-first-chunk bound and a
+	// between-chunks bound, both restarted by every chunk that arrives. See
+	// streamWatchdog. Without these a streaming call against an upstream that
+	// accepts the connection and then says nothing never returns.
+	firstByte := g.cfg.StreamFirstByteTimeout()
+	idle := g.cfg.StreamIdleTimeout()
+	watch := newStreamWatchdog(ctx, firstByte, idle)
+	defer watch.stop()
+	dialCtx := watch.ctx
+
 	started := false
 	var lastUsage *openai.Usage
 	var usedProvider string
@@ -259,6 +270,7 @@ func (g *Gateway) ChatStreamSink(ctx context.Context, req *openai.ChatCompletion
 
 	makeYield := func(provName string, byok bool) func(*openai.ChatCompletionChunk) error {
 		return func(chunk *openai.ChatCompletionChunk) error {
+			watch.beat()
 			if !started {
 				// Commit the response before anything is served. A sink that
 				// cannot open (e.g. an unflushable ResponseWriter) aborts here
@@ -299,14 +311,30 @@ func (g *Gateway) ChatStreamSink(ctx context.Context, req *openai.ChatCompletion
 		}
 		// Resolve BYOK vs central per target so the right key is used and the
 		// metering decision follows the provider that actually serves.
-		callCtx, byok := g.resolveCredential(ctx, t.Provider.Name())
+		callCtx, byok := g.resolveCredential(dialCtx, t.Provider.Name())
 		lastErr = t.Provider.ChatCompletionStream(callCtx, req, t.Model, raw, makeYield(t.Provider.Name(), byok))
 		if lastErr == nil || started {
+			break
+		}
+		if watch.expired() {
+			// The watchdog cancelled this attempt, and its context is now dead:
+			// failing over would hand the next target an already-cancelled
+			// context and report that as the next target's failure.
 			break
 		}
 		if !shouldFailover(lastErr) {
 			break
 		}
+		// A fresh target gets a fresh first-chunk budget rather than whatever the
+		// previous one left of it.
+		watch.restartFirstByte(firstByte)
+	}
+
+	// A provider whose read was unblocked by the watchdog reports a context
+	// cancellation, which is indistinguishable from the CALLER cancelling.
+	// Replace it with the diagnosis, naming the bound that expired.
+	if lastErr != nil && watch.expired() && ctx.Err() == nil {
+		lastErr = watch.err(firstByte, idle)
 	}
 
 	if lastErr != nil && !started {

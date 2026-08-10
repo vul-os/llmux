@@ -14,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config is the root configuration.
@@ -57,14 +58,40 @@ type Config struct {
 	// Empty defaults to "llmux" whenever Postgres is set. Resolved from env
 	// LLMUX_POSTGRES_SCHEMA.
 	PostgresSchema string `json:"postgres_schema"`
+	// PostgresConnectTimeoutSeconds bounds the eager connect-and-migrate that
+	// gateway.New performs when Postgres is configured. 0 selects the built-in
+	// default (DefaultPostgresConnectTimeoutSeconds); a negative value means no
+	// deadline, which is what this used to be unconditionally — a context.Background()
+	// that could park the calling thread forever against a black-holed DSN. In
+	// library mode that thread belongs to the host. Resolved from env
+	// LLMUX_POSTGRES_CONNECT_TIMEOUT_SECONDS.
+	PostgresConnectTimeoutSeconds int `json:"postgres_connect_timeout_seconds"`
 	// Redis address (host:port). When set, rate limiting and (if caching is
 	// enabled) the response cache use Redis — correct across replicas.
 	Redis string `json:"redis"`
 
 	// UpstreamTimeoutSeconds bounds a single non-streaming upstream call
-	// (0 = no extra deadline beyond the client default). Streaming relies on
-	// client-disconnect cancellation instead.
+	// (0 = no extra deadline beyond the client default).
 	UpstreamTimeoutSeconds int `json:"upstream_timeout_seconds"`
+
+	// StreamFirstByteTimeoutSeconds bounds how long a streaming call waits for
+	// the FIRST chunk. 0 selects DefaultStreamFirstByteTimeoutSeconds; negative
+	// disables it.
+	//
+	// A streaming response deliberately has no wall-clock deadline — a long
+	// generation is a correct stream, not a hung one, and a total timeout would
+	// truncate it. The two bounds that CAN distinguish "still working" from
+	// "gone" are time-to-first-chunk and the gap between chunks, so those are
+	// what llmux enforces. Before this there was neither, and a streaming call
+	// against an upstream that accepted the connection and then said nothing
+	// blocked its caller forever: a request goroutine in the sidecar, a host
+	// thread in library mode.
+	StreamFirstByteTimeoutSeconds int `json:"stream_first_byte_timeout_seconds"`
+	// StreamIdleTimeoutSeconds bounds the gap BETWEEN chunks once a stream has
+	// begun. 0 selects DefaultStreamIdleTimeoutSeconds; negative disables it.
+	// The clock restarts on every chunk, so a stream that keeps producing is
+	// never cut off however long it runs in total.
+	StreamIdleTimeoutSeconds int `json:"stream_idle_timeout_seconds"`
 	// MaxResponseBytes bounds non-streaming upstream response bodies (0 = unlimited).
 	MaxResponseBytes int64 `json:"max_response_bytes"`
 	// DropParams lists request body fields to strip before forwarding to
@@ -338,6 +365,54 @@ type PriceOverride struct {
 	Capabilities  []string `json:"capabilities,omitempty"`
 }
 
+// Built-in timeout defaults. They are exported and applied at the point of use
+// (not only in Default) so a hand-built Config — a Go embedder's literal, a
+// test's fixture — is bounded too rather than inheriting "forever" from a zero
+// value.
+//
+// The numbers: 30s to connect and migrate a Postgres store is generous for any
+// reachable database and short enough that a host notices a wrong DSN as an
+// error instead of a hang. 60s to the first streamed chunk covers a cold model
+// load or a long queue at a busy provider, and 120s between chunks is far
+// beyond any real inter-token gap while still catching a dead connection whose
+// FIN never arrived. All three are configurable, and a negative value opts out.
+const (
+	DefaultPostgresConnectTimeoutSeconds = 30
+	DefaultStreamFirstByteTimeoutSeconds = 60
+	DefaultStreamIdleTimeoutSeconds      = 120
+)
+
+// resolveTimeout maps the 0-means-default / negative-means-off convention onto
+// a duration. Zero return means "no timeout".
+func resolveTimeout(configured, fallback int) time.Duration {
+	switch {
+	case configured < 0:
+		return 0
+	case configured == 0:
+		return time.Duration(fallback) * time.Second
+	default:
+		return time.Duration(configured) * time.Second
+	}
+}
+
+// PostgresConnectTimeout is the deadline for gateway.New's eager connect and
+// migrate. Zero means no deadline.
+func (c *Config) PostgresConnectTimeout() time.Duration {
+	return resolveTimeout(c.PostgresConnectTimeoutSeconds, DefaultPostgresConnectTimeoutSeconds)
+}
+
+// StreamFirstByteTimeout is how long a streaming call waits for its first
+// chunk. Zero means no deadline.
+func (c *Config) StreamFirstByteTimeout() time.Duration {
+	return resolveTimeout(c.StreamFirstByteTimeoutSeconds, DefaultStreamFirstByteTimeoutSeconds)
+}
+
+// StreamIdleTimeout is the maximum gap between chunks of a running stream. Zero
+// means no deadline.
+func (c *Config) StreamIdleTimeout() time.Duration {
+	return resolveTimeout(c.StreamIdleTimeoutSeconds, DefaultStreamIdleTimeoutSeconds)
+}
+
 // Default returns a config with sane defaults and providers auto-detected from
 // well-known environment variables, so llmux works out of the box.
 func Default() *Config {
@@ -346,6 +421,10 @@ func Default() *Config {
 		LogLevel: "info",
 		Retry:    RetryConfig{MaxRetries: 2, BackoffMS: 200},
 		Cache:    CacheConfig{MaxEntries: 10000},
+
+		PostgresConnectTimeoutSeconds: DefaultPostgresConnectTimeoutSeconds,
+		StreamFirstByteTimeoutSeconds: DefaultStreamFirstByteTimeoutSeconds,
+		StreamIdleTimeoutSeconds:      DefaultStreamIdleTimeoutSeconds,
 		Pricing: PricingConfig{
 			CatalogPath:         "",
 			SyncIntervalMinutes: 360,
@@ -675,6 +754,15 @@ func (c *Config) merge(o *Config) {
 	if o.UpstreamTimeoutSeconds != 0 {
 		c.UpstreamTimeoutSeconds = o.UpstreamTimeoutSeconds
 	}
+	if o.PostgresConnectTimeoutSeconds != 0 {
+		c.PostgresConnectTimeoutSeconds = o.PostgresConnectTimeoutSeconds
+	}
+	if o.StreamFirstByteTimeoutSeconds != 0 {
+		c.StreamFirstByteTimeoutSeconds = o.StreamFirstByteTimeoutSeconds
+	}
+	if o.StreamIdleTimeoutSeconds != 0 {
+		c.StreamIdleTimeoutSeconds = o.StreamIdleTimeoutSeconds
+	}
 	if o.MaxResponseBytes != 0 {
 		c.MaxResponseBytes = o.MaxResponseBytes
 	}
@@ -762,6 +850,21 @@ func (c *Config) applyEnv(pol envPolicy) {
 		env("postgres", "VULOS_DATABASE_URL", func(v string) { c.Postgres = v })
 	}
 	env("postgres_schema", "LLMUX_POSTGRES_SCHEMA", func(v string) { c.PostgresSchema = v })
+	env("postgres_connect_timeout_seconds", "LLMUX_POSTGRES_CONNECT_TIMEOUT_SECONDS", func(v string) {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.PostgresConnectTimeoutSeconds = n
+		}
+	})
+	env("stream_first_byte_timeout_seconds", "LLMUX_STREAM_FIRST_BYTE_TIMEOUT_SECONDS", func(v string) {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.StreamFirstByteTimeoutSeconds = n
+		}
+	})
+	env("stream_idle_timeout_seconds", "LLMUX_STREAM_IDLE_TIMEOUT_SECONDS", func(v string) {
+		if n, err := strconv.Atoi(v); err == nil {
+			c.StreamIdleTimeoutSeconds = n
+		}
+	})
 	// Whenever Postgres is in play, default the schema to "llmux" so tables live
 	// in a dedicated namespace and never collide with other products sharing the
 	// database.

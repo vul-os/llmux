@@ -235,8 +235,9 @@ mechanisms**:
 
 - **Direct** — the gateway runs **inside your process**. No port, no listener,
   no loopback socket. Go imports the package; the other thirteen load a C shared
-  library exposing exactly six symbols — `llmux_new`, `llmux_call`,
-  `llmux_stream`, `llmux_close`, `llmux_free`, `llmux_abi_version`. Requests and
+  library exposing exactly seven symbols — `llmux_new`, `llmux_call`,
+  `llmux_stream`, `llmux_cancel`, `llmux_close`, `llmux_free`,
+  `llmux_abi_version`. Requests and
   responses are the same JSON the HTTP API uses.
 - **Sidecar** — the `llmux` binary as a child process the package spawns,
   health-checks and supervises for you on `127.0.0.1:<free port>`. You never run

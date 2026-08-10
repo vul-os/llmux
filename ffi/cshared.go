@@ -113,6 +113,18 @@ func llmux_close(h C.uint64_t) {
 	closeGateway(uint64(h))
 }
 
+// Aborts every call currently in flight on h and leaves the handle open. Safe
+// to call from another thread while a call is blocked, which is the point:
+// llmux_call and llmux_stream block until they finish, and without this the
+// only way to abandon one was llmux_close, which destroys the gateway.
+// Cancelling an unknown handle, or one with nothing running, is a no-op.
+//
+//export llmux_cancel
+func llmux_cancel(h C.uint64_t) {
+	defer func() { _ = recover() }() // void: nowhere to report, but never fatal
+	cancelGateway(uint64(h))
+}
+
 // One unary call. method is "chat", "embed" or "models"; requestJSON is the
 // same OpenAI-shaped body the HTTP API takes. Returns malloc'd UTF-8 JSON the
 // caller frees with llmux_free, or NULL with *err set.

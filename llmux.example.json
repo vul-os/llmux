@@ -6,7 +6,11 @@
 
   "postgres": "",
   "postgres_schema": "",
+  "postgres_connect_timeout_seconds": 30,
   "redis": "",
+  "_comment_timeouts": "Nothing may block a caller forever. postgres_connect_timeout_seconds bounds the eager connect+migrate gateway.New performs when postgres is set. A STREAM gets no wall-clock deadline (that would truncate a long generation) — it gets two liveness bounds instead: stream_first_byte_timeout_seconds is how long to wait for the first chunk, stream_idle_timeout_seconds is the largest permitted gap between chunks, and every chunk restarts the clock. upstream_timeout_seconds still bounds a single NON-streaming call. In all four, 0 means the built-in default and a negative value means no bound.",
+  "stream_first_byte_timeout_seconds": 60,
+  "stream_idle_timeout_seconds": 120,
   "_comment_state": "Set postgres (DSN) + redis (host:port) for multi-replica correctness: keys/spend in Postgres, rate limits + cache in Redis. Example: postgres://user@localhost:5432/llmux?sslmode=disable. For the sidecar the DSN is also read (later wins) from env LLMUX_POSTGRES, DATABASE_URL, then VULOS_DATABASE_URL (preferred shared Neon DSN). Embedders (core/gateway via config.FromJSON, and the C ABI) resolve differently: a value stated in the document wins over the environment, and the un-namespaced DATABASE_URL/VULOS_DATABASE_URL are not read at all, because in library mode those belong to the host application. When Postgres is used, tables live under postgres_schema (env LLMUX_POSTGRES_SCHEMA), default 'llmux', so llmux can share one database with other Vulos products.",
 
   "cp": { "cp_url": "", "cp_shared_secret": "", "cp_degraded_fail_open": false, "cp_degraded_rpm": 0 },

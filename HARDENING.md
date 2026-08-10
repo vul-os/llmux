@@ -13,6 +13,14 @@ product / LiteLLM competitor" bar). `[x]` done · `[~]` partial · `[ ]` todo.
 ## Request lifecycle
 - [x] Client disconnect cancels the upstream request (context propagation verified).
 - [x] Configurable non-streaming upstream timeout (`upstream_timeout_seconds`).
+- [x] Streaming liveness bounds: time-to-first-chunk and between-chunks, both
+      configurable (`stream_first_byte_timeout_seconds`,
+      `stream_idle_timeout_seconds`), restarted by every chunk so a long
+      generation is never truncated. A stream previously had no bound at all.
+- [x] Bounded Postgres connect+migrate at `gateway.New`
+      (`postgres_connect_timeout_seconds`); it used `context.Background()`.
+- [x] Per-call cancellation across the C ABI (`llmux_cancel`), so a host can
+      abandon a blocked call without destroying the gateway.
 - [x] Response size bound for non-streaming bodies (`max_response_bytes`, all providers).
 - [x] Streaming: mid-stream failure surfaces a trailing SSE error event (no hang).
 - [x] Retry idempotency: spend recorded once after success, not per attempt.

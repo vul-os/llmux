@@ -38,7 +38,7 @@ test-embed: ## Run the embeddability guards (separate module, gated)
 # so `test` above never reaches it either. It also needs cgo, which is why it is
 # not folded into `test`.
 test-ffi: ## Run the C-ABI unit tests (separate module, gated) AND the C smoke test
-	./scripts/go-test-gate.sh --dir ffi --min 21 \
+	./scripts/go-test-gate.sh --dir ffi --min 26 \
 		--require TestABIVersionMatchesThePackageVersion \
 		--require TestFFIUsesOnlyThePublicAPI \
 		--require TestUnknownHandleIsACleanError \
@@ -53,6 +53,11 @@ test-ffi: ## Run the C-ABI unit tests (separate module, gated) AND the C smoke t
 		--require TestStreamRecoversAPanicFromTheHostCallback \
 		--require TestCloseRecoversAPanicInsteadOfKillingTheHost \
 		--require TestEveryExportHasAPanicBackstop \
+		--require TestNewDoesNotAdoptTheHostsDatabaseURL \
+		--require TestNewStillConnectsWhenTheDocumentNamesADSN \
+		--require TestNewGivesUpOnAnUnreachablePostgres \
+		--require TestStreamGivesUpOnASilentUpstream \
+		--require TestCancelUnblocksAStreamAndLeavesTheHandleUsable \
 		-- -count=1 ./...
 	./scripts/ffi-ctest.sh
 

@@ -8,7 +8,7 @@
  * `llmux serve` sidecar over HTTP.
  *
  * This header is hand-written and is the supported surface. The header cgo
- * generates next to the library (libllmux.h) declares the same six symbols but
+ * generates next to the library (libllmux.h) declares the same seven symbols but
  * drags in Go's typedefs and drops the const qualifiers; use this one.
  *
  * BEFORE YOU LOAD THIS LIBRARY, read ffi/README.md. In summary:
@@ -92,9 +92,9 @@ const char* llmux_abi_version(void);
  * your document (or copy it into LLMUX_POSTGRES).
  *
  * The gateway is INERT: creating it starts no goroutines and — unless YOUR
- * configuration names a Postgres DSN, which connects and migrates eagerly (see
- * llmux_cancel and postgres_connect_timeout_seconds for how long that can
- * block) — opens no sockets. There is no background price-catalog sync and no
+ * configuration names a Postgres DSN, which connects and migrates eagerly and
+ * is bounded by postgres_connect_timeout_seconds, 30s by default — opens no
+ * sockets. There is no background price-catalog sync and no
  * spend flusher in library mode. Nothing happens until you call.
  */
 uint64_t llmux_new(const char* config_json, char** err);
@@ -105,6 +105,22 @@ uint64_t llmux_new(const char* config_json, char** err);
  * be idempotent.
  */
 void llmux_close(uint64_t h);
+
+/*
+ * Aborts every call in flight on h, WITHOUT closing it: the handle stays open
+ * and the next call starts on a fresh context.
+ *
+ * llmux_call and llmux_stream block until they finish. This is the only way to
+ * abandon one — call it from another thread while the call is blocked and the
+ * blocked call returns an error (a cancelled stream that had already delivered
+ * chunks returns -1 with *err set; tokens already served are still metered).
+ * Cancelling an unknown handle, or one with nothing running, is a no-op.
+ *
+ * It is NOT a substitute for the liveness bounds llmux applies to a stream on
+ * its own: see stream_first_byte_timeout_seconds and stream_idle_timeout_seconds
+ * in the configuration document. This is for when YOUR side loses interest.
+ */
+void llmux_cancel(uint64_t h);
 
 /*
  * One unary call. Returns malloc'd UTF-8 JSON (free with llmux_free), or NULL
@@ -169,6 +185,7 @@ int llmux_stream(uint64_t h, const char* method, const char* request_json,
 typedef const char* (*llmux_abi_version_fn)(void);
 typedef uint64_t (*llmux_new_fn)(const char*, char**);
 typedef void (*llmux_close_fn)(uint64_t);
+typedef void (*llmux_cancel_fn)(uint64_t);
 typedef char* (*llmux_call_fn)(uint64_t, const char*, const char*, char**);
 typedef void (*llmux_free_fn)(char*);
 typedef int (*llmux_stream_fn)(uint64_t, const char*, const char*, llmux_chunk_cb, void*, char**);
