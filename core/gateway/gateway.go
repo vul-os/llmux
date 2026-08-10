@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -69,7 +70,19 @@ type Gateway struct {
 	// rdb is the optional shared Redis client (rate limiting + cache across
 	// replicas). It is constructed lazily-connected: go-redis dials on first
 	// use, so building it opens no socket. Start pings it.
+	//
+	// It is written exactly once, in New, before the Gateway is visible to any
+	// other goroutine, and never again. Close used to set it to nil to make
+	// itself idempotent, which was an unsynchronised write to a field Start
+	// reads and a second Close also writes — a data race `go test -race` flags,
+	// and one that could hand Start a nil client between its own nil check and
+	// its Ping. Idempotence is closeOnce's job now, and this field is immutable.
 	rdb *redis.Client
+
+	// closeOnce makes Close idempotent without mutating anything the rest of the
+	// gateway reads. A host's cleanup path calling Close twice must not
+	// double-close the Redis client or the Postgres pool.
+	closeOnce sync.Once
 }
 
 // Option customizes a Gateway at construction. Options never start anything.
@@ -266,17 +279,19 @@ func (g *Gateway) Run(ctx context.Context) error {
 // Close releases the gateway's resources: the Redis client and the Postgres
 // pool. It does not stop background work — that is what cancelling Run's
 // context does. Close is safe to call on a gateway that was never started.
+// A second Close is a no-op and returns nil; only the first one reports.
 func (g *Gateway) Close() error {
 	var errs []error
-	if g.rdb != nil {
-		if err := g.rdb.Close(); err != nil {
-			errs = append(errs, err)
+	g.closeOnce.Do(func() {
+		if g.rdb != nil {
+			if err := g.rdb.Close(); err != nil {
+				errs = append(errs, err)
+			}
 		}
-		g.rdb = nil
-	}
-	if c, ok := g.keys.(interface{ Close() }); ok {
-		c.Close()
-	}
+		if c, ok := g.keys.(interface{ Close() }); ok {
+			c.Close()
+		}
+	})
 	return errors.Join(errs...)
 }
 

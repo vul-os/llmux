@@ -44,6 +44,26 @@ func setErr(errp **C.char, err error) {
 	*errp = C.CString(err.Error())
 }
 
+// clearErr writes NULL through errp. Every fallible export calls it FIRST.
+//
+// Without it, *err was only ever written on failure, so a binding that declares
+// one `char *err = NULL;` and reuses it across calls — the obvious way to write
+// one, and what most of these bindings do — kept the message from an earlier
+// failure after a later success. The binding then frees it a second time on its
+// next error path, or on cleanup, and the double free lands in the HOST's
+// allocator. Clearing on entry makes "*err is non-NULL" mean "THIS call failed",
+// which is what every caller already assumed it meant.
+//
+// It does not free what was there: this library did not necessarily allocate it
+// and, even if it did, freeing a pointer the host may still be holding would be
+// the same bug pointed the other way. Ownership passed to the host when it was
+// written; the host frees it with llmux_free.
+func clearErr(errp **C.char) {
+	if errp != nil {
+		*errp = nil
+	}
+}
+
 // goStr converts a possibly-NULL C string to Go. NULL becomes "", which the
 // callers treat as "not supplied" — a host passing NULL for an optional
 // argument must not be a crash.
@@ -90,6 +110,7 @@ func llmux_abi_version() (v *C.char) {
 //
 //export llmux_new
 func llmux_new(configJSON *C.char, err **C.char) (handle C.uint64_t) {
+	clearErr(err)
 	defer func() {
 		if rec := recover(); rec != nil {
 			handle = 0
@@ -131,6 +152,7 @@ func llmux_cancel(h C.uint64_t) {
 //
 //export llmux_call
 func llmux_call(h C.uint64_t, method *C.char, requestJSON *C.char, err **C.char) (result *C.char) {
+	clearErr(err)
 	defer func() {
 		if rec := recover(); rec != nil {
 			// A panic in C.CString below can only have happened before the
@@ -170,6 +192,7 @@ func llmux_free(p *C.char) {
 //export llmux_stream
 func llmux_stream(h C.uint64_t, method *C.char, requestJSON *C.char,
 	cb C.llmux_chunk_cb, userData unsafe.Pointer, err **C.char) (rc C.int) {
+	clearErr(err)
 	defer func() {
 		if rec := recover(); rec != nil {
 			rc = -1

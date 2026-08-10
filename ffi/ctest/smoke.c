@@ -154,6 +154,10 @@ int main(int argc, char **argv) {
 
 	/* --- 1. version probe ------------------------------------------------ */
 	const char *got_ver = p_abi_version();
+	check(p_abi_version() == got_ver,
+	      "llmux_abi_version returns the same pointer every call (a static, not a fresh malloc)",
+	      "two calls returned different pointers — the header says do not free it, so a "
+	      "per-call allocation would leak on every probe");
 	if (got_ver && strcmp(got_ver, want_ver) == 0) {
 		ok("llmux_abi_version matches the package version");
 	} else {
@@ -213,6 +217,37 @@ int main(int argc, char **argv) {
 		if (err) p_free(err);
 	}
 
+	/* --- 6a. a successful call RESETS *err -------------------------------- */
+	/* A binding declares one `char *err = NULL;` and reuses it. If a success
+	 * leaves the previous failure's message in place, the binding frees it a
+	 * second time later and the double free lands in the host's allocator. */
+	{
+		char *reused = NULL;
+		char *bad = p_call(h, "no-such-method", "{}", &reused);
+		check(bad == NULL && reused != NULL, "the setup call for the *err reset check failed",
+		      "it did not produce an error to leave behind");
+		char *stale = reused;
+		char *good = p_call(h, "models", NULL, &reused);
+		check(good != NULL, "the reused-err probe's second call succeeded", "it failed");
+		check(reused == NULL,
+		      "a successful llmux_call resets *err, so a reused err cannot be double-freed",
+		      "the earlier failure's message survived a successful call");
+		if (good) p_free(good);
+		p_free(stale);
+
+		/* Same for llmux_new. */
+		char *nerr = NULL;
+		uint64_t bogus = p_new("{\"providers\": [", &nerr);
+		check(bogus == 0 && nerr != NULL, "the setup call for llmux_new's *err reset check failed",
+		      "it did not produce an error to leave behind");
+		char *nstale = nerr;
+		uint64_t h2 = p_new(config, &nerr);
+		check(h2 != 0 && nerr == NULL, "a successful llmux_new resets *err",
+		      nerr ? nerr : "llmux_new failed");
+		if (h2) p_close(h2);
+		p_free(nstale);
+	}
+
 	/* --- 6. errors are errors, not crashes -------------------------------- */
 	{
 		err = NULL;
@@ -259,7 +294,7 @@ int main(int argc, char **argv) {
 		int rc = p_stream(h, "chat", req, on_chunk, &st, &err);
 		check(rc == 0, "aborting from the callback is not reported as a failure",
 		      err ? err : "llmux_stream returned non-zero");
-		check(err == NULL, "an aborted stream leaves *err untouched", err ? err : "");
+		check(err == NULL, "an aborted stream leaves *err NULL", err ? err : "");
 		check(st.chunks == 2, "the stream stopped when the callback asked", "it kept going");
 		if (err) p_free(err);
 	}
@@ -305,7 +340,7 @@ int main(int argc, char **argv) {
 	/* Update this when checks are added. It exists because a C test that
 	 * exits 0 having run three of its thirty-two checks looks exactly like
 	 * one that ran them all. */
-	const int EXPECTED_CHECKS = 34;
+	const int EXPECTED_CHECKS = 40;
 	printf("\n%d checks ran, %d failed (expected %d checks)\n", checks_run, failures, EXPECTED_CHECKS);
 	if (checks_run != EXPECTED_CHECKS) {
 		printf("FAIL: the smoke test ran %d checks, not %d — it took an early exit "

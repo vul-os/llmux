@@ -28,14 +28,20 @@
  *   Documents Requests and responses are JSON — the SAME JSON the HTTP API
  *             uses. A body that works against POST /v1/chat/completions works
  *             here unchanged, and the response is what that endpoint returns.
- *   Errors    Functions that can fail take a trailing `char** err`. On failure
- *             they write a malloc'd, human-readable UTF-8 message there. Pass
- *             NULL for err if you do not want the message. The message is NOT
- *             JSON; do not parse it.
+ *   Errors    Functions that can fail take a trailing `char** err`. On entry
+ *             they set *err to NULL; on failure they write a malloc'd,
+ *             human-readable UTF-8 message there. So *err being non-NULL after
+ *             a call always means THAT call failed, and one `char *err = NULL;`
+ *             is safe to reuse across calls. Pass NULL for err if you do not
+ *             want the message. The message is NOT JSON; do not parse it.
+ *             (Clearing does not free what was there — ownership passed to you
+ *             when it was written. Free it before you reuse the variable.)
  *   Ownership Every non-const char* this library returns — results AND error
  *             messages — is freed with llmux_free, and with nothing else.
- *             llmux_abi_version is the one exception: it returns a static
- *             string you must NOT free.
+ *             llmux_abi_version is the one exception: it returns the SAME
+ *             pointer on every call, allocated once when the library loads and
+ *             never freed. You must NOT free it, and freeing it corrupts the
+ *             allocator for everything else in your process.
  *   Handles   Integers in a registry inside the library, never pointers.
  *             Calling with a closed or invented handle is a clean error, not a
  *             crash. Handles are never reused.
@@ -59,8 +65,11 @@ extern "C" {
 #endif
 
 /*
- * Returns the llmux version this library was built from, e.g. "0.1.2", as a
- * static string. Do NOT free it.
+ * Returns the llmux version this library was built from, e.g. "0.1.2".
+ *
+ * The pointer is the same on every call, is owned by the library, and lives as
+ * long as the library is loaded. Do NOT free it and do NOT pass it to
+ * llmux_free. Copy it if you need to own a string.
  *
  * Compare it against the version your bindings were generated for. A shared
  * library is resolved off a load path you may not control; without this probe a
@@ -100,7 +109,16 @@ const char* llmux_abi_version(void);
 uint64_t llmux_new(const char* config_json, char** err);
 
 /*
- * Releases the gateway behind h, aborting any stream still running on it.
+ * Releases the gateway behind h. It cancels every call in flight and then WAITS
+ * (up to a few seconds) for those calls to return before releasing the Redis
+ * client and Postgres pool — closing them underneath a running call would be a
+ * use-after-close inside your process.
+ *
+ * So llmux_close can block briefly, and it must NOT be called from inside a
+ * chunk callback: that would be waiting on the very call that is running it.
+ * Return from your callback (return non-zero to stop the stream) and close
+ * afterwards.
+ *
  * Closing an unknown or already-closed handle is a no-op, so cleanup paths can
  * be idempotent.
  */
@@ -170,7 +188,7 @@ typedef int (*llmux_chunk_cb)(const char* chunk_json, void* user_data);
  * Returns 0 on success, -1 on failure with *err set.
  *
  * A callback that returns non-zero stops the stream and is NOT a failure: the
- * return is 0 and *err is untouched. Your callback returned non-zero, so you
+ * return is 0 and *err is left NULL. Your callback returned non-zero, so you
  * already know it happened; llmux does not hand you back an error for your own
  * decision. Tokens already served are metered either way.
  */

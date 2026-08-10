@@ -61,16 +61,29 @@ than quietly served as one blob after the fact. Use `llmux_stream`.
 
 **Ownership.** Every non-const `char*` this library returns — results *and*
 error messages — is freed with `llmux_free`, and with nothing else.
-`llmux_abi_version` is the single exception: it returns a static string you must
-not free. `llmux_free(NULL)` is safe.
+`llmux_abi_version` is the single exception: it returns the same pointer on
+every call, allocated once when the library loads, and you must not free it.
+`llmux_free(NULL)` is safe.
 
-**Errors.** Fallible functions take a trailing `char** err`. On failure they
-write a malloc'd, human-readable UTF-8 message there; pass `NULL` if you do not
-want it. The message is **not** JSON — do not parse it.
+**Errors.** Fallible functions take a trailing `char** err`. On entry they set
+`*err` to `NULL`; on failure they write a malloc'd, human-readable UTF-8 message
+there. So `*err != NULL` after a call always means *that* call failed, and one
+`char *err = NULL;` is safe to reuse — before this, a success left the previous
+failure's message in place and a binding that reused the variable freed it
+twice, in the host's allocator. Clearing does not free what was there:
+ownership passed to you when it was written. Pass `NULL` if you do not want the
+message. It is **not** JSON — do not parse it.
 
 **Handles are integers in a registry inside the library, never pointers**, and
 they are never reused. Calling with a closed or invented handle is a clean error
 string, not a segfault in your process. `llmux_close` is idempotent.
+
+**Close drains.** `llmux_close` cancels the calls in flight and then waits for
+them to return (bounded, a few seconds) before releasing the Redis client and
+Postgres pool — releasing those under a running call would be a use-after-close
+inside your process. So it can block briefly, and it must not be called from
+inside a chunk callback: that would be waiting on the call that is running it.
+Return from the callback first.
 
 **Threading.** A handle is safe to use from several threads at once.
 

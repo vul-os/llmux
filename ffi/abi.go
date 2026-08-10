@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/vul-os/llmux/core/config"
 	"github.com/vul-os/llmux/core/gateway"
@@ -77,18 +78,46 @@ var newGateway = gateway.New
 type instance struct {
 	gw *gateway.Gateway
 
-	mu     sync.Mutex
-	ctx    context.Context
-	cancel context.CancelFunc
+	mu       sync.Mutex
+	ctx      context.Context
+	cancel   context.CancelFunc
+	closing  bool
+	inflight sync.WaitGroup
 }
 
-// callCtx returns the context in force right now. Reading it under the lock is
-// what makes a concurrent llmux_cancel safe: the swap replaces the field, and a
-// call that already took the old context simply gets cancelled.
-func (i *instance) callCtx() context.Context {
+// closeDrainGrace bounds how long llmux_close waits for the calls it just
+// cancelled to actually return.
+//
+// It is bounded rather than unbounded on purpose. Draining has to exist —
+// Gateway.Close shuts the Redis client and the Postgres pool, and doing that
+// underneath a call still using them is a use-after-close inside the host's
+// process. But llmux_close is a void C function with no way to report a stall,
+// and a host that calls it from INSIDE a chunk callback would wait on the very
+// call that is executing it. Unbounded, that host deadlocks forever; bounded, it
+// stalls for a few seconds and then makes progress. Neither is good, and the
+// second is much easier to diagnose.
+const closeDrainGrace = 5 * time.Second
+
+// errHandleClosing is what a call started against a handle that is being closed
+// gets, instead of being admitted and then having the gateway shut under it.
+var errHandleClosing = errors.New("llmux: handle is being closed")
+
+// begin admits one call: it returns the context in force and the function to
+// call when the call finishes. Reading the context under the lock is what makes
+// a concurrent llmux_cancel safe — the swap replaces the field, and a call that
+// already took the old context simply gets cancelled.
+//
+// The closing check and the WaitGroup Add happen under the same lock as the
+// flag that shutdown sets, which is what makes the drain sound: once shutdown
+// has set closing, no further Add can happen, so its Wait cannot race an Add.
+func (i *instance) begin() (context.Context, func(), error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	return i.ctx
+	if i.closing {
+		return nil, nil, errHandleClosing
+	}
+	i.inflight.Add(1)
+	return i.ctx, i.inflight.Done, nil
 }
 
 // cancelInflight aborts every call currently running on this handle and arms a
@@ -96,18 +125,42 @@ func (i *instance) callCtx() context.Context {
 // from the host's point of view.
 func (i *instance) cancelInflight() {
 	i.mu.Lock()
+	if i.closing {
+		i.mu.Unlock()
+		return
+	}
 	old := i.cancel
 	i.ctx, i.cancel = context.WithCancel(context.Background())
 	i.mu.Unlock()
 	old()
 }
 
-// shutdown cancels whatever is running and releases the gateway's resources.
+// shutdown cancels whatever is running, waits for it to return, and only then
+// releases the gateway's resources. See closeDrainGrace.
 func (i *instance) shutdown() {
 	i.mu.Lock()
+	if i.closing {
+		i.mu.Unlock()
+		return
+	}
+	i.closing = true
 	cancel := i.cancel
 	i.mu.Unlock()
+
 	cancel()
+
+	drained := make(chan struct{})
+	go func() {
+		i.inflight.Wait()
+		close(drained)
+	}()
+	select {
+	case <-drained:
+	case <-time.After(closeDrainGrace):
+		// Something is not responding to cancellation. Closing anyway is the
+		// lesser evil: a void C function that never returns is worse than a
+		// racy teardown, and the host has no other way out.
+	}
 	_ = i.gw.Close()
 }
 
@@ -240,11 +293,19 @@ func callMethod(h uint64, method, requestJSON string) (out string, err error) {
 	if err != nil {
 		return "", err
 	}
+	// Register the call before touching the gateway, so llmux_close waits for it
+	// rather than shutting the Redis client and Postgres pool underneath it.
+	ctx, done, err := inst.begin()
+	if err != nil {
+		return "", err
+	}
+	defer done()
+
 	switch method {
 	case "chat":
-		return chatCall(inst, requestJSON)
+		return chatCall(ctx, inst, requestJSON)
 	case "embed":
-		return embedCall(inst, requestJSON)
+		return embedCall(ctx, inst, requestJSON)
 	case "models":
 		out, err := json.Marshal(inst.gw.ModelList())
 		if err != nil {
@@ -256,7 +317,7 @@ func callMethod(h uint64, method, requestJSON string) (out string, err error) {
 	}
 }
 
-func chatCall(inst *instance, requestJSON string) (string, error) {
+func chatCall(ctx context.Context, inst *instance, requestJSON string) (string, error) {
 	raw := []byte(requestJSON)
 	var req openai.ChatCompletionRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -270,7 +331,7 @@ func chatCall(inst *instance, requestJSON string) (string, error) {
 	}
 	// ChatRaw, not Chat: the caller's ORIGINAL bytes reach the provider, so
 	// fields llmux does not model survive the hop exactly as they do over HTTP.
-	res, err := inst.gw.ChatRaw(inst.callCtx(), &req, raw)
+	res, err := inst.gw.ChatRaw(ctx, &req, raw)
 	if err != nil {
 		return "", err
 	}
@@ -279,13 +340,13 @@ func chatCall(inst *instance, requestJSON string) (string, error) {
 	return string(res.Body), nil
 }
 
-func embedCall(inst *instance, requestJSON string) (string, error) {
+func embedCall(ctx context.Context, inst *instance, requestJSON string) (string, error) {
 	raw := []byte(requestJSON)
 	var req openai.EmbeddingRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return "", fmt.Errorf("llmux: invalid embeddings request JSON: %w", err)
 	}
-	resp, err := inst.gw.EmbedRaw(inst.callCtx(), &req, raw)
+	resp, err := inst.gw.EmbedRaw(ctx, &req, raw)
 	if err != nil {
 		return "", err
 	}
@@ -364,6 +425,15 @@ func streamMethod(h uint64, method, requestJSON string, emit func(string) error)
 	if err != nil {
 		return err
 	}
+	// One context for the whole call (taking it twice could straddle an
+	// llmux_cancel and stream on a context the host already abandoned), and one
+	// registration so llmux_close drains this stream instead of closing the
+	// gateway out from under it.
+	cctx, done, err := inst.begin()
+	if err != nil {
+		return err
+	}
+	defer done()
 	if method != "chat" {
 		return unknownMethod(method, StreamMethods)
 	}
@@ -374,9 +444,6 @@ func streamMethod(h uint64, method, requestJSON string, emit func(string) error)
 	}
 	req.Stream = true
 
-	// One context for the whole call: taking it twice could straddle an
-	// llmux_cancel and stream on a context the host already abandoned.
-	cctx := inst.callCtx()
 	res, err := inst.gw.Prepare(cctx, req.Model)
 	if err != nil {
 		return err
