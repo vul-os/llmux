@@ -16,10 +16,24 @@
 #   4. runs it with the library path, the version from ./VERSION, that config,
 #      and the expected answer text.
 #
+# With --selftest it then does step 5: rebuilds the library with the version
+# derivation deliberately broken and requires the SAME smoke binary to reject
+# it. See the comment on that step for why the version probe in particular needs
+# that treatment.
+#
 # It fails closed: no compiler, no library, no upstream, or a smoke test that
 # ran the wrong number of checks is a FAILURE, never a skip.
 #
 set -euo pipefail
+
+selftest=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --selftest) selftest=1; shift ;;
+    -h|--help) sed -n '2,26p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    *) echo "ffi-ctest: unknown argument $1" >&2; exit 2 ;;
+  esac
+done
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "${here}/.." && pwd)"
@@ -113,3 +127,63 @@ cc -std=c11 -Wall -Wextra -Werror -O1 \
 
 # --- 4. run it ---------------------------------------------------------------
 "${tmp}/smoke" "${libpath}" "${version}" "${config}" "${TEXT}"
+
+if [ "${selftest}" -eq 0 ]; then
+  echo "ffi-ctest: OK — run with --selftest to also prove the version probe can fail."
+  exit 0
+fi
+
+# --- 5. selftest: the version derivation must be load-bearing ----------------
+#
+# llmux_abi_version used to report a hand-typed constant in ffi/abi.go, and in
+# v0.1.3 that constant lagged the release: the library told every host it was
+# 0.1.2 when it was 0.1.3, so the staleness check the symbol exists to serve
+# answered "stale" about a current library. It is now derived — ffi/abi.go's
+# Version is llmux.Version, which is //go:embed'ed from ./VERSION one module up
+# and reached through the `replace` directive in ffi/go.mod.
+#
+# That is three links (embed, TrimSpace, replace) and none of them is visible in
+# the built artifact. If any of them silently stopped connecting, every test
+# above would still pass: they would all be reading the same wrong-but-consistent
+# value, which is exactly how the original defect went out green.
+#
+# So: rebuild the library with the LIBRARY's version string mutated, one module
+# away from the ABI, and require the smoke binary — the same one, built against
+# the same header, comparing against the same ./VERSION — to notice. If it does
+# not, the derivation is decorative and the string is coming from somewhere else.
+#
+# `go build -overlay` swaps the file for the build only; nothing in the checkout
+# is touched.
+
+echo
+echo "ffi-ctest: selftest — breaking the version derivation, the smoke test must catch it"
+
+mut="${tmp}/mut"
+mkdir -p "${mut}"
+sed 's|^var Version = strings\.TrimSpace(versionFile)$|var Version = strings.TrimSpace(versionFile) + "-mutant"|' \
+  "${root}/version.go" > "${mut}/version.go"
+if cmp -s "${root}/version.go" "${mut}/version.go"; then
+  echo "ffi-ctest: FAIL — the mutation changed nothing in version.go. The sed expression no longer" \
+       "matches, so this case would test an unmodified library and report a green it did not earn." >&2
+  exit 1
+fi
+printf '{"Replace":{"%s":"%s"}}\n' "${root}/version.go" "${mut}/version.go" > "${mut}/overlay.json"
+
+mutlib="${mut}/${libfile}"
+if ! ( cd "${ffi_dir}" && CGO_ENABLED=1 go build -overlay "${mut}/overlay.json" \
+         -buildmode=c-shared -o "${mutlib}" . ) >"${mut}/build.log" 2>&1; then
+  echo "ffi-ctest: FAIL — the mutated library did not build; a mutation that cannot be compiled" \
+       "proves nothing:" >&2
+  cat "${mut}/build.log" >&2
+  exit 1
+fi
+
+if "${tmp}/smoke" "${mutlib}" "${version}" "${config}" "${TEXT}" >"${mut}/smoke.log" 2>&1; then
+  echo "ffi-ctest: FAIL — the smoke test PASSED against a library whose version string was" \
+       "deliberately corrupted. The version probe is not checking what it claims to." >&2
+  sed 's/^/    /' "${mut}/smoke.log" >&2
+  exit 1
+fi
+echo "ffi-ctest: caught — a library built from a mutated ./VERSION is rejected"
+sed -n 's/^  FAIL/    FAIL/p' "${mut}/smoke.log" | head -3
+echo "ffi-ctest: OK — the version probe is capable of failing."

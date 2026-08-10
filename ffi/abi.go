@@ -11,17 +11,32 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/vul-os/llmux"
 	"github.com/vul-os/llmux/core/config"
 	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/openai"
 )
 
-// Version is what llmux_abi_version reports. It is the llmux package version,
-// and TestABIVersionMatchesThePackageVersion asserts it equals the repo's
-// VERSION file — the point of the probe is that a host can compare the loaded
-// library against the version it was built for and refuse a stale .so on the
-// load path instead of calling into it and guessing.
-const Version = "0.1.6"
+// Version is what llmux_abi_version reports: the llmux release this library was
+// built from, so a host can compare the .so it dlopen'd against the version it
+// was built for and refuse a stale one instead of calling into it and guessing.
+//
+// It is a DERIVATION, not a declaration, and that is the whole point. This used
+// to be `const Version = "0.1.6"` — a second copy of a string that also lives in
+// /VERSION — and in v0.1.3 the two came apart: VERSION was bumped for the
+// release and this was not, so the library told every host it was 0.1.2 and the
+// staleness check reported "old" for a current build. Nothing caught it, because
+// the test that would have (ffi/abi_test.go's TestABIVersionMatchesThePackageVersion)
+// lives in THIS module, and ffi/ is a separate module that the root's
+// `go test ./...` cannot reach.
+//
+// Now there is nothing to keep in sync. llmux.Version is embedded from the
+// VERSION file at compile time (see ../version.go for why the embed has to live
+// up there), and this module's go.mod `replace`s the library with the checkout
+// one directory up — so the string compiled into the shared library is, by
+// construction, the VERSION file of the tree it was built from. Bumping the
+// release bumps this. Forgetting to bump this is not an available mistake.
+var Version = llmux.Version
 
 // main exists because -buildmode=c-shared requires package main. It never runs:
 // loading a c-shared library initialises the Go runtime and the package's init

@@ -32,17 +32,42 @@ jobs:
       - name: Run tests
         run: go test ./...
 
-      - name: Verify tag matches declared version
+      # The VERSION file is the source of truth for llmux_abi_version: the root
+      # package go:embeds it and ffi/abi.go's Version is that value, so the
+      # string every C consumer reads is whatever this file said at build time.
+      # A tag that disagrees with it therefore ships a shared library that
+      # misreports itself — the v0.1.3 defect, moved one level up from the Go
+      # constant that used to cause it.
+      #
+      # Nothing checked this. The step below used to build with
+      # `-X main.Version=${VERSION}` and then assert the binary reported
+      # ${VERSION}: it injected the value it went on to check, so it passed for
+      # every tag ever pushed and could not have done otherwise. That round trip
+      # is kept — it does prove the ldflag path is wired and that --version
+      # parses — but the assertion that can actually fail is the first one.
+      - name: Verify tag matches the VERSION file
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#v}"
+          DECLARED="$(tr -d '[:space:]' < VERSION)"
+          if [ -z "${DECLARED}" ]; then
+            echo "ERROR: the VERSION file is empty; llmux_abi_version would report nothing"
+            exit 1
+          fi
+          if [ "${DECLARED}" != "${VERSION}" ]; then
+            echo "ERROR: the VERSION file says '${DECLARED}' but the tag is '${TAG}'."
+            echo "llmux_abi_version is derived from the VERSION file, so this release would build"
+            echo "a shared library that tells every host it is ${DECLARED}. Bump VERSION and re-tag."
+            exit 1
+          fi
           go build -ldflags "-X main.Version=${VERSION}" -o /tmp/llmux-check ./cmd/llmux
           BIN_VER=$(/tmp/llmux-check --version)
           if [ "${BIN_VER}" != "${VERSION}" ]; then
-            echo "ERROR: binary reports version '${BIN_VER}' but tag is '${TAG}'"
+            echo "ERROR: the -X main.Version ldflag did not reach the binary (it reports '${BIN_VER}')"
             exit 1
           fi
-          echo "Version check passed: ${VERSION}"
+          echo "Version check passed: tag ${TAG}, VERSION file ${DECLARED}, binary ${BIN_VER}"
 
       # Everything that will be published lands in release/ and nothing else
       # does. The manifest below covers that directory, so "published" and

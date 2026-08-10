@@ -62,7 +62,7 @@ test-ffi: ## Run the C-ABI unit tests (separate module, gated) AND the C smoke t
 		--require TestCloseIsBoundedWhenACallWillNotStop \
 		--require TestACallStartedDuringCloseIsRefused \
 		-- -count=1 ./...
-	./scripts/ffi-ctest.sh
+	./scripts/ffi-ctest.sh --selftest
 
 ffi: ## Build the C-ABI shared library for this host into dist/ffi
 	./scripts/build-ffi.sh

@@ -25,9 +25,20 @@ import (
 // ---------------------------------------------------------------------------
 
 // The whole point of llmux_abi_version is that a host can compare the loaded
-// library against the version it expects. That is worthless if the constant
-// drifts from the release it claims. The C smoke test performs the same
-// comparison against the BUILT library; this one keeps the source honest.
+// library against the version it expects. Version used to be a hand-typed
+// constant here, which made that worthless the moment it lagged a release — as
+// it did in v0.1.3. It is now derived from llmux.Version, embedded from
+// /VERSION at compile time, so there is no copy to lag.
+//
+// This test is no longer policing a duplicate; it is checking that the
+// derivation lands on the file we think it does. Three links have to hold for
+// that: the `replace` in go.mod pointing at the checkout above (rather than a
+// published tag), the //go:embed in ../version.go, and the TrimSpace. Any one of
+// them breaking would leave the ABI reporting something confidently wrong, and
+// none of them is visible by reading this file.
+//
+// The C smoke test performs the same comparison against the BUILT library, which
+// is the only place a broken -buildmode=c-shared link would show up.
 func TestABIVersionMatchesThePackageVersion(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "VERSION"))
 	if err != nil {
@@ -39,8 +50,10 @@ func TestABIVersionMatchesThePackageVersion(t *testing.T) {
 	}
 	if Version != want {
 		t.Errorf("ffi Version = %q but ../VERSION says %q.\n"+
-			"  llmux_abi_version is how a host detects a stale shared library on its load path. "+
-			"A constant that lags the release makes every such check report the wrong answer.", Version, want)
+			"  llmux_abi_version is how a host detects a stale shared library on its load path, "+
+			"and Version is supposed to be llmux.Version — i.e. this very file's contents. If "+
+			"they disagree, the embed, the TrimSpace or the go.mod replace directive is not "+
+			"doing what it looks like it does.", Version, want)
 	}
 }
 

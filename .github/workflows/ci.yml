@@ -249,7 +249,7 @@ jobs:
       # its own checks executed, so an early exit is a failure rather than a
       # short green run.
       - name: C smoke test (dlopen the built library)
-        run: ./scripts/ffi-ctest.sh
+        run: ./scripts/ffi-ctest.sh --selftest
 
       # The C ABI must not leak cgo into the main module. The `ci` job builds
       # with the runner's default (CGO_ENABLED=1); this proves the pure-Go
