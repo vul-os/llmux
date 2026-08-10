@@ -1,6 +1,6 @@
 //! Direct mode: llmux running **inside this process**, over the C ABI.
 //!
-//! This module `dlopen`s `libllmux` and binds the six functions in
+//! This module `dlopen`s `libllmux` and binds the seven functions in
 //! [`ffi/include/llmux.h`]. There is no server, no port and no loopback socket;
 //! a call is a C call into Go with JSON in and JSON out.
 //!
@@ -41,6 +41,23 @@
 //! including the error paths: [`Error::from_c`] takes ownership of the message,
 //! copies it, and frees it before returning. Handles are closed by [`Gateway`]'s
 //! `Drop`, so a `?` anywhere in your code cannot leak one.
+//!
+//! # Cancellation
+//!
+//! `break`ing out of a `for chunk in gw.stream(...)?` loop — or dropping the
+//! [`ChunkStream`] any other way — is what a Rust user means by "I do not want
+//! the rest of this stream," and it reaches `llmux_cancel` for you: see
+//! [`ChunkStream`]'s `Drop`. [`Gateway::cancel_handle`] hands out a
+//! `Clone + Send + Sync + 'static` [`CancelHandle`] for cancelling from
+//! somewhere that does not hold the iterator at all — a `ctrlc` handler, a
+//! `tokio::select!` arm, a watchdog thread. [`Gateway::cancel`] is the same
+//! operation without detaching a handle, for callers driving [`Gateway::call`]
+//! or [`Gateway::stream_with`] directly.
+//!
+//! `llmux_cancel` is **per-handle, not per-call**: it aborts every call in
+//! flight on the gateway, not just the one you meant. If you need independent
+//! cancellation scopes — two streams where cancelling one must not touch the
+//! other — give each scope its own [`Gateway::open`].
 
 use std::ffi::{c_char, c_int, c_void, CStr, CString};
 use std::fmt;
@@ -128,6 +145,22 @@ impl Error {
         (api.free)(err);
         Error::Llmux(msg)
     }
+
+    /// True if this is the specific failure a blocked `call` / `stream` /
+    /// `stream_with` returns when `llmux_cancel` lands on it — the library's
+    /// exact message is `"context canceled"` (see `ffi/include/llmux.h`).
+    ///
+    /// [`ChunkStream`] already checks this for you and ends the iteration
+    /// silently instead of handing it to you as an `Err` — abandoning an
+    /// iterator is not a failure the consumer asked to see. This is for
+    /// [`Gateway::call`] and [`Gateway::stream_with`], which return the raw
+    /// error because they have no iterator-shaped place to swallow it, and
+    /// which would otherwise force you to string-match `"context canceled"`
+    /// yourself to tell a deliberate cancel apart from an ordinary upstream
+    /// failure.
+    pub fn is_cancelled(&self) -> bool {
+        matches!(self, Error::Llmux(m) if m == "context canceled")
+    }
 }
 
 /// Shorthand for this module's results.
@@ -140,6 +173,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 type AbiVersionFn = unsafe extern "C" fn() -> *const c_char;
 type NewFn = unsafe extern "C" fn(*const c_char, *mut *mut c_char) -> u64;
 type CloseFn = unsafe extern "C" fn(u64);
+type CancelFn = unsafe extern "C" fn(u64);
 type CallFn =
     unsafe extern "C" fn(u64, *const c_char, *const c_char, *mut *mut c_char) -> *mut c_char;
 type FreeFn = unsafe extern "C" fn(*mut c_char);
@@ -153,7 +187,7 @@ type StreamFn = unsafe extern "C" fn(
     *mut *mut c_char,
 ) -> c_int;
 
-/// The loaded library and its six resolved symbols.
+/// The loaded library and its seven resolved symbols.
 ///
 /// # Why this is never dropped
 ///
@@ -178,6 +212,7 @@ struct Api {
     abi_version: AbiVersionFn,
     new: NewFn,
     close: CloseFn,
+    cancel: CancelFn,
     call: CallFn,
     free: FreeFn,
     stream: StreamFn,
@@ -221,6 +256,7 @@ impl Api {
         let abi_version = *lib.get::<AbiVersionFn>(b"llmux_abi_version\0")?;
         let new = *lib.get::<NewFn>(b"llmux_new\0")?;
         let close = *lib.get::<CloseFn>(b"llmux_close\0")?;
+        let cancel = *lib.get::<CancelFn>(b"llmux_cancel\0")?;
         let call = *lib.get::<CallFn>(b"llmux_call\0")?;
         let free = *lib.get::<FreeFn>(b"llmux_free\0")?;
         let stream = *lib.get::<StreamFn>(b"llmux_stream\0")?;
@@ -228,6 +264,7 @@ impl Api {
             abi_version,
             new,
             close,
+            cancel,
             call,
             free,
             stream,
@@ -451,6 +488,57 @@ impl Gateway {
         Ok(s)
     }
 
+    /// Aborts every call in flight on this handle, without closing it — the
+    /// handle stays open and the next call starts on a fresh context.
+    ///
+    /// This is the low-level primitive. [`Gateway::stream`]'s iterator already
+    /// calls this for you when it is dropped early (see [`ChunkStream`]);
+    /// reach for this directly only when you are driving [`Gateway::call`] or
+    /// [`Gateway::stream_with`] yourself and need to abandon a call those
+    /// methods have no other way to interrupt. [`Gateway::cancel_handle`]
+    /// gives you the same operation detached from `&Gateway`, for a thread
+    /// that has no other business touching the gateway.
+    ///
+    /// Safe to call from another thread while `call`, `stream` or
+    /// `stream_with` is blocked on this same handle — that is the only way to
+    /// abandon one, since none of them poll for cancellation on their own.
+    /// Also safe from *inside* a chunk callback, unlike [`Gateway`]'s `Drop`
+    /// (`llmux_close`), which must never be called from a callback because it
+    /// waits for the very call running it. A no-op if nothing is in flight, if
+    /// you call it twice, or if the handle is unknown or already closed — so
+    /// there is no wrong time to call it.
+    ///
+    /// The blocked call returns an error whose message is exactly
+    /// `"context canceled"` (see [`Error::is_cancelled`]); chunks already
+    /// delivered stay delivered, and tokens already served are metered either
+    /// way. [`Gateway::call`] and [`Gateway::stream_with`] hand that error
+    /// back to you as an ordinary `Err` because they have no iterator-shaped
+    /// place to swallow it; [`ChunkStream`] does have one and never surfaces
+    /// it.
+    ///
+    /// **Per handle, not per call.** This aborts *every* call currently
+    /// running on this gateway, not just one you had in mind. A gateway
+    /// shared by two concurrent streams cannot cancel only one of them — give
+    /// each independent cancellation scope its own [`Gateway::open`].
+    pub fn cancel(&self) {
+        // SAFETY: llmux_cancel treats an unknown or already-closed handle as a
+        // clean no-op (see ffi/include/llmux.h), so there is no handle-validity
+        // precondition beyond `self` existing, which borrowck already
+        // guarantees.
+        unsafe { (self.inner.api.cancel)(self.inner.handle) }
+    }
+
+    /// Detaches a [`CancelHandle`] for this gateway: the same operation as
+    /// [`Gateway::cancel`], but `Clone + Send + Sync + 'static` so it can be
+    /// handed to a `ctrlc` handler, a `tokio::select!` arm, or a watchdog
+    /// thread that has no other reason to hold — or outlive — a `&Gateway`.
+    pub fn cancel_handle(&self) -> CancelHandle {
+        CancelHandle {
+            api: self.inner.api,
+            handle: self.inner.handle,
+        }
+    }
+
     /// Streams a chat completion, calling `on_chunk` once per chunk on **this**
     /// thread, and blocking until the stream ends.
     ///
@@ -533,10 +621,11 @@ impl Gateway {
     /// binding that collected the whole answer and replayed it as chunks would
     /// look identical until someone measured it.
     ///
-    /// The iterator owns an `Arc` of the handle, so the gateway cannot be
-    /// closed underneath it. Dropping the iterator early closes the channel,
-    /// which makes the callback return non-zero, which stops the stream — and
-    /// [`ChunkStream`]'s `Drop` joins the worker, so no thread is left behind.
+    /// The iterator owns an `Arc` of the handle (via the worker thread's own
+    /// clone), so the gateway cannot be closed underneath it. Dropping the
+    /// iterator early — a `break`, an early `?`, a panic — reaches
+    /// `llmux_cancel` before anything else: see [`ChunkStream`]'s `Drop` for
+    /// why that ordering is the fix for a real bug, not a nicety.
     pub fn stream(&self, request_json: &str) -> Result<ChunkStream> {
         let (tx, rx): (SyncSender<Result<String>>, Receiver<Result<String>>) = sync_channel(0);
         let inner = Arc::clone(&self.inner);
@@ -554,9 +643,23 @@ impl Gateway {
                     send_tx.send(Ok(chunk.to_string())).is_ok()
                 });
                 if let Err(e) = res {
-                    // Best effort: if the consumer has gone, there is nobody to
-                    // tell, and that is fine.
-                    let _ = tx.send(Err(e));
+                    // A cancellation this SDK itself asked for (directly via
+                    // Gateway::cancel/CancelHandle, or indirectly because
+                    // ChunkStream::drop got there first) is not a failure the
+                    // consumer asked to see — it is the mechanism working.
+                    // Swallowing it here is what makes the iterator end
+                    // silently (the next `recv` sees a disconnected sender)
+                    // instead of yielding one last `Err("context canceled")`
+                    // after the consumer already walked away, or worse, to a
+                    // CancelHandle user who cancelled deliberately and would
+                    // otherwise see their own cancellation reported as a bug.
+                    // A genuine failure is not swallowed: only this exact,
+                    // documented sentinel is.
+                    if !e.is_cancelled() {
+                        // Best effort: if the consumer has gone, there is
+                        // nobody to tell, and that is fine too.
+                        let _ = tx.send(Err(e));
+                    }
                 }
             })
             .expect("spawn llmux-stream worker");
@@ -564,7 +667,66 @@ impl Gateway {
         Ok(ChunkStream {
             rx,
             worker: Some(worker),
+            cancel: self.cancel_handle(),
         })
+    }
+}
+
+/// A detached handle for cancelling a [`Gateway`] from somewhere that does not
+/// hold the gateway, or even the same thread as the code driving it.
+///
+/// `Clone + Send + Sync + 'static` on purpose: those are exactly the bounds a
+/// `ctrlc` handler, a `tokio::select!` arm, or a watchdog thread need to be
+/// handed one. Get one from [`Gateway::cancel_handle`]; calling
+/// [`CancelHandle::cancel`] does what [`Gateway::cancel`] does.
+///
+/// # Why holding this can never be unsound
+///
+/// This carries the resolved `&'static Api` — never dropped, see [`Api`]'s
+/// type-level comment — and the bare `u64` handle. Nothing else. In
+/// particular it does **not** hold an `Arc<Inner>`, so cloning it and
+/// outliving the [`Gateway`] it came from does not keep the underlying handle
+/// open: drop every `Gateway` and [`ChunkStream`] that references the handle
+/// and `llmux_close` runs on schedule, exactly as if no `CancelHandle` existed
+/// to hold it back. And a `CancelHandle` that outlives the close is not a
+/// use-after-free waiting to happen: handles are never reused, and the ABI
+/// documents `llmux_cancel` on an unknown or already-closed handle as a clean
+/// no-op (see `ffi/include/llmux.h`). So there is no window in this type's
+/// lifetime where calling `cancel()` is unsound — at worst, after the gateway
+/// has closed, it does nothing.
+#[derive(Clone, Copy)]
+pub struct CancelHandle {
+    api: &'static Api,
+    handle: u64,
+}
+
+// SAFETY: `Api`'s fields are C function pointers (safe to call from any
+// thread, per the ABI's own documentation) plus a `libloading::Library` that
+// is itself Send + Sync and never unloaded (see `Api`'s `unsafe impl`s above);
+// `u64` is plain data. Sending or sharing a `CancelHandle` across threads adds
+// no new hazard beyond what `Api` already allows.
+unsafe impl Send for CancelHandle {}
+unsafe impl Sync for CancelHandle {}
+
+impl fmt::Debug for CancelHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CancelHandle")
+            .field("handle", &self.handle)
+            .finish()
+    }
+}
+
+impl CancelHandle {
+    /// Aborts every call in flight on the gateway this handle came from,
+    /// without closing it. See [`Gateway::cancel`] for the full contract —
+    /// this is that method with the `Gateway` detached so it can cross a
+    /// thread boundary that otherwise has no reason to touch the gateway at
+    /// all.
+    pub fn cancel(&self) {
+        // SAFETY: same as Gateway::cancel — llmux_cancel accepts any u64,
+        // including a closed or unknown one, and is documented to treat that
+        // as a no-op.
+        unsafe { (self.api.cancel)(self.handle) }
     }
 }
 
@@ -573,9 +735,21 @@ impl Gateway {
 /// Each item is one `chat.completion.chunk` JSON document — byte for byte what
 /// the HTTP API writes after `data: `, without the prefix and without the
 /// terminal `[DONE]` frame.
+///
+/// Never yields `Err` for a cancellation — its own, or one delivered through a
+/// [`CancelHandle`] from another thread while this iterator is still being
+/// pulled elsewhere. Either way the iteration just ends (the next call to
+/// `next` returns `None`), the same as if the upstream had finished normally.
+/// Abandoning a stream is not a failure a Rust consumer asked to see; a real
+/// upstream or transport failure is still `Err`, unaffected by any of this.
 pub struct ChunkStream {
     rx: Receiver<Result<String>>,
     worker: Option<JoinHandle<()>>,
+    /// Detached handle for this stream's gateway. Used by `Drop`, and kept as
+    /// a `CancelHandle` rather than the `Arc<Inner>` the worker thread already
+    /// holds so that this field can never be the thing keeping the handle
+    /// open — see `CancelHandle`'s own doc comment.
+    cancel: CancelHandle,
 }
 
 impl Iterator for ChunkStream {
@@ -587,11 +761,39 @@ impl Iterator for ChunkStream {
 }
 
 impl Drop for ChunkStream {
+    /// The fix for a real bug: a consumer that reads 3 of 10 chunks and then
+    /// walks away — a `break`, an early `?`, a panic — used to only stop the
+    /// *next* chunk from reaching them. llmux had already started fetching the
+    /// one after that from upstream (the callback for chunk N returns before
+    /// llmux issues the blocking read for chunk N+1), and that fetch ran to
+    /// completion and was metered before the closed channel was ever noticed.
+    /// Measured against `sdks/fake-upstream.py`: cancelling after 3 delivered
+    /// chunks costs the upstream exactly 3 generated chunks with the call
+    /// below in place, not 4 — see the crate README for the full numbers.
+    ///
+    /// Ordering is load-bearing, and matches the safety note on
+    /// `llmux_stream`'s callback: the trampoline's `user_data` points at a
+    /// closure living on the *worker* thread's stack, and it stays valid for
+    /// as long as that thread's `llmux_stream` call has not returned. So:
+    ///
+    /// 1. Cancel FIRST, while that call may still be blocked inside Go. This
+    ///    is what makes it a prompt abort of whatever chunk llmux is already
+    ///    reading, rather than a wait for the next chunk boundary.
+    /// 2. Only THEN close the receiving end. Belt and suspenders: cancel is
+    ///    the fast path that stops upstream generation, but if the worker
+    ///    happens to be sitting in `send_tx.send` with a chunk already in hand
+    ///    rather than blocked in the native call, it still needs to see that
+    ///    nobody will ever drain that channel again.
+    /// 3. Only THEN join the worker. This is what actually waits for the
+    ///    native call to unwind back out of Go and the worker thread to exit
+    ///    — i.e. for the point up to which `user_data` needed to stay valid —
+    ///    before this function (and the `Arc<Inner>` clone the worker's local
+    ///    `Gateway` held) can return and be released. Dropping the channel or
+    ///    releasing the handle before this join would risk the callback
+    ///    touching memory that is no longer there.
     fn drop(&mut self) {
-        // Close the receiving end first so a worker blocked in `send` wakes up,
-        // sees the disconnect, and returns non-zero from the callback to stop
-        // the stream. Then join, so dropping the iterator cannot leave a thread
-        // running against a handle we are about to release.
+        self.cancel.cancel();
+
         let (dead_tx, dead_rx) = sync_channel(0);
         drop(dead_tx);
         let _ = std::mem::replace(&mut self.rx, dead_rx);
@@ -631,5 +833,30 @@ mod tests {
         let s = e.to_string();
         assert!(s.contains("LLMUX_LIBRARY"), "{s}");
         assert!(s.contains("/a/libllmux.so"), "{s}");
+    }
+
+    /// `Error::is_cancelled` matches on the library's exact wording and
+    /// nothing else — a looser match (e.g. "canceled" anywhere in the
+    /// message) would also catch an unrelated upstream error that happens to
+    /// mention cancellation, and a stricter one (e.g. requiring a specific
+    /// `Error` variant) would not exist, because `llmux_cancel`'s failure is
+    /// not distinguished from any other `Error::Llmux` at the ABI boundary.
+    #[test]
+    fn is_cancelled_matches_only_the_exact_message() {
+        assert!(Error::Llmux("context canceled".to_string()).is_cancelled());
+        assert!(!Error::Llmux("deadline exceeded".to_string()).is_cancelled());
+        assert!(!Error::Llmux("context canceled: extra".to_string()).is_cancelled());
+        assert!(!Error::Nul(std::ffi::CString::new("a\0b").unwrap_err()).is_cancelled());
+    }
+
+    /// `CancelHandle` must be `Clone + Send + Sync + 'static` to be handed to
+    /// a `ctrlc` handler or a watchdog thread — that is the entire reason it
+    /// exists rather than requiring callers to keep a `&Gateway` around. This
+    /// is a compile-time assertion: it proves nothing at runtime and is not
+    /// meant to.
+    #[test]
+    fn cancel_handle_is_send_sync_static() {
+        fn assert_bounds<T: Clone + Send + Sync + 'static>() {}
+        assert_bounds::<CancelHandle>();
     }
 }

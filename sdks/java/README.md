@@ -13,17 +13,21 @@ green, and the measurements are in this file. It is because the direct path
 requires a change to the *java launch command* that a library cannot make on
 its own. See [the verdict](#the-verdict).
 
-Run both examples:
+Run the examples:
 
 ```sh
-sdks/java/run-examples.sh            # both
+sdks/java/run-examples.sh            # direct + sidecar
 sdks/java/run-examples.sh direct
 sdks/java/run-examples.sh sidecar
+sdks/java/run-examples.sh cancel     # llmux_cancel, against sdks/fake-upstream.py
 ```
 
 The script builds the shared library, builds the gateway binary, starts the
 fake OpenAI upstream from `ffi/fakeupstream`, and runs the examples against it —
-so neither needs an API key or a network.
+so none of them needs an API key or a network. `cancel` is its own mode because
+cancelling mid-stream needs an upstream with a chunk delay and a generation
+counter, which `ffi/fakeupstream` does not have — see
+[Cancellation](#cancellation).
 
 ---
 
@@ -94,7 +98,18 @@ JSON in, JSON out — the same JSON `POST /v1/chat/completions` takes and
 returns. The binding does not parse it and has no JSON dependency; use whatever
 parser you already have.
 
-Worked example: [`examples/DirectChat.java`](examples/DirectChat.java).
+Worked examples: [`examples/DirectChat.java`](examples/DirectChat.java) (calls
+and streaming) and [`examples/CancelChat.java`](examples/CancelChat.java)
+(cancellation — see below).
+
+### The C ABI surface: seven symbols
+
+`LlmuxDirect` binds every function `ffi/include/llmux.h` declares:
+`llmux_abi_version`, `llmux_new`, `llmux_close`, `llmux_cancel`, `llmux_call`,
+`llmux_free`, `llmux_stream`. `llmux_cancel` is the newest of the seven,
+added in llmux 0.1.5; before it, `llmux_close` was the only way out of a
+blocked `call` or `stream`, and it takes the whole handle down with it. See
+"Cancellation" below.
 
 ### Requirements
 
@@ -152,6 +167,102 @@ the JVM. `LlmuxDirect` catches everything your handler throws, records it,
 returns "stop" to llmux so the stream unwinds cleanly, and rethrows it from
 `stream()` once control is back on the Java side. Write your handler normally;
 the binding holds that line for you.
+
+A handler that returns `false` (the "early stop" demo in `DirectChat.java`,
+"delivered 2 chunk(s), no exception") only ever stops the *consumer*: `rc=0`,
+`*err=NULL`, and llmux does not learn anything happened until the next chunk
+was going to be handed to your callback anyway. Whether the *provider* also
+stopped generating in that window is not something `stream()` tells you either
+way. `llmux_cancel` is the answer to a different question — "make the provider
+stop, and tell me it did" — and that is what the rest of this section measures.
+
+### Cancellation
+
+Before llmux 0.1.5, `close()` was the only way out of a `call` or `stream`
+that would not return on its own, and it destroys the handle — every other
+call running on it goes down too. `cancel()` aborts what is running without
+closing anything, and interrupting the thread blocked in `stream()` reaches it
+as well; the class doc has the mechanism, this section has what was measured.
+
+**The low-level path — `LlmuxDirect.cancel()`:**
+
+```java
+LlmuxDirect llmux = LlmuxDirect.open(configJson);
+Thread worker = new Thread(() -> llmux.stream("chat", requestJson, chunk -> {
+    System.out.print(chunk);
+    return true;
+}));
+worker.start();
+// ... from any other thread, once you have seen enough ...
+llmux.cancel();
+```
+
+Calling it from another thread makes the blocked `stream()` fail promptly with
+`LlmuxException("llmux_stream(chat): context canceled")` — a failure, not a
+clean stop, and tokens already served are still metered on llmux's side. The
+handle survives: a `call()` or a fresh `stream()` right after works normally.
+
+**The idiomatic path — interrupt the blocked thread.** `stream()` cannot be
+interrupted the way `Thread.sleep` can — a downcall into native code ignores
+`Thread.interrupt()` — so `LlmuxDirect` wires it through the one place that
+thread runs Java code while the call is blocked: the chunk callback. Every
+invocation checks `Thread.interrupted()` first; finding it set means someone
+called `Thread.interrupt()` (directly, or via `Future.cancel(true)`) since the
+last chunk, and the trampoline calls `cancel()` itself, from inside the
+callback — documented safe, unlike `close()` — and stops the stream.
+`stream()` then throws `InterruptedException`, with the interrupt status left
+cleared, exactly as `Thread.sleep` leaves it, instead of `LlmuxException`. This
+is what makes `ExecutorService`/`Future` work as expected:
+
+```java
+ExecutorService pool = Executors.newSingleThreadExecutor();
+Future<Integer> future = pool.submit(() -> llmux.stream("chat", requestJson, chunk -> {
+    System.out.print(chunk);
+    return true;
+}));
+// ... from the controller ...
+future.cancel(true);         // interrupts the worker thread; nothing more
+```
+
+`Future.cancel(true)` does nothing but interrupt the thread running the task —
+that alone is enough to reach `llmux_cancel` through this path. What
+`future.get()` throws afterward is `CancellationException`, per the `Future`
+contract, and it throws it **immediately**, whether or not the worker thread
+has actually noticed the interrupt yet: measuring "is the stream really done"
+right after `future.get()` throws is measuring a race, not a result. The real
+signal that the worker is done is `ExecutorService.awaitTermination` (or
+`Thread.join` for a plain `Thread`) — `examples/CancelChat.java` does the
+latter for its own direct-`cancel()` demonstration and the former for the
+`Future` one, and got two different numbers by getting this right.
+
+**Measured**, with `sdks/fake-upstream.py --chunk-delay-ms 100 --text "one two
+three four five six seven eight nine ten"` (ten words, one chunk each, plus a
+trailing usage frame the harness does not count — 12 chunks run to
+completion), cancelling after the consumer had seen 3:
+
+| construct | consumer saw | upstream `generated` |
+|---|---|---|
+| `llmux.cancel()` from another thread | 3 | **3** |
+| `Future.cancel(true)` | 3 | **4** |
+
+Both stop the provider well short of the 12 it takes to finish, and both leave
+the handle open — `examples/CancelChat.java` calls `models` again afterward to
+prove it. The gap between them is real, not noise, and it is the direct
+consequence of the mechanism: `cancel()` reaches `llmux_cancel` the instant the
+controller thread calls it, while `Future.cancel(true)` only sets a flag that
+the worker thread can act on the next time it comes up for air in the chunk
+callback — which, in this run, was one chunk later. Reproduce it with:
+
+```sh
+sdks/java/run-examples.sh cancel
+```
+
+**`llmux_cancel` is per-HANDLE, not per-call.** It aborts *every* call
+currently in flight on that gateway — a concurrent `call()` or a sibling
+`stream()` on the very same `LlmuxDirect` is aborted too, not just the one you
+meant to stop. If cancelling one request must not touch another running on the
+same object, give it its own gateway (`LlmuxDirect.open` again) rather than
+sharing one.
 
 ---
 
@@ -360,10 +471,12 @@ sdks/java/
   src/main/java/to/llmux/Llmux.java            sidecar (Java 11+)
   src/main/java/to/llmux/LlmuxDirect.java      direct, FFM (Java 22+)
   src/main/java/to/llmux/LlmuxException.java
+  src/test/java/to/llmux/LlmuxDirectCancelTest.java   cancel()/interrupt tests, JUnit
   examples/SidecarChat.java                    runnable
   examples/DirectChat.java                     runnable
+  examples/CancelChat.java                     runnable — llmux_cancel, see Cancellation
   tools/SignalHandlerProbe.java                the evidence for this README
-  run-examples.sh                              builds everything, runs both
+  run-examples.sh                              builds everything, runs direct/sidecar/cancel
   signal-probe.sh                              runs the probe
   run-java-check.sh                            the dependency-free smoke test
 ```

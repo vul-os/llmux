@@ -32,12 +32,14 @@ Tested on **Deno 2.7.11 (aarch64-apple-darwin)**.
 | mode | flags |
 |---|---|
 | direct | `--allow-ffi` (plus `--allow-env=LLMUX_LIB` if you point it with that variable) |
-| direct, the example | `--allow-ffi --allow-run --allow-env --allow-read` — run/read/env are for the fake upstream it spawns, not for llmux |
+| direct, the example | `--allow-ffi --allow-run --allow-env --allow-read --allow-net` — run/read/env are for the fake upstream it spawns, not for llmux; net is for THIS process's own `fetch()` of the fake upstream's `GET /generated`, used to prove cancellation actually stopped it |
 | sidecar | `--allow-run --allow-net --allow-env` (`--allow-read --allow-write` in the example, for its temporary config file) |
 
 **`--unstable-ffi`**: not needed here. On Deno 2 the FFI API is stable and
-`--allow-ffi` alone works — verified by running `examples/direct.ts` with
-exactly `--allow-ffi --allow-run --allow-env --allow-read` and nothing else. On
+`--allow-ffi` alone works for direct mode itself — verified by running
+`examples/direct.ts` with exactly
+`--allow-ffi --allow-run --allow-env --allow-read --allow-net` and nothing
+else (the last one is for the example's own fetch, not for `Deno.dlopen`). On
 Deno 1.x, `Deno.dlopen` was unstable and you also needed `--unstable-ffi`
 (or plain `--unstable` before 1.30). Passing it on 2.7.11 is accepted and does
 nothing.
@@ -76,7 +78,12 @@ exit path out of the block, throw included. `close()` is idempotent, as
 - `gw.call(method, request)` — off the event loop, returns a promise.
 - `gw.callSync(method, request)` — same call on this thread, blocking. Useful in
   a script; it is the one entry point here that can stall the isolate.
-- `gw.stream(request)` — an async generator. `break` stops the stream.
+- `gw.stream(request, options?)` — an async generator. `break`, `return`, an
+  exception in the loop body, or `options.signal` firing all stop the stream —
+  see "Cancellation" below.
+- `gw.cancel()` — the low-level escape hatch `stream()`'s `signal` is built on.
+  Aborts every call in flight on this handle and leaves it open. See
+  "Cancellation".
 
 Everything the library allocates is released: `takeString` frees each result
 with `llmux_free` before returning the string, `takeError` does the same for the
@@ -85,6 +92,61 @@ error message, and the `UnsafeCallback` is closed only **after** the
 the pointer is how this becomes a segfault instead of an exception. The
 generator's `finally` runs on `break` and on `throw` as well as on completion,
 so the stop-and-wait sequence is not something the caller has to remember.
+
+### Cancellation
+
+llmux v0.1.5 added a seventh ABI symbol, `llmux_cancel`
+(`ffi/include/llmux.h`). Before it, the only way out of a call blocked in
+`llmux_call` or `llmux_stream` was `llmux_close`, which destroys the gateway
+and every other stream running on it. `llmux_cancel` aborts what is running
+and leaves the handle open — `llmux_call(h, "models", ...)` right after a
+cancel succeeds normally.
+
+```ts
+// The idiomatic way: an AbortSignal, fired from wherever your cancel
+// decision actually lives — a timeout, a sibling request, a UI button —
+// not necessarily the code that is reading chunks.
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000);
+for await (
+  const chunk of gw.stream({ model, messages }, { signal: controller.signal })
+) {
+  // ...
+}
+
+// The low-level escape hatch, if you are not holding a stream's iterator at
+// all — e.g. cancelling from a signal handler or a supervisor task.
+gw.cancel();
+```
+
+**`llmux_cancel` is per-HANDLE, not per-stream or per-call.** It aborts EVERY
+call in flight on the gateway it is given — every `stream()`, every `call()`
+and `callSync()` currently running. `stream()`'s `signal` option does not
+change that: aborting the signal you gave to `streamA` also aborts `streamB`
+if both are running on the same `Gateway`. **If you need independent
+cancellation for concurrent streams, give each one its own gateway** —
+`Gateway.open()` is inert and cheap enough to call per cancellation scope; do
+not share one handle across scopes and expect only one of them to stop.
+
+Two different outcomes depending on who decided to stop, both exercised in
+`examples/direct.ts`:
+
+- **The stream's own consumer stops it** — `break`, `return`, an exception in
+  the loop body, or the `signal` given to THIS `stream()` call firing — and
+  nothing is thrown. `llmux_stream` returns an error internally (`rc=-1`, the
+  message is exactly `context canceled` — see `llmux_cancel` in the header),
+  but that is your own decision coming back to you, not a failure to hand you,
+  the same principle already applied to a callback returning non-zero.
+- **Something else cancels the gateway out from under this stream** —
+  `gw.cancel()` called from unrelated code, or another stream's `signal`, or
+  `close()` — and this stream's `for await` throws. Swallowing that too would
+  make an externally-forced stop look identical to the stream finishing on its
+  own, which is exactly the confusion the per-handle caveat above is trying to
+  prevent.
+
+An already-aborted `AbortSignal` rejects before any native call is made at
+all — no `llmux_stream`, no allocation, nothing to unwind. See "What
+cancelling actually stops" below for the measured numbers.
 
 ### Run it
 
@@ -96,31 +158,37 @@ deno task example:direct
 ```
 deno       2.7.11 on darwin/aarch64
 library    /Users/pc/code/vulos/llmux/dist/ffi/darwin_arm64/libllmux.dylib
-abi        0.1.2
+abi        0.1.5
 
 handle     1
 
-models       deepseek/deepseek-chat, openai/gpt-4o-mini, anthropic/claude-3-5-haiku, openai/gpt-4o, anthropic/claude-3-5-sonnet, google/gemini-1.5-pro, google/gemini-1.5-flash
+models       openai/gpt-4o-mini, google/gemini-1.5-flash, deepseek/deepseek-chat, anthropic/claude-3-5-sonnet, anthropic/claude-3-5-haiku, google/gemini-1.5-pro, openai/gpt-4o
 chat         "the quick brown fox jumps over the lazy dog"
-             took 390 ms; the event loop ticked 137x meanwhile
+             took 379 ms; the event loop ticked 155x meanwhile
 
 stream      the quick brown fox jumps over the lazy dog
-             10 chunks, event loop ticked 163x during the stream
+             10 chunks, event loop ticked 160x during the stream
 
-break       consumed 3 chunks; the C callback fired 4x (10 = the whole answer)
+break       consumed 3 chunks; the C callback fired 3x (10 = the whole answer)
             no error raised — stopping is your decision, not a failure
+
+cancel      consumer saw 3 chunks before AbortSignal fired
+            AbortError raised on the chunk it was awaiting when the signal fired
+            upstream generated 3 of 10 words total
 
 error       no route for model "no-such-model" (providers: fake)
 stream:true llmux: "stream": true is not valid for llmux_call; use llmux_stream
 closed      llmux gateway is closed
 ```
 
-Those tick counts are the whole argument: a 1 ms timer fires 137× across a
-390 ms call. The same measurement on Node is `0`.
+Those tick counts are the whole argument: a 1 ms timer fires 155× across a
+379 ms call. The same measurement on Node is `0`.
 
-No API key and no network — the example spawns
+No API key and no network beyond loopback — the example spawns
 [`examples/fake-upstream.mjs`](examples/fake-upstream.mjs), an
-OpenAI-compatible fixture that prints the llmux config routing `demo` at itself.
+OpenAI-compatible fixture that prints the llmux config routing `demo` at
+itself, and the cancellation demo also `fetch()`es that same fixture's own
+`GET /generated` to see what the provider actually produced.
 
 ### Threads, honestly
 
@@ -184,7 +252,7 @@ error       HTTP 404 {"error":{"message":"no route for model \"no-such-model\" (
 
 ---
 
-## What `break` actually stops
+## What cancelling actually stops
 
 A wrapper that turns a native callback into an async iterator has a failure mode
 that looks like success: the consumer stops early, the loop exits, everything
@@ -192,23 +260,57 @@ looks cancelled — and the library ran to completion anyway, generating and
 billing tokens nobody read. It was found in two other bindings in this suite, so
 it is measured here rather than assumed.
 
-`gw.stream(...)` exposes `nativeChunks`, the number of times the C callback
-actually fired. The example breaks after 3 chunks of a 10-chunk answer and
-prints both numbers. Measured on Deno 2.7.11, darwin/arm64:
+Before llmux v0.1.5 there was no way to interrupt the blocked native call
+itself: abandoning the iterator only ever set a local flag the C callback
+checked at its *next* invocation, up to one whole provider chunk-delay away.
+`llmux_cancel` closes that gap — abandoning `gw.stream()`'s iterator now calls
+it from the generator's `finally`, which interrupts the network read the
+native call is blocked in right now, instead of waiting for that read to
+finish producing a chunk nobody wanted.
+
+**The proof that matters is outside this process**, because a consumer can only
+ever report what it itself saw, never what the provider went on generating and
+billing after it stopped looking. `examples/direct.ts` streams from
+[`examples/fake-upstream.mjs`](examples/fake-upstream.mjs) at 100 ms/chunk,
+cancels through an `AbortSignal` fired from *outside* the consuming loop after
+3 chunks — the way a real caller would use it, not a `break` inside the loop
+that decides to stop itself — and then asks the fixture's own `GET /generated`
+how many chunks it actually wrote to a socket. Measured on Deno 2.7.11,
+darwin/arm64:
+
+```
+cancel      consumer saw 3 chunks before AbortSignal fired
+            AbortError raised on the chunk it was awaiting when the signal fired
+            upstream generated 3 of 10 words total
+```
+
+Three delivered, three generated, nothing extra billed.
+
+`gw.stream(...)` also exposes `nativeChunks` — how many times the C callback
+fired in this process, independent of what the upstream did. Breaking the same
+kind of stream from inside its own loop tells the same story, with one honest
+exception. Measured on Deno 2.7.11, darwin/arm64, breaking after 3 chunks of 10:
 
 | upstream pace | consumed | C callback fired |
 |---|---|---|
-| 40 ms/chunk | 3 | **4** |
-| as fast as the socket allows | 3 | **4** |
+| 40 ms/chunk | 3 | **3** |
+| as fast as the socket allows (`FAKE_DELAY_MS=0`) | 3 | **4** |
 
-Deno needs no backpressure machinery for this, and that is not luck: with
-`nonblocking: true`, Deno parks the native thread until the isolate has run the
-callback, so the library can never get more than one chunk ahead of the consumer.
-Flooding the fixture (`FAKE_DELAY_MS=0`) does not change the number.
+The flood row is not a regression — it is the one case the fix cannot reach,
+and it is reported rather than assumed away. With the whole answer already
+sitting in the socket's receive buffer, Go's HTTP client can read and dispatch
+chunk 4 to the callback faster than this binding's `break` → generator
+`finally` → `llmux_cancel` chain can run on the JS side: cancelling "as fast as
+possible" is bounded by callback-marshalling latency, not network latency,
+once there is no network latency left to interrupt. Any real model — token
+generation is never instant — lands in the first row. One extra chunk is also
+exactly what the old stop-flag-only implementation cost in every case, flood
+included; this fix does not make that particular case worse, it just cannot
+make it better.
 
-The residue is one chunk in flight — `llmux_stream` can only notice the stop
-flag at the *next* chunk boundary, which the header says plainly. Tokens already
-served are metered either way.
+Tokens already served are metered either way — cancelling stops the *next*
+chunk, not the ones already delivered. See "Cancellation" above for which of
+these outcomes raises an error and which does not.
 
 ---
 
@@ -234,8 +336,8 @@ Not footnotes. These are properties of `-buildmode=c-shared`;
    that forks after loading. The rule is unchanged: **load the library after the
    fork, in the worker, never in the master.**
 
-3. **The library is 12–17 MB.** Measured: 12,787,504 bytes on darwin/arm64,
-   17,348,392 bytes on linux/arm64.
+3. **The library is 12–17 MB.** Measured: 12,823,104 bytes on darwin/arm64,
+   17,356,264 bytes on linux/arm64.
 
 4. **Prebuilt libraries exist for darwin/arm64 and linux/arm64 only.**
    linux/amd64 is built and tested in CI but not shipped from a developer

@@ -1,13 +1,16 @@
 /*
- * mini_http.h — just enough HTTP/1.1 over loopback for the sidecar examples.
+ * mini_http.h — just enough HTTP/1.1 over loopback for the C examples.
  *
  * C has no HTTP client in its standard library, and the house rule for these
  * SDKs is to prefer the standard library over a third-party dependency. So
- * these examples talk to the sidecar with BSD sockets directly. That is honest
- * for the case it covers — a request to 127.0.0.1, over a connection this
- * process opened, with `Connection: close` — and it is NOT a general HTTP
- * client. It does not do TLS, redirects, chunked transfer-encoding,
- * keep-alive, proxies, IPv6 literals or retries.
+ * sidecar_chat.c talks to the `llmux serve` sidecar with BSD sockets directly,
+ * and direct_chat.c's llmux_cancel demo uses the same file for one GET against
+ * sdks/fake-upstream.py's /generated endpoint — a plain loopback request that
+ * has nothing to do with the ABI, which is why it goes through here rather
+ * than through libllmux. That is honest for the case it covers — a request to
+ * 127.0.0.1, over a connection this process opened, with `Connection: close`
+ * — and it is NOT a general HTTP client. It does not do TLS, redirects,
+ * chunked transfer-encoding, keep-alive, proxies, IPv6 literals or retries.
  *
  * If you are writing a real program: link libcurl. This file exists so the
  * examples have no dependencies, not as a component to reuse.

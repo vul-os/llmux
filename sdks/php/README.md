@@ -242,6 +242,98 @@ Learned while writing `src/Ffi.php`, all of it observable on PHP 8.5.9:
   cannot be handed to `FFI::cdef` directly. The declarations are transcribed
   into `Ffi::CDEF`; if the header changes, that constant changes with it.
 
+### Cancellation
+
+llmux 0.1.5 added a seventh ABI function, `llmux_cancel(h)`, alongside the six
+`Ffi::CDEF` already declared (`llmux_abi_version`, `llmux_new`, `llmux_close`,
+`llmux_call`, `llmux_free`, `llmux_stream`). It aborts every call in flight on
+a handle without closing the handle itself — the gateway stays open, and the
+next call starts on a fresh context. Before it, the only way out of a blocked
+call was `close()`, which tears down the gateway and every other stream
+running on it.
+
+**PHP's common CLI and FPM builds have no threads**, so the question every
+other SDK answers with "call cancel from another thread" does not apply here,
+and the honest story is narrower: cancel from *inside* the chunk callback, or
+step outside the callback with a Fiber. Both were measured, not assumed.
+
+**Calling `cancel()` from inside a `stream()` callback is safe and is the
+simplest option.** It is a plain nested FFI call, no different in kind from
+any other call you might make from inside your own code:
+
+```php
+$seen = 0;
+$llmux->stream('chat', $request, function () use (&$seen, $llmux): void {
+    $seen++;
+    if ($seen >= 3) {
+        $llmux->cancel();
+    }
+});
+```
+
+Measured against `sdks/fake-upstream.py` (100 ms/chunk, ten words), cancelling
+this way after the 3rd chunk: `stream()` throws with `"context canceled"`
+(unlike returning `false` from the callback, which stops the stream quietly,
+with no exception — see the note on `stream()`), the consumer saw exactly 3
+chunks, and the upstream's own count at `GET /generated` also read **3** —
+against **12** for a run left to finish (ten word chunks, a finish chunk, and
+a usage chunk; the JS runtimes' harness has no usage frame, so their
+equivalent full count is 11 — see `sdks/fake-upstream.py`'s own docstring).
+
+**The idiomatic construct is `streamGenerator()`, a real PHP `Generator`,
+because a bare `break` is safe on it in a way `break` inside `stream()`'s own
+callback is not.** `stream()` calls your callback directly from inside the FFI
+trampoline that Go invokes per chunk, so a `break` placed there would have to
+unwind past that trampoline and the blocked `llmux_stream` C frame to reach
+`stream()`'s own call site — undefined territory this SDK does not try to make
+safe (PHP's FFI extension already refuses to let an *exception* cross that
+same boundary; see the fatal-error bullet above). `streamGenerator()` avoids
+the problem instead of surviving it: it requires **PHP >= 8.1** for `Fiber`,
+which it uses to run the blocking `llmux_stream` call on a separate,
+suspendable stack, so the code you write in your `foreach` body runs one level
+outside the FFI trampoline, never inside it:
+
+```php
+foreach ($llmux->streamGenerator('chat', $request) as [$chunk, $raw]) {
+    echo $chunk['choices'][0]['delta']['content'] ?? '';
+    if ($enough) {
+        break;
+    }
+}
+```
+
+Measured on PHP 8.5.9, same harness: breaking after 3 chunks ran
+`streamGenerator()`'s `finally` (which calls `cancel()` unconditionally, a
+no-op on a stream that already ran to completion) **immediately** — PHP runs a
+generator's pending `finally` as soon as the generator becomes unreachable,
+which for a `foreach` target with no lingering reference is the moment the
+loop exits, not eventually on some later garbage-collection pass — and
+cancel-to-fiber-terminated took under 1 ms. The upstream's `/generated` read
+exactly **3** afterward, matching the numbers above. `examples/cancel_demo.php`
+runs this end to end and prints both numbers.
+
+**A `pcntl_signal` handler can also reach a blocked `llmux_stream` call — this
+was measured, and it surprised us.** `pcntl_async_signals(true)` in PHP >= 7.1
+is documented to dispatch signals without waiting for the next VM tick, and
+that turned out to mean what it says: with a handler registered for `SIGALRM`
+that calls `$llmux->cancel()`, and a real `SIGALRM` delivered (from a forked
+helper, to approximate "something external signals this process") 350 ms into
+a ~1.1 s stream, the handler ran at **t=0.432s**, `llmux_stream` returned with
+`"context canceled"` after **4** chunks instead of running to completion, and
+total elapsed time was **0.45s** instead of ~1.0–1.2s. This is *not* promoted
+to a recommended construct here: it depends on the interaction between libc's
+signal delivery, PHP's async-signal dispatch, and Go's own signal handling
+(`llmux.h`'s Threads/Panics conventions document five signals Go replaces and
+three more it wraps — `SIGALRM` is untouched by either list, which is
+presumably *why* this worked, but that leaves it one Go-runtime-internals
+change away from silently stopping working). Prefer `streamGenerator()` or an
+explicit `cancel()` call inside your own callback; treat this measurement as
+"it can be done," not as the recommended way to do it.
+
+**`llmux_cancel` is per HANDLE, not per call.** It aborts every call in flight
+on that gateway, not just the one you meant to stop. Give a cancellation scope
+its own `Ffi` instance if it needs to be independent.
+
 ## Examples
 
 | file | mode | what it shows |
@@ -249,8 +341,9 @@ Learned while writing `src/Ffi.php`, all of it observable on PHP 8.5.9:
 | `examples/sidecar_chat.php` | sidecar | spawn, models, chat, SSE stream, HTTP error, guaranteed stop |
 | `examples/direct_chat.php` | direct | version probe, models, chat, callback stream, early stop, error path, `finally { close() }` |
 | `examples/fork_probe.php` | direct | reproduces the fork hazard, and the false green that hides it |
+| `examples/cancel_demo.php` | direct | `llmux_cancel` via `streamGenerator()`, against `sdks/fake-upstream.py`'s counting fake — see [Cancellation](#cancellation) |
 
-All three run against a fake upstream with no provider key:
+The first three run against a fake upstream with no provider key:
 
 ```sh
 go build -o /tmp/fakeupstream ./ffi/fakeupstream
@@ -260,4 +353,13 @@ CFG=$(…the CONFIG line it printed…)
 LLMUX_CONFIG_JSON="$CFG" LLMUX_MODEL=demo php sdks/php/examples/direct_chat.php
 echo "$CFG" > /tmp/llmux.json
 LLMUX_CONFIG=/tmp/llmux.json LLMUX_MODEL=demo php sdks/php/examples/sidecar_chat.php
+```
+
+`cancel_demo.php` needs no setup at all — it spawns `sdks/fake-upstream.py`
+itself, because that harness (not `ffi/fakeupstream`) is the one with the
+per-chunk delay and the `/generated` counter the cancellation measurement
+needs, and it requires PHP >= 8.1 for `streamGenerator()`'s `Fiber`:
+
+```sh
+php sdks/php/examples/cancel_demo.php
 ```

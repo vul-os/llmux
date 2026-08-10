@@ -95,6 +95,14 @@
         <version>3.2.5</version>
         <configuration>
           <!--
+            LlmuxDirectCancelTest loads libllmux through java.lang.foreign,
+            same as LlmuxDirect itself. Without this, JDK 24+ prints the
+            "restricted method" warning on every run and a future release
+            throws instead — see sdks/java/README.md's Direct-path
+            Requirements section for the same flag on the java launch command.
+          -->
+          <argLine>--enable-native-access=ALL-UNNAMED</argLine>
+          <!--
             Fixture-driven tests resolve the binary from LLMUX_BINARY. Point it
             at the real gateway (or a fake) to exercise the spawn/readiness/
             singleton/cleanup paths; otherwise those tests skip via assumptions.

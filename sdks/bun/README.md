@@ -61,6 +61,84 @@ No permission flags are involved. That is a genuine difference from Deno, where
 FFI is gated behind `--allow-ffi`: **`bun:ffi` has no permission model**, so any
 dependency in your process can dlopen anything.
 
+- `gw.call(method, request)` — blocking; see "Which one should I use?" above.
+- `gw.stream(request, options?)` — an async generator. `break`, `return`, an
+  exception in the loop body, or `options.signal` firing all stop the stream —
+  see "Cancellation" below.
+- `gw.cancel()` — the low-level escape hatch `stream()`'s `signal` is built on.
+  Aborts every call in flight on this handle and leaves it open. See
+  "Cancellation".
+
+### Cancellation
+
+llmux v0.1.5 added a seventh ABI symbol, `llmux_cancel`
+(`ffi/include/llmux.h`). Before it, the only way out of a call blocked in
+`llmux_call` or `llmux_stream` was `llmux_close`, which destroys the gateway
+and every other stream running on it. `llmux_cancel` aborts what is running
+and leaves the handle open — `call("models")` right after a cancel succeeds
+normally.
+
+```ts
+// The idiomatic way: an AbortSignal, fired from wherever your cancel
+// decision actually lives — a timeout, a sibling request, a UI button —
+// not necessarily the code that is reading chunks.
+const controller = new AbortController();
+setTimeout(() => controller.abort(), 5000);
+for await (
+  const chunk of gw.stream({ model, messages }, { signal: controller.signal })
+) {
+  // ...
+}
+
+// The low-level escape hatch, if you are not holding a stream's iterator at
+// all — e.g. cancelling from a signal handler or a supervisor task.
+gw.cancel();
+```
+
+**How this reaches across the Worker boundary**: `stream()` runs
+`llmux_stream` on a Worker (see "One gateway, two threads" below), so a plain
+in-process flag cannot interrupt it from the main thread the way it could if
+everything ran on one thread. `llmux_cancel` does not need to — it is called
+from the MAIN thread's own `dlopen`'d symbol table, targeting the SAME handle
+number the Worker is blocked on. That works, and is not a race, for the exact
+reason the Worker is handed this gateway's handle rather than a second one: a
+Bun `Worker` is a thread in the same process, `dlopen` of the same path
+resolves to the library already loaded there, and `llmux_cancel` is documented
+as safe "from another thread while the call is blocked". No postMessage has to
+reach the Worker before the native call is interrupted — the shared `Atomics`
+stop flag exists for the Worker's own bookkeeping (telling a self-inflicted
+cancel from an external one — see `stream-worker.ts`), not for reaching the
+library.
+
+**`llmux_cancel` is per-HANDLE, not per-stream or per-call.** It aborts EVERY
+call in flight on the gateway it is given — every `stream()`, every `call()`
+currently running. `stream()`'s `signal` option does not change that: aborting
+the signal you gave to `streamA` also aborts `streamB` if both are running on
+the same `Gateway`. **If you need independent cancellation for concurrent
+streams, give each one its own gateway** — `Gateway.open()` is inert and cheap
+enough to call per cancellation scope; do not share one handle across scopes
+and expect only one of them to stop.
+
+Two different outcomes depending on who decided to stop, both exercised in
+`examples/direct.ts`:
+
+- **The stream's own consumer stops it** — `break`, `return`, an exception in
+  the loop body, or the `signal` given to THIS `stream()` call firing — and
+  nothing is thrown. `llmux_stream` returns an error internally (`rc=-1`, the
+  message is exactly `context canceled` — see `llmux_cancel` in the header),
+  but that is your own decision coming back to you, not a failure to hand you,
+  the same principle already applied to a callback returning non-zero.
+- **Something else cancels the gateway out from under this stream** —
+  `gw.cancel()` called from unrelated code, or another stream's `signal`, or
+  `close()` — and this stream's `for await` throws. Swallowing that too would
+  make an externally-forced stop look identical to the stream finishing on its
+  own, which is exactly the confusion the per-handle caveat above is trying to
+  prevent.
+
+An already-aborted `AbortSignal` rejects before any work starts at all — no
+Worker is even spawned. See "What cancelling actually stops" below for what is
+and is not measured on this machine.
+
 ### Memory and handles
 
 - Every `char*` llmux returns — results **and** error messages — goes through
@@ -71,8 +149,9 @@ dependency in your process can dlopen anything.
   and only there: it returns static storage that must not be freed.
 - The worker's `JSCallback` is closed only after `llmux_stream` has unwound.
 - The generator's `finally` runs on `break` and on `throw` as well as on normal
-  completion: it raises the shared stop flag, waits for the native call to
-  finish, and only then terminates the worker.
+  completion: it raises the shared stop flag, calls `llmux_cancel` on the same
+  handle from the main thread (see "Cancellation" above), waits for the
+  native call to finish, and only then terminates the worker.
 
 ### One gateway, two threads
 
@@ -118,12 +197,28 @@ stream:true llmux: "stream": true is not valid for llmux_call; use llmux_stream
 closed      llmux gateway is closed
 ```
 
-Those two tick counts, `0x` and `171x`, are the argument for reading the
-"which one" section above rather than skipping it.
+**This capture predates `llmux_cancel` and is not proof of anything about
+this change.** It is left here because it is still true of the parts it
+covers (models/chat/stream), but the `abi 0.1.2` line, the `break` row, and
+the absence of a `cancel` row are all now stale: the library on this machine
+reports `0.1.5`, `stream()` and `gw.cancel()` were rewired to call
+`llmux_cancel`, and `examples/direct.ts` gained an AbortSignal-based
+cancellation demo (see "Cancellation" above). **None of that has been run on
+Bun.** There is no Bun runtime on the machine this change was written on —
+`bun` is absent from `PATH` — so the new code is type-checked
+(`bun run check`, i.e. `tsc --noEmit`, passes) but not executed, and no
+`break` count, no `cancel` count, and no `GET /generated` count for the new
+behaviour is reported anywhere in this file. Run
+`../../scripts/build-ffi.sh && bun run examples/direct.ts` on a machine with
+Bun installed to get real numbers, then replace this whole block (including
+this notice) with fresh output the way [`../deno/README.md`](../deno/README.md)'s
+equivalent section was.
 
-No API key and no network: the example spawns
+No API key and no network beyond loopback: the example spawns
 [`examples/fake-upstream.mjs`](examples/fake-upstream.mjs), an
-OpenAI-compatible fixture that prints the llmux config routing `demo` at itself.
+OpenAI-compatible fixture that prints the llmux config routing `demo` at
+itself, and the cancellation demo also `fetch()`es that same fixture's own
+`GET /generated` to see what the provider actually produced.
 
 ---
 
@@ -174,7 +269,7 @@ error       HTTP 404 {"error":{"message":"no route for model \"no-such-model\" (
 
 ---
 
-## What `break` actually stops
+## What cancelling actually stops
 
 A wrapper that turns a native callback into an async iterator has a failure mode
 that looks like success: the consumer stops early, the loop exits, everything
@@ -182,9 +277,12 @@ looks cancelled — and the library ran to completion anyway, generating and
 billing tokens nobody read. It was found in two other bindings in this suite, so
 it is measured here rather than assumed.
 
-`gw.stream(...)` exposes `nativeChunks`, the number of times the C callback
-actually fired. The example breaks after 3 chunks of a 10-chunk answer and
-prints both numbers. Measured on Bun 1.3.14, darwin/arm64:
+**The backpressure measurements below are real but predate `llmux_cancel` —
+they were taken against the shared-`Atomics`-flag-only implementation, before
+this SDK gained the seventh ABI symbol.** `gw.stream(...)` exposes
+`nativeChunks`, the number of times the C callback actually fired. The example
+broke after 3 chunks of a 10-chunk answer and printed both numbers. Measured
+on Bun 1.3.14, darwin/arm64, before this change:
 
 | upstream pace | consumed | C callback fired |
 |---|---|---|
@@ -193,28 +291,48 @@ prints both numbers. Measured on Bun 1.3.14, darwin/arm64:
 | 40 ms/chunk, with backpressure | 3 | **4** |
 | as fast as the socket allows, with backpressure | 3 | **5** |
 
-The middle row is the bug, reproduced. `postMessage` from the worker is
+The middle row was the bug, reproduced. `postMessage` from the worker is
 fire-and-forget, so with a fast upstream the worker ran the whole completion
 before the main thread got round to breaking — a `take(3)` that silently paid
-for ten chunks.
+for ten chunks. The fix that produced this table is in
+[`stream-worker.ts`](stream-worker.ts): a second Int32 in the shared control
+block counts chunks the consumer has actually pulled, and the callback blocks
+in `Atomics.wait` until it is no more than one chunk ahead. Blocking there is
+legal precisely because it is the worker thread — `Atomics.wait` throws on a
+main thread — and that thread is already parked inside `llmux_stream`. The
+wait is bounded at 50 ms per iteration and re-checks the stop flag, so a lost
+notify degrades to a poll instead of a hang.
 
-The fix is in [`stream-worker.ts`](stream-worker.ts): a second Int32 in the
-shared control block counts chunks the consumer has actually pulled, and the
-callback blocks in `Atomics.wait` until it is no more than one chunk ahead.
-Blocking there is legal precisely because it is the worker thread — `Atomics.wait`
-throws on a main thread — and that thread is already parked inside
-`llmux_stream`. The wait is bounded at 50 ms per iteration and re-checks the stop
-flag, so a lost notify degrades to a poll instead of a hang.
+That backpressure mechanism bounded the overrun; it could not eliminate it,
+because a shared flag only stops the NEXT callback invocation — it cannot
+interrupt a network read already in progress. `llmux_cancel` closes that
+remaining gap: `break`ing, `return`ing, throwing out of, or aborting the
+signal on `gw.stream()`'s iterator now also calls `llmux_cancel` from the
+main thread directly onto the handle the worker is blocked in (see
+"Cancellation" above) — the same fix Deno's binding measured going from a
+4-callback overrun down to 3 (or all the way to `generated: 3 of 10` on the
+upstream's own count, using an `AbortSignal` fired from outside the loop) at
+a realistic per-chunk delay. See
+[`../deno/README.md`](../deno/README.md#what-cancelling-actually-stops) for
+that measurement in full, including the one honest exception (a synthetic
+zero-delay flood, where the fix cannot outrun data already sitting in a
+socket buffer).
 
-It costs something, and the cost should be stated: against an upstream with no
-delay at all, backpressure took the full 10-chunk stream from 294 event-loop
-ticks to 16, because the library now waits for the loop between chunks. Against
-a realistic 40 ms/chunk upstream it made no measurable difference (318 ticks).
-A real model is far slower than either fixture.
+**None of the above has been re-measured on Bun for this change.** There is
+no Bun runtime on the machine this was written on, so the backpressure table
+is left as the last real Bun measurement taken (against the pre-`llmux_cancel`
+code), not as a claim about the code in this version. Re-running
+`examples/direct.ts`'s `break` and `cancel` sections on a machine with Bun
+installed, and reporting both `nativeChunks` and the upstream's own
+`GET /generated` count the way the cancel section of the example already
+prints them, is the next thing that needs to happen here — not a new number
+guessed from the Deno result, which runs on a different FFI binding
+(`nonblocking: true` symbols and no Worker at all) and is not guaranteed to
+land on the identical count.
 
-The residue is one chunk in flight — `llmux_stream` can only notice the stop
-flag at the *next* chunk boundary, which the header says plainly. Tokens already
-served are metered either way.
+Tokens already served are metered either way — cancelling stops the *next*
+chunk, not the ones already delivered. See "Cancellation" above for which
+outcome raises an error and which does not.
 
 ---
 

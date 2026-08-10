@@ -8,11 +8,19 @@
 # both examples: as a JSON argument to the direct one, and as a config file to
 # the sidecar's binary. One fake, one config document, two doors.
 #
+# It ALSO starts a second, unrelated fake upstream, sdks/fake-upstream.py, for
+# direct_chat's llmux_cancel demo alone. ffi/fakeupstream answers instantly and
+# counts nothing, so there is no window in it to cancel into and nothing to
+# check a cancellation against; fake-upstream.py sleeps --chunk-delay-ms
+# between chunks and exposes GET /generated, which is what turns "did the
+# cancel actually reach the provider" from a guess into a measurement. Needs
+# python3 on PATH; nothing else in this script does.
+#
 # Usage:
 #   ./run-demo.sh                 # both
 #   ./run-demo.sh direct_chat     # one
 #
-# Needs a Go toolchain to build the fake upstream, and will build the shared
+# Needs a Go toolchain to build the fake upstreams, and will build the shared
 # library and the llmux binary if they are not already in dist/.
 
 set -euo pipefail
@@ -43,6 +51,7 @@ export LLMUX_BINARY="${bin}"
 tmp="$(mktemp -d)"
 cleanup() {
   [ -n "${fake_pid:-}" ] && kill "${fake_pid}" 2>/dev/null || true
+  [ -n "${cancel_pid:-}" ] && kill "${cancel_pid}" 2>/dev/null || true
   rm -rf "${tmp}"
 }
 trap cleanup EXIT
@@ -67,6 +76,23 @@ export LLMUX_CONFIG="${tmp}/llmux.json"     # read by the binary (sidecar mode)
 export LLMUX_CONFIG_JSON="${config}"        # read by the example (direct mode)
 export LLMUX_DEMO_MODEL=demo
 
+echo "==> starting the cancellation fake upstream (sdks/fake-upstream.py, 100ms/chunk)"
+python3 "${root}/sdks/fake-upstream.py" \
+  --text "one two three four five six seven eight nine ten" --chunk-delay-ms 100 \
+  >"${tmp}/cancel.out" 2>"${tmp}/cancel.err" &
+cancel_pid=$!
+for _ in $(seq 1 100); do
+  grep -q '^CONFIG ' "${tmp}/cancel.out" 2>/dev/null && break
+  sleep 0.05
+done
+if ! grep -q '^CONFIG ' "${tmp}/cancel.out"; then
+  echo "run-demo: the cancellation fake upstream never printed a CONFIG line" >&2
+  cat "${tmp}/cancel.err" >&2
+  exit 1
+fi
+export LLMUX_CANCEL_CONFIG_JSON="$(sed -n 's/^CONFIG //p' "${tmp}/cancel.out")"
+export LLMUX_CANCEL_UPSTREAM_URL="$(sed -n 's/^URL //p' "${tmp}/cancel.out")"
+
 echo "==> building the examples"
 make -C "${here}" LLMUX_LIB_DIR="${libdir}" all >/dev/null
 
@@ -76,6 +102,7 @@ if [ ${#examples[@]} -eq 0 ]; then
 fi
 
 echo "    upstream:  $(sed -n 's/^URL //p' "${tmp}/fake.out")"
+echo "    cancel:    ${LLMUX_CANCEL_UPSTREAM_URL} (fake-upstream.py, 100ms/chunk)"
 echo "    library:   ${libdir}/${libname}"
 echo "    binary:    ${LLMUX_BINARY}"
 

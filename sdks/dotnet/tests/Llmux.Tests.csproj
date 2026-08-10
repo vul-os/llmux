@@ -13,6 +13,13 @@
       which looks like a test failure and is a missing-runtime error.
     -->
     <RollForward>LatestMajor</RollForward>
+    <!--
+      LlmuxDirect.cs (compiled below for DirectCancelTests) is declared
+      `unsafe` at the class level for its `delegate* unmanaged<...>` chunk
+      callback. That requires this flag for the whole project, the same as
+      Llmux.csproj itself — see the comment there.
+    -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,8 +30,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Reference the SDK source directly (single-file library). -->
+    <!-- Reference the SDK source directly (single-file library, both halves). -->
     <Compile Include="../Llmux.cs" />
+    <Compile Include="../LlmuxDirect.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net.Http;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -80,7 +81,14 @@ namespace Llmux.Examples
                 }
                 Console.WriteLine($"early stop: consumed {consumed} chunk(s); the stream unwound early");
 
-                // 5. Cancellation does the same thing, through the token.
+                // 5. Cancellation does the same thing, through the token — and
+                //    does it by reaching llmux_cancel, not by waiting for the
+                //    next chunk to happen to arrive. StreamAsync registers a
+                //    callback on the token that calls Cancel() the instant it
+                //    fires, which is what lets this throw promptly even while
+                //    llmux_stream is blocked in a network read between
+                //    chunks. See the measured version of this same demo
+                //    below, and StreamAsync's remarks in LlmuxDirect.cs.
                 using var cts = new CancellationTokenSource();
                 int beforeCancel = 0;
                 try
@@ -96,10 +104,69 @@ namespace Llmux.Examples
                 }
                 catch (OperationCanceledException)
                 {
+                    // Not llmux's own "context canceled" string — that is the
+                    // whole point of routing this through the token rather
+                    // than surfacing the library's error text.
                     Console.WriteLine($"cancellation: token cancelled after {beforeCancel} chunk(s)");
                 }
 
-                // 6. The error path. The library's message becomes an exception
+                // 6. The measured version of the same demo, against the
+                //    harness built for this: sdks/fake-upstream.py sleeps
+                //    between chunks and counts what actually reached the
+                //    wire at GET /generated. ffi/fakeupstream (used for
+                //    everything above) has neither, so it cannot answer the
+                //    question that matters: did cancelling really stop the
+                //    provider from generating and metering more tokens, or
+                //    did it just stop telling this process about them?
+                //    run-examples.sh starts this second fake and passes its
+                //    config and URL here; without it, this step is skipped
+                //    the same way step 1 skips chat and streaming when there
+                //    is no upstream at all.
+                string? cancelConfig = Environment.GetEnvironmentVariable("LLMUX_CANCEL_CONFIG_JSON");
+                string? cancelUrl = Environment.GetEnvironmentVariable("LLMUX_CANCEL_URL");
+                if (!string.IsNullOrEmpty(cancelConfig) && !string.IsNullOrEmpty(cancelUrl))
+                {
+                    using var cancelGateway = LlmuxDirect.Open(cancelConfig, library);
+                    const string tenWordsRequest =
+                        """{"model":"demo","messages":[{"role":"user","content":"go"}],"stream":true}""";
+
+                    using var measureCts = new CancellationTokenSource();
+                    int seen = 0;
+                    try
+                    {
+                        await foreach (string chunk in
+                            cancelGateway.StreamAsync(tenWordsRequest, "chat", measureCts.Token))
+                        {
+                            seen++;
+                            if (seen == 3)
+                            {
+                                // The idiomatic construct — cancel the token,
+                                // not Cancel() directly — so this exercises
+                                // the same registration a real consumer would
+                                // rely on.
+                                measureCts.Cancel();
+                            }
+                        }
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        // Expected; see step 5.
+                    }
+
+                    using var http = new HttpClient();
+                    string generatedJson = await http.GetStringAsync(cancelUrl.TrimEnd('/') + "/generated");
+                    Console.WriteLine($"cancellation (measured): consumer saw {seen} chunk(s); "
+                        + $"upstream reports {generatedJson}");
+                }
+                else
+                {
+                    Console.WriteLine();
+                    Console.WriteLine("LLMUX_CANCEL_CONFIG_JSON/LLMUX_CANCEL_URL unset: skipping the measured");
+                    Console.WriteLine("cancellation demo. Use run-examples.sh for the harness with a 100 ms");
+                    Console.WriteLine("per-chunk delay and a GET /generated counter.");
+                }
+
+                // 7. The error path. The library's message becomes an exception
                 //    and the C string it allocated for it is freed.
                 try
                 {
@@ -112,7 +179,7 @@ namespace Llmux.Examples
                 }
             }
 
-            // 7. Use after dispose is a clean error, not a crash.
+            // 8. Use after dispose is a clean error, not a crash.
             var closed = LlmuxDirect.Open(config, library);
             closed.Dispose();
             closed.Dispose(); // idempotent

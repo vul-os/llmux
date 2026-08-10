@@ -4,14 +4,18 @@
 # Run from sdks/ruby:  ruby -Ilib -Itest test/test_llmux.rb
 #
 # Covers: binary resolution, URL formatting, health-poll readiness/timeout,
-# singleton/lazy start, cleanup, and an integration test gated on the real
-# binary (LLMUX_BINARY or the bundled bin/llmux).
+# singleton/lazy start, cleanup, an integration test gated on the real binary
+# (LLMUX_BINARY or the bundled bin/llmux), and direct-mode llmux_cancel tests
+# gated on a real libllmux (LLMUX_LIBRARY or dist/ffi/<goos>_<goarch>/), run
+# against sdks/fake-upstream.py.
 
 require "minitest/autorun"
 require "socket"
 require "fileutils"
 require "tmpdir"
 require "rbconfig"
+require "net/http"
+require "json"
 require "llmux"
 
 RUBY = RbConfig.ruby
@@ -196,6 +200,100 @@ class CleanupTest < LlmuxTestBase
     Llmux.stop
     assert_nil Llmux.instance_variable_get(:@pid)
     assert wait_port_closed(port, 3.0), "port should be freed after stop"
+  end
+end
+
+class DirectModeCancelTest < LlmuxTestBase
+  FAKE_UPSTREAM = File.expand_path("../../fake-upstream.py", __dir__)
+
+  # Spawn sdks/fake-upstream.py and block until it has printed its first two
+  # lines (URL, CONFIG), same contract the SDKs' own examples rely on.
+  def with_fake_upstream(chunk_delay_ms:, text:)
+    python = %w[python3 python].find { |c| system("command -v #{c} > /dev/null 2>&1") }
+    skip "python3 required for sdks/fake-upstream.py" unless python
+
+    io = IO.popen([python, FAKE_UPSTREAM, "--chunk-delay-ms", chunk_delay_ms.to_s, "--text", text])
+    url = io.gets.to_s[/^URL (\S+)/, 1]
+    config = io.gets.to_s[/^CONFIG (.+)$/, 1]
+    raise "fake upstream did not start" unless url && config
+
+    yield url, config
+  ensure
+    if io
+      Process.kill("TERM", io.pid)
+      io.close
+    end
+  end
+
+  def generated_count(base_url)
+    JSON.parse(Net::HTTP.get(URI("#{base_url}/generated")))["generated"]
+  end
+
+  # This is the regression test for the bug llmux_cancel exists to fix: a
+  # consumer that stops reading after N chunks must not leave the upstream
+  # generating (and metering) the rest in the background. See
+  # sdks/ruby/README.md's "Cancellation" section for the numbers this
+  # reproduces on this machine.
+  def test_stream_enum_break_reaches_llmux_cancel
+    require "llmux/ffi"
+    library = ENV["LLMUX_LIBRARY"] || Llmux::Ffi.resolve_library
+    skip "no libllmux available (set LLMUX_LIBRARY or run scripts/build-ffi.sh)" unless File.file?(library)
+
+    with_fake_upstream(chunk_delay_ms: 20, text: "one two three four five six seven eight nine ten") do |url, config|
+      Llmux::Ffi.open(config: config, library: library) do |llmux|
+        seen = 0
+        llmux.stream_enum("chat", model: "demo",
+                           messages: [{ role: "user", content: "hi" }]).each do |_chunk, _raw|
+          seen += 1
+          break if seen >= 3
+        end
+        assert_equal 3, seen, "the consumer should see exactly the chunks generated before it broke"
+
+        # Give the cancelled connection a moment to be observed upstream, then
+        # confirm generation actually stopped instead of finishing in the
+        # background unread. 12 is "one" through "ten" plus the finish and
+        # usage chunks — see fake-upstream.py and sdks/ruby/README.md.
+        sleep 0.2
+        generated = generated_count(url)
+        assert_equal 3, generated,
+          "llmux_cancel should have stopped the upstream at 3 chunks, not let it run to #{generated}"
+
+        # The handle must survive: llmux_cancel aborts the call, not the gateway.
+        assert llmux.call("models").key?("data")
+      end
+    end
+  end
+
+  def test_cancel_from_another_thread_stops_a_blocked_stream
+    require "llmux/ffi"
+    library = ENV["LLMUX_LIBRARY"] || Llmux::Ffi.resolve_library
+    skip "no libllmux available (set LLMUX_LIBRARY or run scripts/build-ffi.sh)" unless File.file?(library)
+
+    with_fake_upstream(chunk_delay_ms: 20, text: "one two three four five six seven eight nine ten") do |url, config|
+      Llmux::Ffi.open(config: config, library: library) do |llmux|
+        seen = 0
+        signal = Queue.new
+        rc_error = nil
+
+        streamer = Thread.new do
+          llmux.stream("chat", model: "demo", messages: [{ role: "user", content: "hi" }]) do |_c, _r|
+            seen += 1
+            signal << true if seen == 3
+            0
+          end
+        rescue Llmux::Error => e
+          rc_error = e
+        end
+
+        signal.pop
+        llmux.cancel
+        streamer.join(5)
+
+        assert_equal 3, seen
+        assert rc_error, "a stream cancelled mid-flight should return the context-canceled error"
+        assert_includes rc_error.message, "context canceled"
+      end
+    end
   end
 end
 

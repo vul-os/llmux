@@ -61,6 +61,7 @@ typealias NewFn = @convention(c) (
     UnsafePointer<CChar>?, UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> UInt64
 typealias CloseFn = @convention(c) (UInt64) -> Void
+typealias CancelFn = @convention(c) (UInt64) -> Void
 typealias CallFn = @convention(c) (
     UInt64, UnsafePointer<CChar>?, UnsafePointer<CChar>?,
     UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
@@ -72,7 +73,7 @@ typealias StreamFn = @convention(c) (
     UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>?
 ) -> Int32
 
-/// The loaded library and its six resolved symbols.
+/// The loaded library and its seven resolved symbols.
 ///
 /// # Why this is never unloaded
 ///
@@ -89,6 +90,7 @@ final class Library: @unchecked Sendable {
     let abiVersion: AbiVersionFn
     let new: NewFn
     let close: CloseFn
+    let cancel: CancelFn
     let call: CallFn
     let free: FreeFn
     let stream: StreamFn
@@ -119,6 +121,7 @@ final class Library: @unchecked Sendable {
         abiVersion = try sym("llmux_abi_version", AbiVersionFn.self)
         new = try sym("llmux_new", NewFn.self)
         close = try sym("llmux_close", CloseFn.self)
+        cancel = try sym("llmux_cancel", CancelFn.self)
         call = try sym("llmux_call", CallFn.self)
         free = try sym("llmux_free", FreeFn.self)
         stream = try sym("llmux_stream", StreamFn.self)
@@ -277,6 +280,38 @@ public final class Gateway: @unchecked Sendable {
     /// The version the loaded library was built from, e.g. `"0.1.2"`.
     public var abiVersion: String { lib.version }
 
+    /// Aborts every call in flight on this gateway, without closing it: the
+    /// handle stays open and the next call starts on a fresh context.
+    ///
+    /// `call`, `streamSync`, and therefore `chunks` all block the calling
+    /// thread until they finish — this is the only way to abandon one from
+    /// outside. Call it from another thread while a call is blocked and the
+    /// blocked call returns `LLMuxError.llmux("context canceled")`; chunks
+    /// already delivered stay delivered, and tokens already served are still
+    /// metered.
+    ///
+    /// It is also safe to call from **inside a chunk callback** — unlike
+    /// `llmux_close`, which must never be called from a callback because it
+    /// waits for the very call that is running it, `llmux_cancel` does not
+    /// wait. This is the only cancellation path available to a host whose
+    /// callback is its only thread (Node, PHP), and it is exactly what
+    /// ``chunks(_:)`` relies on being safe: cancelling one `AsyncThrowingStream`
+    /// can race a chunk arriving on the background queue that is driving it.
+    ///
+    /// A no-op when nothing is running on this handle, and a no-op the second
+    /// time, so a defensive `cancel()` in a cleanup path costs nothing.
+    ///
+    /// **This is per-HANDLE, not per-call.** It aborts every call in flight on
+    /// this `Gateway`, including one your code did not mean to touch. There is
+    /// no finer-grained cancel in the ABI — if you need to cancel one stream
+    /// without disturbing another that happens to share a handle, the fix is
+    /// one `Gateway` per cancellation scope. ``chunks(_:)`` calls this from
+    /// `onTermination`, so cancelling or abandoning one streamed
+    /// `AsyncSequence` aborts every other call in flight on the same gateway.
+    public func cancel() {
+        lib.cancel(handle)
+    }
+
     /// One unary call. `method` is `"chat"`, `"embed"` or `"models"`; the
     /// request and the result are the same JSON the HTTP API uses.
     ///
@@ -377,53 +412,81 @@ public final class Gateway: @unchecked Sendable {
     /// length of a model's answer is how a Swift concurrency program deadlocks.
     ///
     /// Chunks are yielded **as they arrive**, so time-to-first-token is real.
-    /// But `AsyncThrowingStream` does not propagate backpressure to a
-    /// non-async producer: with `.unbounded` buffering, a consumer slower than
-    /// the model queues chunks in memory. For a chat completion that is bounded
-    /// by the answer length and is fine; for anything unbounded it would not
-    /// be. (The Rust binding for the same ABI uses a rendezvous channel and
-    /// does get real backpressure — a difference in what the two languages'
-    /// stream types offer, not in the ABI.)
+    /// But `AsyncThrowingStream.yield` never suspends — that is the whole
+    /// difference between "buffered" and "backpressured" — so `.unbounded`
+    /// buffering means a consumer slower than the model queues chunks in
+    /// memory rather than pausing the producer. For a chat completion that is
+    /// bounded by the answer length, and this SDK keeps `.unbounded`
+    /// deliberately rather than switching to `.bufferingNewest`, which would
+    /// silently drop earlier chunks — the wrong trade for text, where every
+    /// chunk is content, not a replaceable sample. (The Rust binding for the
+    /// same ABI uses a rendezvous channel and gets real backpressure — a
+    /// difference in what the two languages' stream types offer, not in the
+    /// ABI. The sidecar's stream, below, gets it from `URLSession.bytes(for:)`
+    /// driving the socket read.)
     ///
-    /// Cancelling the consuming `Task`, or simply breaking out of the loop,
-    /// terminates the stream: the callback sees the termination flag and
-    /// returns non-zero, which stops it at the library.
+    /// None of that touches the bug this method exists to not have: a
+    /// consumer that stops reading must stop the *upstream provider*, not just
+    /// stop queuing chunks nobody will read. `AsyncThrowingStream` calls
+    /// `onTermination` with `.cancelled` exactly when that happens — the
+    /// consuming `Task` is cancelled, or the iterator is simply abandoned by
+    /// breaking out of the loop — and this method's `onTermination` reaches
+    /// for ``cancel()`` there, not just a flag. A flag only helps once the
+    /// *next* chunk arrives and the callback runs again; if the upstream has
+    /// gone quiet between chunks, `streamSync` is blocked deep in a network
+    /// read on the background queue with nothing scheduled to check a flag.
+    /// `llmux_cancel` is the one thing that reaches into that blocked call
+    /// from another thread and makes it return now, per fact 1 in the FFI
+    /// contract: a cancelled `llmux_stream` returns promptly with
+    /// `context canceled`, whatever it was doing.
+    ///
+    /// That C-ABI string is not what reaches the consumer, though: catching
+    /// `LLMuxError.llmux("context canceled")` here and re-throwing
+    /// `CancellationError()` is deliberate. `context canceled` is Go's
+    /// `context.Canceled.Error()`, produced only when something cancels the
+    /// call's context — llmux's own liveness timeouts return their own,
+    /// differently worded errors (`stream_idle_timeout_seconds` and
+    /// `stream_first_byte_timeout_seconds` in the configuration document), so
+    /// this text is never ambiguous with "the model actually failed." A Swift
+    /// consumer catching a cancelled `for try await` loop should see the
+    /// idiomatic `CancellationError`, not a foreign-language error string it
+    /// has no reason to pattern-match on.
     public func chunks(_ requestJSON: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream(String.self, bufferingPolicy: .unbounded) { continuation in
-            // A plain class, guarded by a lock, rather than an actor: the
-            // producer side runs on a dispatch queue and cannot await.
-            let stopped = Flag()
-            continuation.onTermination = { _ in stopped.set() }
+            continuation.onTermination = { [self] reason in
+                switch reason {
+                case .cancelled:
+                    // The consumer walked away — Task cancellation or a plain
+                    // `break` — while `streamSync` below may still be blocked
+                    // on the background queue. See ``cancel()`` for what this
+                    // does and does not reach: it is per-HANDLE, so it also
+                    // aborts any other call sharing this `Gateway`.
+                    cancel()
+                case .finished:
+                    // The producer already returned, through completion or its
+                    // own error. Nothing is left in flight to cancel, and
+                    // calling `cancel()` anyway would be a no-op — see fact 4 —
+                    // but there is no reason to reach for the ABI at all here.
+                    break
+                @unknown default:
+                    cancel()
+                }
+            }
 
             DispatchQueue.global(qos: .userInitiated).async { [self] in
                 do {
                     try streamSync(requestJSON) { chunk in
-                        if stopped.isSet { return false }
                         continuation.yield(chunk)
-                        return !stopped.isSet
+                        return true
                     }
                     continuation.finish()
+                } catch LLMuxError.llmux("context canceled") {
+                    continuation.finish(throwing: CancellationError())
                 } catch {
                     continuation.finish(throwing: error)
                 }
             }
         }
-    }
-}
-
-/// A one-way boolean, safe to set from one thread and read from another.
-final class Flag: @unchecked Sendable {
-    private let lock = NSLock()
-    private var value = false
-    var isSet: Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        return value
-    }
-    func set() {
-        lock.lock()
-        value = true
-        lock.unlock()
     }
 }
 

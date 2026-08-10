@@ -23,7 +23,13 @@ export interface StreamWorkerData {
   request: string;
   /**
    * Two Int32s shared with the main thread:
-   *   [0] stop  — non-zero means the consumer asked to stop
+   *   [0] stop  — non-zero means THIS stream's consumer asked to stop, via
+   *               break/return/throw or its own AbortSignal (index.ts's
+   *               cancelNative sets it before ever calling llmux_cancel).
+   *               Also doubles as how this file tells "our own stream asked
+   *               for this" from "some other call on the same gateway got
+   *               cancelled instead" when llmux_stream comes back with
+   *               "context canceled" — see the error handling below.
    *   [1] acks  — how many chunks the consumer has actually pulled
    * The second one is the backpressure channel; see the wait loop below.
    */
@@ -63,8 +69,11 @@ const onChunk = new JSCallback(
     // BACKPRESSURE. Without this the library runs to completion regardless of
     // what the consumer does: postMessage is fire-and-forget, so a `break` after
     // 3 chunks of a 10-chunk answer still generated and metered all 10 (measured
-    // — see README.md, "What `break` actually stops"). Blocking here until the
+    // — see README.md, "What cancelling actually stops"). Blocking here until the
     // consumer is at most PREFETCH chunks behind bounds the overrun at PREFETCH.
+    // llmux_cancel (below) closes the rest of the gap: it interrupts the
+    // network read directly, instead of waiting for a chunk that is already
+    // in flight to reach this callback at all.
     //
     // Blocking is legal on this thread and only on this thread: Atomics.wait
     // throws on a main thread, and this callback is running inside
@@ -88,8 +97,31 @@ try {
     // any other string the library returns. The address has to be re-branded as
     // a Pointer after its round trip through the BigUint64Array slot.
     const p = (err[0] ?? 0n) === 0n ? null : (Number(err[0]) as unknown as Pointer);
-    failure = p ? new CString(p).toString() : "llmux_stream failed";
+    const msg = p ? new CString(p).toString() : "llmux_stream failed";
     if (p) symbols.llmux_free(p);
+    // "context canceled" is the one message llmux_cancel is documented to
+    // produce, and llmux_cancel is the only thing that produces it
+    // (ffi/include/llmux.h). STOP is this stream's OWN cancel flag — the main
+    // thread sets it, in the same order every time, before it ever calls
+    // llmux_cancel (see index.ts's cancelNative). So if STOP is up when this
+    // returns, the main thread's own break/return/throw/AbortSignal asked for
+    // this, and it is not a failure to report — same principle the header
+    // already states for a callback returning non-zero.
+    //
+    // If STOP is NOT up, we did not ask for this stream to stop, so something
+    // else on this GATEWAY did: llmux_cancel is per-handle, so an unrelated
+    // gw.cancel() call, or another stream's AbortSignal, reaches every call in
+    // flight on the handle, this one included. That is surfaced rather than
+    // swallowed — hiding it would make an externally-forced stop look
+    // identical to this stream finishing on its own.
+    if (msg !== "context canceled") {
+      failure = msg; // an ordinary failure, unrelated to cancellation
+    } else if (Atomics.load(ctl, STOP) === 0) {
+      failure = "llmux_cancel was called on this gateway while this stream was still running " +
+        "(it aborts every call in flight on the handle, not just one — see README.md)";
+    }
+    // else: "context canceled" AND our own STOP flag is up — our own cancel
+    // coming back to us. Leave `failure` null.
   }
 } catch (e) {
   failure = e instanceof Error ? e.message : "llmux_stream threw a non-Error value";

@@ -23,6 +23,16 @@ namespace Llmux
     /// takes and returns. This class deliberately does not parse it, and has no
     /// JSON dependency.</para>
     ///
+    /// <para>The idiomatic way to abandon a stream is the <see cref="CancellationToken"/>
+    /// already on <see cref="StreamAsync"/> — cancelling it reaches
+    /// <c>llmux_cancel</c> even while the native call is blocked between chunks,
+    /// not just when the next chunk happens to arrive. <see cref="Cancel"/> is
+    /// the raw operation underneath, for callers who are not consuming a
+    /// stream at all (a stuck unary <see cref="Call"/>, or a chunk callback in
+    /// a language binding without an async iterator). Both are per-HANDLE:
+    /// they abort every call in flight on this gateway, not just one stream.
+    /// See README.md.</para>
+    ///
     /// <code>
     /// using var llmux = LlmuxDirect.Open(configJson);
     /// string models = llmux.Call("models");
@@ -53,6 +63,9 @@ namespace Llmux
 
         [LibraryImport(Lib, EntryPoint = "llmux_close")]
         private static partial void CloseNative(ulong handle);
+
+        [LibraryImport(Lib, EntryPoint = "llmux_cancel")]
+        private static partial void CancelNative(ulong handle);
 
         [LibraryImport(Lib, EntryPoint = "llmux_call", StringMarshalling = StringMarshalling.Utf8)]
         private static partial IntPtr CallNative(ulong handle, string method, string? requestJson, IntPtr* err);
@@ -297,6 +310,65 @@ namespace Llmux
             }
         }
 
+        // ------------------------------------------------------------ cancel
+
+        /// <summary>
+        /// Aborts every call in flight on this handle, without closing it: the
+        /// handle stays open and the next call starts on a fresh context.
+        ///
+        /// <para><see cref="Call"/> and <see cref="StreamAsync"/> block until
+        /// they finish; this is the only way to abandon one. Call it from
+        /// another thread while a call is blocked and that call returns an
+        /// error — a stream that had already delivered chunks returns with
+        /// "context canceled"; tokens already served are still metered
+        /// either way. It is also safe to call from inside a chunk callback,
+        /// unlike <see cref="Dispose"/> (<c>llmux_close</c>), which must
+        /// never be called from a callback because it waits for the very
+        /// call running it.</para>
+        ///
+        /// <para><b>This is per-HANDLE, not per-call.</b> It aborts every
+        /// call in flight on this gateway, including calls your own code did
+        /// not intend to touch. If you need independent cancellation scopes,
+        /// use one gateway per scope.</para>
+        ///
+        /// <para>No-op if nothing is running on this handle, if you call it
+        /// twice, or if the handle is already closed — mirroring
+        /// <c>llmux_cancel</c>'s own tolerance of an unknown handle, so a
+        /// cleanup path can call this unconditionally without checking
+        /// disposal first.</para>
+        /// </summary>
+        public void Cancel()
+        {
+            bool taken = false;
+            try
+            {
+                // Same DangerousAddRef discipline as Call(): it pins the
+                // handle open for the duration of this call, so a Dispose
+                // racing us on another thread cannot let llmux_cancel run
+                // against a handle that is mid-release. If the add-ref fails
+                // to observe a live handle, or the handle was already
+                // closed, there is nothing to cancel.
+                _handle.DangerousAddRef(ref taken);
+                if (_handle.IsInvalid)
+                {
+                    return;
+                }
+                CancelNative(_handle.Value);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Already closed. llmux_cancel on an unknown handle is
+                // defined as a no-op, so being called after Dispose is too.
+            }
+            finally
+            {
+                if (taken)
+                {
+                    _handle.DangerousRelease();
+                }
+            }
+        }
+
         // ----------------------------------------------------------- streaming
 
         /// <summary>
@@ -311,6 +383,36 @@ namespace Llmux
         /// unbounded channel would look identical and quietly let the whole
         /// completion run — measured, see README.md.</para>
         ///
+        /// <para><b>Cancelling reaches <c>llmux_cancel</c>, not just the
+        /// channel.</b> Between chunks, <c>llmux_stream</c> is blocked in a
+        /// network read on its own dedicated thread — not sitting in the
+        /// callback — so a bounded channel alone cannot stop it: the next
+        /// chunk still has to actually arrive before the callback runs again
+        /// and can be told to stop. This method registers a callback on
+        /// <paramref name="cancellationToken"/> that calls <see cref="Cancel"/>
+        /// the instant the token is cancelled, on whatever thread cancelled
+        /// it, which unblocks that read immediately instead of after the next
+        /// chunk. The registration is disposed on every exit from this
+        /// method; leaving it registered would leak a callback into the
+        /// token for as long as the token itself lives, which for a
+        /// long-lived token (a shutdown token reused across many streams)
+        /// means one leaked callback per stream, forever.</para>
+        ///
+        /// <para>An already-cancelled token throws
+        /// <see cref="OperationCanceledException"/> before any native call is
+        /// made — no gateway work starts on a token that was never going to
+        /// let it run. Cancellation partway through also surfaces as
+        /// <see cref="OperationCanceledException"/>, never as llmux's own
+        /// "context canceled" message: that string is what the C ABI returns,
+        /// but a .NET consumer catches the exception type, not a message it
+        /// would have to string-match.</para>
+        ///
+        /// <para><see cref="Cancel"/> is per-HANDLE: cancelling one
+        /// enumerator aborts every call in flight on this gateway, including
+        /// another <see cref="StreamAsync"/> or <see cref="Call"/> you did
+        /// not mean to touch. Use one gateway per cancellation scope if you
+        /// need independent streams. See README.md.</para>
+        ///
         /// <para>Expect one chunk beyond your last consumed one: cancellation is
         /// prompt, not retroactive.</para>
         /// </summary>
@@ -320,6 +422,11 @@ namespace Llmux
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(requestJson);
+
+            // An already-cancelled token must not cause any native work to
+            // start at all — not the channel, not the pump thread, not
+            // llmux_stream. Fail here, before any of that exists.
+            cancellationToken.ThrowIfCancellationRequested();
 
             // Capacity 1 is load-bearing. See the remarks above.
             var channel = Channel.CreateBounded<string>(new BoundedChannelOptions(1)
@@ -331,6 +438,14 @@ namespace Llmux
 
             var state = new StreamState(channel.Writer, cancellationToken);
             var gcHandle = GCHandle.Alloc(state);
+
+            // The bridge from "the consumer's token fired" to "llmux_cancel
+            // ran". Register(Cancel) is a method-group conversion, not a
+            // closure over local state, and Cancel() is already safe to call
+            // from whatever thread cancelled the token (see its own remarks
+            // on DangerousAddRef). Must be disposed on every exit path — see
+            // the class remarks above.
+            CancellationTokenRegistration registration = cancellationToken.Register(Cancel);
 
             // llmux_stream blocks its thread for the whole stream, so it gets a
             // dedicated one rather than a thread-pool worker held hostage.
@@ -359,11 +474,22 @@ namespace Llmux
                 }
                 catch (LlmuxException) when (state.Stopped)
                 {
-                    // We asked it to stop; its complaint is not news.
+                    // We asked it to stop — via Stop() above, or via the
+                    // token registration calling Cancel() on another thread
+                    // — so llmux's "context canceled" is not news here.
+                    // ReadAllAsync(cancellationToken) already turned a
+                    // cancelled token into an OperationCanceledException for
+                    // the consumer; this is just the pump thread's own
+                    // unwinding, not something to surface a second time.
                 }
                 finally
                 {
                     gcHandle.Free();
+                    // Undisposed, this callback would live for as long as
+                    // the CALLER's token does, not for as long as this
+                    // stream does — a leak for every token that outlives a
+                    // single StreamAsync call.
+                    registration.Dispose();
                 }
             }
         }

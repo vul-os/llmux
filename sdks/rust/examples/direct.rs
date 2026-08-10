@@ -122,8 +122,121 @@ fn run() -> Result<(), Error> {
         Err(e) => println!("bogus:   {e}"),
     }
 
+    // ------------------------------------------------------------ cancel
+    // llmux 0.1.5 added `llmux_cancel`, the only way to abandon a blocked call
+    // without destroying the whole gateway — that is what llmux_close does,
+    // and llmux_close must never be called from inside a callback (it waits
+    // for the very call running it). `Gateway::stream`'s iterator already
+    // reaches it for you: dropping the iterator below, via `break`, is enough.
+    //
+    // This needs a fake that can prove something the `fakeupstream` this
+    // example otherwise points at cannot: how many chunks the upstream
+    // actually produced. `sdks/fake-upstream.py` counts a chunk the moment it
+    // is written to a socket and serves the count at GET /generated, so this
+    // section spawns its own copy of it rather than reusing `path`'s config.
+    // "demo" here, not the outer `model`: this section stands up its own
+    // fake-upstream.py with its own config, which always routes exactly
+    // "demo" — not whatever LLMUX_MODEL happened to be set to for `gw` above.
+    match run_cancellation_demo(&path, "demo") {
+        Ok(()) => {}
+        Err(msg) => println!("cancel:  skipped ({msg})"),
+    }
+
     Ok(())
     // gw drops here: llmux_close(handle).
+}
+
+/// Streams from `sdks/fake-upstream.py` at 100ms/chunk, cancels after 3
+/// delivered chunks by dropping the iterator, and prints what the consumer
+/// saw against what the upstream actually generated.
+///
+/// Returns `Err` with a human-readable reason if `python3` is not available —
+/// the same "skip loudly" convention `find_library` and its callers use for a
+/// missing `libllmux` — rather than failing the whole example over a fixture
+/// dependency.
+fn run_cancellation_demo(lib_path: &std::path::Path, model: &str) -> std::result::Result<(), String> {
+    use std::io::BufRead;
+    use std::process::{Command, Stdio};
+
+    if Command::new("python3").arg("--version").output().is_err() {
+        return Err("python3 not on PATH; sdks/fake-upstream.py needs it".into());
+    }
+
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("..")
+        .join("fake-upstream.py");
+    let mut child = Command::new("python3")
+        .arg(&script)
+        .args(["--text", "one two three four five six seven eight nine ten"])
+        .args(["--chunk-delay-ms", "100"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .map_err(|e| format!("spawn {}: {e}", script.display()))?;
+
+    // Kills the fake on every return path below, including `?`. An example
+    // that leaves a listening python process behind every time someone runs
+    // it is exactly the kind of small leak this crate's own Gateway::Drop
+    // exists to not have.
+    struct KillOnDrop(std::process::Child);
+    impl Drop for KillOnDrop {
+        fn drop(&mut self) {
+            let _ = self.0.kill();
+            let _ = self.0.wait();
+        }
+    }
+    let stdout = child.stdout.take().ok_or("fake-upstream.py had no stdout")?;
+    let _guard = KillOnDrop(child);
+    let mut lines = std::io::BufReader::new(stdout).lines();
+
+    let url = lines
+        .next()
+        .ok_or("fake-upstream.py exited before printing URL")?
+        .map_err(|e| e.to_string())?
+        .strip_prefix("URL ")
+        .ok_or("expected a URL-prefixed line")?
+        .to_string();
+    let config = lines
+        .next()
+        .ok_or("fake-upstream.py exited before printing CONFIG")?
+        .map_err(|e| e.to_string())?
+        .strip_prefix("CONFIG ")
+        .ok_or("expected a CONFIG-prefixed line")?
+        .to_string();
+
+    // A second, independent gateway against the counting fake — not the `gw`
+    // the rest of this example uses, so this section cannot disturb it.
+    let cgw = Gateway::open_at(lib_path, Some(&config)).map_err(|e| e.to_string())?;
+    let req = format!(
+        r#"{{"model":{model},"messages":[{{"role":"user","content":"count to ten"}}],"stream":true}}"#,
+        model = json_string(model)
+    );
+
+    let mut seen = 0usize;
+    {
+        let stream = cgw.stream(&req).map_err(|e| e.to_string())?;
+        for chunk in stream {
+            chunk.map_err(|e| e.to_string())?; // never "context canceled": we cancelled ourselves
+            seen += 1;
+            if seen == 3 {
+                break; // ChunkStream::drop runs here: llmux_cancel, THEN teardown.
+            }
+        }
+    }
+    println!("cancel:  consumer saw {seen} chunks");
+
+    // The handle survives: a fresh call on the SAME handle still works.
+    let _ = cgw.call("models", None).map_err(|e| e.to_string())?;
+    println!("cancel:  handle survives — a fresh call on it still works");
+
+    let generated = llmux::http::get(
+        &format!("{url}/generated"),
+        std::time::Duration::from_secs(2),
+    )
+    .map_err(|e| e.to_string())?;
+    println!("cancel:  GET /generated -> {generated}");
+
+    Ok(())
 }
 
 /// Minimal JSON string quoting, so the example does not need serde to build a

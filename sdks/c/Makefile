@@ -49,8 +49,11 @@ check-lib:
 	  echo "or point at one:  make LLMUX_LIB_DIR=/path/to/dir"; \
 	  exit 1; }
 
-direct_chat: direct_chat.c jsonpeek.c jsonpeek.h | check-lib
-	$(CC) $(CFLAGS) $(INCLUDE) -o $@ direct_chat.c jsonpeek.c \
+## direct_chat now links mini_http.c too: its llmux_cancel demo needs one plain
+## GET against sdks/fake-upstream.py's /generated endpoint, which is outside
+## the ABI entirely and exactly what mini_http was written for.
+direct_chat: direct_chat.c jsonpeek.c jsonpeek.h mini_http.c mini_http.h | check-lib
+	$(CC) $(CFLAGS) $(INCLUDE) -o $@ direct_chat.c jsonpeek.c mini_http.c \
 	  -L$(LLMUX_LIB_DIR) -lllmux -Wl,-rpath,$(LLMUX_LIB_DIR) -lpthread
 ifeq ($(UNAME_S),Darwin)
 	@# `go build -buildmode=c-shared` gives the dylib the bare install name

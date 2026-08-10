@@ -57,7 +57,7 @@
     "lint": "eslint .",
     "check:lint-config": "node scripts/check-lint-config.mjs",
     "pretest": "npm run build",
-    "test": "node --test test/sidecar.test.js",
+    "test": "node --test test/sidecar.test.js test/direct.test.js",
     "example:direct": "npm run build && node examples/direct.ts",
     "example:sidecar": "npm run build && node examples/sidecar.ts"
   },

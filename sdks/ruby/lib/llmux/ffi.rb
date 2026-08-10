@@ -134,6 +134,17 @@ module Llmux
     # the stream and is NOT an error — llmux returns success and writes no
     # message, because you already know you asked it to stop.
     #
+    # Do not put a bare `break` in the block — see the warning on #stream_enum
+    # for why, and return `:stop` instead. Calling `cancel` from inside the
+    # block is also safe (measured; see #cancel) and is the ONLY way to reach
+    # llmux_cancel from a host with no threads at all; here, where a second
+    # Ruby thread can do it too, it is mostly useful when you want the
+    # `context canceled` error back from stream() instead of a quiet stop.
+    #
+    # llmux_cancel is PER HANDLE, not per call: cancelling aborts every call in
+    # flight on this gateway, not just this stream. One gateway per
+    # cancellation scope if you need them independent.
+    #
     # Threads: the callback runs on the thread that called stream, synchronously
     # (asserted in ffi/ctest/smoke.c by comparing pthread ids). Fiddle releases
     # the GVL for the call and Fiddle::Closure reacquires it around your block
@@ -187,6 +198,69 @@ module Llmux
       callback&.free if callback.respond_to?(:free)
     end
 
+    # Stream a chat completion as an Enumerator instead of a block — for
+    # `each`, `lazy`, `take_while`, external `#next`, or a plain `for` loop.
+    # Abandoning it — `break` out of `each`, or any other early exit — reaches
+    # llmux_cancel, same guarantee #stream gives you through its own return
+    # value, in the shape Ruby programmers reach for first:
+    #
+    #   llmux.stream_enum("chat", model: "…", messages: [...]).each do |chunk, raw|
+    #     print chunk.dig("choices", 0, "delta", "content")
+    #     break if enough?
+    #   end
+    #
+    # Why `break` is safe HERE but a bare `break` inside #stream's block is
+    # not: #stream calls your block directly from inside the FFI trampoline,
+    # so `break` there would have to unwind past the trampoline and the blocked
+    # llmux_stream C frame to reach #stream's own call site — undefined
+    # territory, same family of hazard as raising out of the block (see the
+    # comment above on that). Here your `break` targets `each`, not `stream`,
+    # so the block you actually write never sits inside the trampoline at all:
+    # it runs one level further out, inside Enumerator::Yielder#<<, called from
+    # the tiny relay block below. Measured on Ruby 4.0.5, against the same
+    # fake upstream as #cancel (100 ms/chunk, ten words): breaking after 3
+    # chunks ran this method's `ensure` immediately — not on GC, right there as
+    # `each` unwound — with the consumer having seen exactly 3 chunks and the
+    # upstream's `/generated` never climbing past 3 afterward.
+    #
+    # That `ensure` calls cancel() unconditionally, including on a stream that
+    # ran to completion, where it is a documented no-op — belt and suspenders
+    # rather than trusting the unwind above to have already stopped the
+    # provider by itself.
+    def stream_enum(method, request = nil, **kwargs)
+      request = kwargs unless kwargs.empty?
+      Enumerator.new do |y|
+        stream(method, request) { |chunk, raw| y << [chunk, raw] }
+      ensure
+        cancel
+      end
+    end
+
+    # Abort every call in flight on this handle, without closing it: the handle
+    # stays open and usable, and the next call starts on a fresh context.
+    #
+    # This is the ONLY way to get a blocked call() or stream() to return early
+    # from outside the call itself. Measured on this machine, against a fake
+    # upstream sleeping 100 ms per chunk (`sdks/fake-upstream.py`), cancelling
+    # a ten-word stream after 3 delivered chunks:
+    #
+    #   from a second thread, while the streaming thread was blocked in
+    #   @fn_stream.call            -> rc=-1, err="context canceled",
+    #                                  consumer saw exactly 3 chunks,
+    #                                  cancel-call-to-thread-join: ~1.5 ms
+    #
+    # It is safe to call from another thread AND from inside the chunk block
+    # itself (see #stream) — cancel() takes no lock of its own, deliberately,
+    # for the same reason #call and #stream do not: a call in flight must stay
+    # reachable while it is in flight. Cancelling an unknown or idle handle is
+    # a no-op, so cleanup paths can call it blindly, same as #close.
+    def cancel
+      return if @handle.nil? || @handle.zero?
+
+      @fn_cancel.call(@handle)
+      nil
+    end
+
     # Release the gateway, aborting any stream still running on it. Idempotent,
     # so cleanup paths can call it blindly.
     def close
@@ -224,6 +298,7 @@ module Llmux
       @fn_free = Fiddle::Function.new(@dl["llmux_free"], [PTR], VOID, name: "llmux_free")
       @fn_stream = Fiddle::Function.new(@dl["llmux_stream"], [U64, PTR, PTR, PTR, PTR, PTR], INT,
                                         name: "llmux_stream")
+      @fn_cancel = Fiddle::Function.new(@dl["llmux_cancel"], [U64], VOID, name: "llmux_cancel")
     rescue Fiddle::DLError => e
       raise Error, "#{@library_path} is missing a symbol the ABI promises: #{e.message}"
     end

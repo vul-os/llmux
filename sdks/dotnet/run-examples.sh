@@ -7,6 +7,10 @@
 #   * the gateway binary     (go build ./cmd/llmux)   for the sidecar example
 #   * a fake OpenAI upstream (ffi/fakeupstream)       for both, so neither
 #     needs an API key or a network
+#   * the cancellation harness (sdks/fake-upstream.py) for the direct example's
+#     llmux_cancel demo — ffi/fakeupstream has no per-chunk delay and no
+#     GET /generated counter, so it cannot answer "did cancelling actually
+#     stop the upstream?" the way this one can. Direct-mode only.
 #
 # Fails closed: no dotnet, a library that would not build, or an example that
 # exits non-zero is a FAILURE, never a skip.
@@ -23,18 +27,25 @@ export DOTNET_CLI_TELEMETRY_OPTOUT=1
 export DOTNET_NOLOGO=1
 
 fail() { echo "run-examples: FAIL — $*" >&2; exit 1; }
+runs_direct() { [ "${which}" != "sidecar" ]; }
 
 command -v go >/dev/null 2>&1 || fail "go is not on PATH"
 command -v dotnet >/dev/null 2>&1 || fail "dotnet is not on PATH"
+if runs_direct; then
+  command -v python3 >/dev/null 2>&1 || fail "python3 is not on PATH (needed for the cancellation harness)"
+fi
 echo "run-examples: dotnet $(dotnet --version), go $(go version | awk '{print $3}')"
 
 tmp="$(mktemp -d)"
 fake_pid=""
+cancel_pid=""
 cleanup() {
-  if [ -n "${fake_pid}" ] && kill -0 "${fake_pid}" 2>/dev/null; then
-    kill "${fake_pid}" 2>/dev/null || true
-    wait "${fake_pid}" 2>/dev/null || true
-  fi
+  for pid in "${fake_pid}" "${cancel_pid}"; do
+    if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+      kill "${pid}" 2>/dev/null || true
+      wait "${pid}" 2>/dev/null || true
+    fi
+  done
   rm -rf "${tmp}"
 }
 trap cleanup EXIT
@@ -80,6 +91,28 @@ done
 printf '%s' "${config}" > "${tmp}/llmux.json"
 echo "run-examples: upstream $(sed -n 's/^URL //p' "${tmp}/fake.out" | head -1)"
 
+# --- the cancellation-measurement harness -------------------------------------
+cancel_config=""
+cancel_url=""
+if runs_direct; then
+  python3 "${root}/sdks/fake-upstream.py" \
+    --text "one two three four five six seven eight nine ten" \
+    --chunk-delay-ms 100 >"${tmp}/cancel-fake.out" 2>&1 &
+  cancel_pid=$!
+  for _ in $(seq 1 200); do
+    if grep -q '^CONFIG ' "${tmp}/cancel-fake.out" 2>/dev/null; then
+      cancel_config="$(sed -n 's/^CONFIG //p' "${tmp}/cancel-fake.out" | head -1)"
+      cancel_url="$(sed -n 's/^URL //p' "${tmp}/cancel-fake.out" | head -1)"
+      break
+    fi
+    kill -0 "${cancel_pid}" 2>/dev/null \
+      || { cat "${tmp}/cancel-fake.out" >&2; fail "the cancellation harness died"; }
+    sleep 0.05
+  done
+  [ -n "${cancel_config}" ] || fail "the cancellation harness never announced a CONFIG"
+  echo "run-examples: cancellation harness ${cancel_url} (100 ms/chunk, 10 words)"
+fi
+
 # --- build -------------------------------------------------------------------
 dotnet build "${here}/examples/Examples.csproj" -v q -c Release -o "${tmp}/out" \
   >"${tmp}/dotnet.log" 2>&1 || { cat "${tmp}/dotnet.log" >&2; fail "the examples did not build"; }
@@ -92,6 +125,8 @@ run() {
   LLMUX_CONFIG_JSON="${config}" \
   LLMUX_BINARY="${bin}" \
   LLMUX_CONFIG="${tmp}/llmux.json" \
+  LLMUX_CANCEL_CONFIG_JSON="${cancel_config}" \
+  LLMUX_CANCEL_URL="${cancel_url}" \
     dotnet "${tmp}/out/llmux-examples.dll" "$1" || status=1
 }
 

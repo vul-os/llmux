@@ -101,6 +101,7 @@ const SYMBOLS = {
   llmux_abi_version: { parameters: [], result: "pointer" },
   llmux_new: { parameters: ["buffer", "buffer"], result: "u64" },
   llmux_close: { parameters: ["u64"], result: "void" },
+  llmux_cancel: { parameters: ["u64"], result: "void" },
   llmux_call: { parameters: ["u64", "buffer", "buffer", "buffer"], result: "pointer" },
   llmux_call_async: {
     name: "llmux_call",
@@ -210,6 +211,23 @@ export interface ChatChunk {
 
 export type Method = "chat" | "embed" | "models";
 
+export interface StreamOptions {
+  /**
+   * Abort this stream early. Wired to `llmux_cancel`, which interrupts the
+   * blocked native call directly rather than waiting for it to notice a local
+   * flag at the next chunk boundary — see {@link Gateway.cancel}.
+   *
+   * An already-aborted signal rejects before any native call is made: no
+   * `llmux_stream`, no allocation, nothing to unwind.
+   *
+   * `llmux_cancel` is per-HANDLE, not per-stream: aborting this signal aborts
+   * EVERY call in flight on this gateway, including some other stream you
+   * started on the same `Gateway`. If independent cancellation matters, give
+   * each cancellation scope its own `Gateway.open()`.
+   */
+  signal?: AbortSignal;
+}
+
 /**
  * What {@link Gateway.stream} returns: an async generator with one extra
  * property.
@@ -217,10 +235,12 @@ export type Method = "chat" | "embed" | "models";
  * `nativeChunks` counts how many times the C callback has actually fired, which
  * is NOT the same as how many chunks you consumed. Nothing back-pressures the
  * library: `llmux_stream` keeps calling the callback as fast as the provider
- * sends, and your `break` only takes effect at the next chunk boundary AFTER
- * the flag is set. Compare it with your own count if you care whether the
- * tokens you stopped reading were nonetheless generated and metered — they
- * were. See README.md, "What `break` actually stops".
+ * sends, and cancelling only takes effect at the next chunk boundary AFTER a
+ * `llmux_cancel` lands — the wait for that boundary is now bounded by an
+ * interrupted network read rather than a full chunk delay, but it is not zero.
+ * Compare it with your own count if you care whether the tokens you stopped
+ * reading were nonetheless generated and metered — they were. See README.md,
+ * "What cancelling actually stops".
  */
 export interface ChunkStream extends AsyncGenerator<ChatChunk, void, unknown> {
   readonly nativeChunks: number;
@@ -315,12 +335,28 @@ export class Gateway implements Disposable {
    *
    * ```ts
    * for await (const chunk of gw.stream({ model, messages })) { ... }
+   *
+   * const controller = new AbortController();
+   * for await (const chunk of gw.stream({ model, messages }, { signal: controller.signal })) {
+   *   if (shouldStop(chunk)) controller.abort();
+   * }
    * ```
    *
-   * `break` stops the stream: the C callback returns non-zero, llmux stops at
-   * the next chunk boundary, and `llmux_stream` still returns 0. That is not an
-   * error — you decided to stop, so llmux does not hand your decision back to
-   * you as a failure. Tokens already served are metered either way.
+   * Abandoning the iterator — `break`, a `return`, an exception in the loop
+   * body, or `options.signal` firing — reaches `llmux_cancel`, so the native
+   * call is actually interrupted rather than left to notice a local flag at its
+   * next chunk boundary. That boundary used to be a whole provider chunk-delay
+   * away: a consumer that `break`s after 3 chunks of a slow stream no longer
+   * costs the upstream a 4th one just because a read was already in flight.
+   *
+   * `break`ing out yourself is not an error: llmux does not hand your own
+   * decision back to you as a failure, the same way a callback returning
+   * non-zero is not one. An `options.signal` that fires while you are still
+   * awaiting a chunk is different — that is somebody else's decision reaching
+   * you asynchronously — so it rejects the pending `next()` with the signal's
+   * abort reason (an `AbortError` `DOMException` if none was given), the error
+   * every web-platform consumer already knows to catch. Tokens already served
+   * are metered either way; see "What cancelling actually stops" in README.md.
    *
    * How this stays off the event loop: `llmux_stream` is declared `nonblocking`,
    * so it runs on a Deno blocking-task thread while the isolate keeps going, and
@@ -328,9 +364,9 @@ export class Gateway implements Disposable {
    * the library and valid only for the duration of the callback, so it is copied
    * into a JS string there and never held as a pointer.
    */
-  stream(request: Record<string, unknown> | string): ChunkStream {
+  stream(request: Record<string, unknown> | string, options: StreamOptions = {}): ChunkStream {
     const counter = { n: 0 };
-    const gen = this.#streamImpl(request, counter) as ChunkStream;
+    const gen = this.#streamImpl(request, counter, options.signal) as ChunkStream;
     Object.defineProperty(gen, "nativeChunks", { get: () => counter.n, enumerable: true });
     return gen;
   }
@@ -338,7 +374,16 @@ export class Gateway implements Disposable {
   async *#streamImpl(
     request: Record<string, unknown> | string,
     counter: { n: number },
+    signal: AbortSignal | undefined,
   ): AsyncGenerator<ChatChunk, void, unknown> {
+    // An already-aborted signal fails before ANY work starts — no llmux_stream
+    // call, no allocation, nothing to unwind. This has to be the very first
+    // thing that runs in the generator body, before `this.#live()` even, so
+    // that no native call is ever made on behalf of a request nobody wants.
+    if (signal?.aborted) {
+      throw signal.reason ?? new DOMException("stream aborted before it started", "AbortError");
+    }
+
     const lib = this.#lib;
     const h = this.#live();
     const body = typeof request === "string"
@@ -350,12 +395,41 @@ export class Gateway implements Disposable {
     let stop = 0;
     let done = false;
     let failure: Error | null = null;
+    // Set once WE ask llmux to stop this call — from the `finally` below (a
+    // `break`/`return`/`throw` on the consumer's side) or from `onAbort`. A
+    // cancelled llmux_stream returns rc=-1 with err "context canceled"
+    // (ffi/include/llmux.h, on llmux_cancel) — indistinguishable, on the wire,
+    // from a genuine failure that happens to say the same words. This flag is
+    // how the code below tells "you asked for this" from "something broke".
+    let cancelledByUs = false;
+    // Set only by onAbort, never by the plain break/return/throw path: the
+    // reason a still-awaiting consumer's `next()` should reject with. Left
+    // undefined means "nobody outside this iterator asked to stop", which is
+    // exactly when stopping must NOT be surfaced as an error.
+    let abortReason: unknown = undefined;
 
     const ping = () => {
       const w = wake;
       wake = null;
       w?.();
     };
+
+    // Both an abandoned iterator and a fired AbortSignal feed into this one
+    // function so `cancelledByUs` is set exactly once and llmux_cancel is
+    // asked at most once per stream — it is documented as a no-op on repeat,
+    // but there is no reason to rely on that when a flag already avoids it.
+    const cancelNative = () => {
+      if (cancelledByUs) return; // already asked; llmux_cancel is a no-op on repeat, but skip the call anyway
+      cancelledByUs = true;
+      stop = 1; // stop queuing anything the callback delivers after this point
+      lib.symbols.llmux_cancel(h);
+    };
+    const onAbort = () => {
+      abortReason = signal!.reason ?? new DOMException("stream aborted", "AbortError");
+      cancelNative();
+      ping(); // wake a consumer parked on an empty queue instead of making it wait for the native call to unwind
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
 
     const cb = new Deno.UnsafeCallback(
       { parameters: ["pointer", "pointer"], result: "i32" } as const,
@@ -377,7 +451,35 @@ export class Gateway implements Disposable {
     const call = lib.symbols
       .llmux_stream(h, cstr("chat"), body, cb.pointer, null, err)
       .then((rc) => {
-        if (rc !== 0) failure = takeError(lib, err, "llmux_stream failed");
+        if (rc === 0) return;
+        const e = takeError(lib, err, "llmux_stream failed");
+        // "context canceled" is the one error llmux_cancel is documented to
+        // produce, and llmux_cancel is the only thing that produces it. If we
+        // are the ones who called it — from this stream's own break/return/
+        // throw, or from the AbortSignal this stream was given — that is our
+        // own decision coming back to us, not a failure to surface, the same
+        // principle the header already states for a callback returning
+        // non-zero.
+        if (cancelledByUs) {
+          if (e.message === "context canceled") return;
+          failure = e; // a real failure raced our own cancel; do not hide it
+          return;
+        }
+        if (e.message === "context canceled") {
+          // We did not ask for this. Something else on this GATEWAY did —
+          // llmux_cancel is per-handle (see the per-handle caveat in
+          // README.md), so gw.cancel() called from unrelated code, or the
+          // handle's own close(), reaches every stream on it, this one
+          // included. Surfacing this rather than swallowing it is deliberate:
+          // hiding it would look identical to this stream finishing on its
+          // own, and the consumer here never decided to stop.
+          failure = new Error(
+            "llmux_cancel was called on this gateway while this stream was still running " +
+              "(it aborts every call in flight on the handle, not just one — see README.md)",
+          );
+          return;
+        }
+        failure = e;
       })
       .catch((e: unknown) => {
         failure = e instanceof Error ? e : new Error("llmux_stream rejected with a non-Error value");
@@ -395,20 +497,63 @@ export class Gateway implements Disposable {
           continue;
         }
         if (done) break;
+        // An abort does not wait for the native call to unwind before telling
+        // the consumer why: whatever is already queued drains first (already
+        // delivered chunks stay delivered), then this breaks out immediately
+        // rather than parking again.
+        if (abortReason !== undefined) break;
         await new Promise<void>((resolve) => {
           wake = resolve;
         });
       }
       if (failure) throw failure;
+      if (abortReason !== undefined) {
+        throw abortReason instanceof Error
+          ? abortReason
+          : new DOMException(String(abortReason), "AbortError");
+      }
     } finally {
       // Reached on `break`/`throw` as well as normal completion. Ask llmux to
-      // stop, then wait for the native call to unwind BEFORE closing the
-      // callback — closing it while the library still holds the pointer is how
-      // this becomes a segfault rather than an exception.
-      stop = 1;
+      // stop (unless it already has finished on its own), then wait for the
+      // native call to unwind BEFORE closing the callback — closing it while
+      // the library still holds the pointer is how this becomes a segfault
+      // rather than an exception.
+      signal?.removeEventListener("abort", onAbort);
+      if (!done) cancelNative();
       await call;
       cb.close();
     }
+  }
+
+  /**
+   * Aborts every call in flight on this handle — every `stream()` and every
+   * `call()`/`callSync()` currently running, not just one of them, because
+   * `llmux_cancel` is per-HANDLE. The handle itself stays open and usable: the
+   * next call starts on a fresh context, and `llmux_call(h, "models", ...)`
+   * right after a cancel succeeds normally.
+   *
+   * Safe to call from another thread and safe to call from inside a chunk
+   * callback — unlike {@link close}, which must never be called from a
+   * callback because it waits (up to a few seconds) on the very call running
+   * it. A no-op if nothing is running on this handle, and a no-op if the
+   * handle is already closed: mirrors `llmux_cancel`'s own contract of being
+   * harmless on an unknown handle, so a caller racing this against `close()`
+   * from another thread never has to guard the order.
+   *
+   * This is the low-level escape hatch. Reach for `stream()`'s `signal` option
+   * first — it gives you a per-stream idiom without you having to remember
+   * that this call reaches every stream on the gateway, not just one.
+   *
+   * A `stream()` that asked to be cancelled itself (via `break`, `return`, an
+   * exception, or its own `signal`) never throws for it — see `stream()`'s
+   * doc. A `stream()` that did NOT ask for this and gets caught in the blast
+   * radius anyway throws instead, on purpose: silently ending that consumer's
+   * loop would look identical to it finishing normally, which is exactly the
+   * kind of paper-over that would hide the one thing this method's docs are
+   * trying to warn you about.
+   */
+  cancel(): void {
+    this.#lib.symbols.llmux_cancel(this.#h);
   }
 
   /** Release the gateway, aborting any stream still running on it. Idempotent. */

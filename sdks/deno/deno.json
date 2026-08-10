@@ -7,7 +7,7 @@
     "check": "deno check mod.ts examples/direct.ts examples/sidecar.ts",
     "lint": "deno lint",
     "fmt:check": "deno fmt --check",
-    "example:direct": "deno run --allow-ffi --allow-run --allow-env --allow-read examples/direct.ts",
+    "example:direct": "deno run --allow-ffi --allow-run --allow-env --allow-read --allow-net examples/direct.ts",
     "example:sidecar": "deno run --allow-run --allow-net --allow-env --allow-read --allow-write examples/sidecar.ts"
   },
   "fmt": {

@@ -7,7 +7,7 @@ outcome on a platform nobody has built one for. Set LLMUX_LIBRARY to force a
 particular one.
 
 What is worth testing in a ctypes binding is not "does chat work" — ffi/ tests
-that in Go and in C. It is the four things a binding gets wrong:
+that in Go and in C. It is the five things a binding gets wrong:
 
   1. Ownership. llmux_call returns malloc'd memory that only llmux_free may
      release; a c_char_p restype would silently leak every result.
@@ -16,17 +16,30 @@ that in Go and in C. It is the four things a binding gets wrong:
   3. The callback contract. Which thread it runs on, and what happens to an
      exception raised inside it.
   4. Abort. A callback that says stop must stop, and must not be an error.
+  5. Cancellation. Abandoning stream_iter() (break, close(), garbage
+     collection) or calling cancel() explicitly must reach llmux_cancel and
+     actually stop the provider — not just stop delivering chunks locally,
+     which is the bug the Cancellation tests below exist to catch. Proving it
+     needs a provider slow enough to interrupt mid-stream and honest enough to
+     report what it generated, which fake_openai's FakeUpstream is not built
+     for (no delay, no counter) — the Cancellation tests use
+     sdks/fake-upstream.py instead, the harness shared with every other
+     language's SDK for this exact measurement.
 """
 
 from __future__ import annotations
 
 import ctypes
 import json
+import subprocess
 import sys
 import threading
+import time
 import unittest
 import unittest.mock
+import urllib.request
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -293,6 +306,186 @@ class Streaming(DirectTestBase):
         with self.gateway() as gw:
             with self.assertRaises(LLMuxError):
                 list(gw.stream_iter({"model": "no-such-model", "messages": []}))
+
+
+class Cancellation(unittest.TestCase):
+    """llmux_cancel, and the bug it exists to fix.
+
+    fake_openai.FakeUpstream (everything above this class) answers instantly
+    and counts nothing — its only job is giving the ctypes BINDING a request
+    path to exercise. Whether a cancellation actually reaches the provider is
+    a question about the whole stack, not the binding, and answering it needs
+    a provider slow enough to interrupt mid-stream and honest enough to say
+    what it wrote: sdks/fake-upstream.py, the harness shared with every other
+    language's SDK for exactly this measurement. It serves ten words at
+    ``--chunk-delay-ms 100`` and counts chunks at ``GET /generated`` — see its
+    module docstring for why that count only rises for chunks actually
+    written to a socket, and stops the instant the client disconnects.
+
+    Also stdlib-only, also skipped (via _library_or_skip) when no libllmux is
+    resolvable on this machine, same as every other class here.
+    """
+
+    TEXT = "one two three four five six seven eight nine ten"
+    CHAT = {"model": "demo", "messages": [{"role": "user", "content": "go"}]}
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.library = _library_or_skip()
+        harness = Path(__file__).resolve().parents[2] / "fake-upstream.py"
+        cls.proc = subprocess.Popen(
+            [sys.executable, str(harness), "--chunk-delay-ms", "100", "--text", cls.TEXT],
+            stdout=subprocess.PIPE,
+            text=True,
+        )
+        cls.url = None
+        cls.config = None
+        # The harness prints exactly three lines (URL, CONFIG, TEXT) and then
+        # starts serving — see its module docstring. Stop reading at TEXT
+        # rather than looping on readline() forever if it never appears.
+        for _ in range(200):
+            line = cls.proc.stdout.readline()
+            if not line:
+                break
+            if line.startswith("URL "):
+                cls.url = line[len("URL "):].strip()
+            elif line.startswith("CONFIG "):
+                cls.config = line[len("CONFIG "):].strip()
+            elif line.startswith("TEXT "):
+                break
+        if not cls.url or not cls.config:
+            raise unittest.SkipTest("sdks/fake-upstream.py did not start")
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        if hasattr(cls, "proc"):
+            cls.proc.terminate()
+            try:
+                cls.proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:  # pragma: no cover - defensive
+                cls.proc.kill()
+
+    def gateway(self) -> Gateway:
+        gw = Gateway(self.config, library=self.library)
+        self.addCleanup(gw.close)
+        return gw
+
+    def _generated(self) -> int:
+        with urllib.request.urlopen(f"{self.url}/generated") as resp:
+            return json.load(resp)["generated"]
+
+    def test_cancel_from_another_thread_unblocks_a_blocked_stream(self):
+        """Fact measured with the coordinator's C probe, reproduced here:
+        cancelling from another thread while `stream` blocks returns the
+        blocked call with `context canceled` well before the 12-chunk stream
+        (10 words + a finish frame + a usage frame) would end on its own —
+        ~1.2s of chunk delay against an assertion of well under a second.
+
+        This is possible only because a ctypes.CDLL call — llmux_stream is
+        bound via CDLL, not PyDLL — releases the GIL for the duration of the
+        native call. A PYFUNCTYPE/PyDLL binding would hold the GIL through
+        the block and this second thread could never even reach the call to
+        cancel(), let alone have it take effect.
+        """
+        gw = self.gateway()
+        seen: list[Any] = []
+        raised: list[BaseException] = []
+
+        def blocked() -> None:
+            try:
+                gw.stream(self.CHAT, seen.append)
+            except BaseException as exc:  # noqa: BLE001 - inspected below
+                raised.append(exc)
+
+        worker = threading.Thread(target=blocked)
+        t0 = time.monotonic()
+        worker.start()
+        deadline = time.monotonic() + 5.0
+        while len(seen) < 3 and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertGreaterEqual(len(seen), 3, "the upstream never delivered 3 chunks to cancel against")
+        gw.cancel()
+        worker.join(timeout=5)
+        elapsed = time.monotonic() - t0
+
+        self.assertFalse(worker.is_alive(), "cancel() did not unblock the blocked stream")
+        self.assertEqual(len(raised), 1, "stream() must raise, not return quietly, on a cancel")
+        self.assertIsInstance(raised[0], LLMuxError)
+        self.assertIn("context canceled", str(raised[0]))
+        self.assertLess(elapsed, 0.8, "cancel() took as long as letting the stream run to completion")
+
+    def test_cancel_is_safe_from_inside_the_chunk_callback(self):
+        """Fact measured with the coordinator's C probe, reproduced here:
+        cancelling from inside the callback that is currently running does
+        not deadlock, unlike close() (which must never be called from a
+        callback because it waits on the very call running the callback).
+        This is the only cancellation path open to a single-threaded host."""
+        gw = self.gateway()
+        seen: list[Any] = []
+
+        def on_chunk(chunk: Any) -> None:
+            seen.append(chunk)
+            if len(seen) == 3:
+                gw.cancel()
+
+        with self.assertRaises(LLMuxError) as caught:
+            gw.stream(self.CHAT, on_chunk)
+        self.assertIn("context canceled", str(caught.exception))
+        self.assertEqual(len(seen), 3)
+
+    def test_handle_survives_a_cancel(self):
+        """Fact measured with the coordinator's C probe: the handle stays
+        usable immediately after a cancel, and a fresh call on it succeeds."""
+        gw = self.gateway()
+        gw.cancel()  # nothing running: a documented no-op, not an error
+        self.assertTrue(gw.models())
+
+    def test_stream_iter_break_stops_the_upstream_not_just_the_consumer(self):
+        """The bug this task exists to fix.
+
+        The previous stream_iter() only set a local flag that its callback
+        checked before forwarding the NEXT chunk to Python — that stops
+        chunks from reaching the consumer, but does nothing to the
+        connection, so the provider kept generating (and llmux kept
+        metering) chunks the consumer had already walked away from. This
+        polls /generated because the provider's own disconnect detection
+        happens on its next scheduled write, not the instant cancel() is
+        called — see sdks/fake-upstream.py's _peer_gone for why that check
+        cannot be synchronous with the client's disconnect.
+
+        The upstream process (and so its /generated counter) is shared across
+        every test in this class, hence the baseline: what matters is how
+        much THIS stream added, not the running total.
+        """
+        baseline = self._generated()
+        gw = self.gateway()
+        count = 0
+        for _ in gw.stream_iter(self.CHAT):
+            count += 1
+            if count == 3:
+                break
+        self.assertEqual(count, 3, "the consumer did not see 3 chunks before breaking")
+
+        deadline = time.monotonic() + 2.0
+        added = self._generated() - baseline
+        while added > 3 and time.monotonic() < deadline:
+            time.sleep(0.05)
+            added = self._generated() - baseline
+        self.assertEqual(
+            added,
+            3,
+            f"stream_iter's break did not reach llmux_cancel: the upstream generated {added} "
+            "chunks for this stream, not 3 -- it kept running after the consumer walked away",
+        )
+
+    def test_stream_iter_full_run_generates_all_twelve(self):
+        """The baseline the cancellation number above is measured against:
+        ten words plus a finish frame plus a usage frame, uninterrupted."""
+        baseline = self._generated()
+        gw = self.gateway()
+        chunks = list(gw.stream_iter(self.CHAT))
+        self.assertEqual("".join(_delta(c) for c in chunks), self.TEXT)
+        self.assertEqual(self._generated() - baseline, 12)
 
 
 def _delta(chunk: dict) -> str:

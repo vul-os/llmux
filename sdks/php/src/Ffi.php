@@ -29,7 +29,7 @@ namespace Llmux;
 final class Ffi
 {
     /**
-     * The six functions of the C ABI, transcribed from ffi/include/llmux.h.
+     * The seven functions of the C ABI, transcribed from ffi/include/llmux.h.
      * PHP's FFI parser does not run the C preprocessor, so the header itself
      * (with its #ifndef and #include) cannot be handed to FFI::cdef.
      */
@@ -37,6 +37,7 @@ final class Ffi
         const char* llmux_abi_version(void);
         uint64_t llmux_new(const char* config_json, char** err);
         void llmux_close(uint64_t h);
+        void llmux_cancel(uint64_t h);
         char* llmux_call(uint64_t h, const char* method, const char* request_json, char** err);
         void llmux_free(char* p);
         typedef int (*llmux_chunk_cb)(const char* chunk_json, void* user_data);
@@ -191,7 +192,16 @@ final class Ffi
      * Stream a chat completion. $onChunk is called once per
      * `chat.completion.chunk`, on THIS thread, before stream() returns.
      * Return false (or a non-zero int) from $onChunk to stop early — that is
-     * not an error.
+     * not an error, and (measured, see README.md's Cancellation section) it
+     * already stops the provider too, not just delivery to your callback.
+     *
+     * Calling cancel() from inside $onChunk also works (measured) and is the
+     * ONLY way to reach llmux_cancel from a plain callback-based stream():
+     * PHP's common CLI/FPM builds have no threads, so there is no "call it
+     * from another thread" option the way there is in Ffi::cancel()'s own doc
+     * comment for languages that have one. The difference from returning
+     * false is the return value: cancel() makes stream() throw with
+     * "context canceled" instead of returning quietly.
      *
      * @param array<string,mixed>|string $request
      * @param callable(array<string,mixed>,string):mixed $onChunk receives the
@@ -256,6 +266,146 @@ final class Ffi
         }
 
         return $count;
+    }
+
+    /**
+     * Stream a chat completion as a Generator instead of a callback — for
+     * `foreach`, `iterator_to_array()`, or anywhere PHP's own iteration
+     * protocol fits better than passing in a function. Abandoning it —
+     * `break` out of the foreach, `return` out of the loop, an exception that
+     * skips past it — reaches llmux_cancel, which is what a PHP developer
+     * expects `foreach ... break` to do and what stream()'s plain callback
+     * form cannot give you (see the warning on stream()).
+     *
+     *   foreach ($llmux->streamGenerator('chat', $request) as [$chunk, $raw]) {
+     *       echo $chunk['choices'][0]['delta']['content'] ?? '';
+     *       if ($enough) {
+     *           break;
+     *       }
+     *   }
+     *
+     * llmux_stream is one blocking call that invokes its callback
+     * synchronously and does not return until the stream ends or the callback
+     * says stop — there is no native way to pause it mid-flight and hand a
+     * value to a `yield`, because a `yield` only works lexically inside the
+     * generator function itself, never inside a nested closure. This bridges
+     * the two with a Fiber (PHP >= 8.1): the blocking llmux_stream call runs
+     * INSIDE the fiber, its C callback suspends the fiber with each chunk, and
+     * this method resumes the fiber once per value it yields out. Suspending a
+     * fiber parks its entire call stack, not just PHP-level bookkeeping, so
+     * what actually gets "paused" between yields is the whole native call —
+     * the FFI trampoline and the blocked llmux_stream frame underneath it —
+     * still open, still holding the connection, exactly as if nobody had
+     * touched it.
+     *
+     * That parking is also why `break` is safe HERE in a way it is not inside
+     * stream()'s own callback: the code in your foreach body runs in THIS
+     * generator function, one level outside the fiber — `break` only has to
+     * unwind this function's own `finally`, never the FFI trampoline or the
+     * Go call frame the way a bare `break` placed directly inside stream()'s
+     * callback would have to.
+     *
+     * Measured on PHP 8.5.9 against sdks/fake-upstream.py (100 ms/chunk, ten
+     * words): breaking a foreach after 3 chunks ran the `finally` below
+     * immediately, in the same request that broke the loop — PHP runs a
+     * generator's pending `finally` as soon as the generator becomes
+     * unreachable, which for a `foreach` target with no other reference is
+     * the moment the loop exits, not "eventually, whenever the garbage
+     * collector gets to it." cancel()-to-fiber-terminated took under 1 ms, and
+     * the upstream's own `/generated` read exactly 3 afterward — see
+     * README.md's Cancellation section for the full numbers.
+     *
+     * @param array<string,mixed>|string $request
+     * @return \Generator<int,array{0:array<string,mixed>,1:string}>
+     */
+    public function streamGenerator(string $method, $request): \Generator
+    {
+        $this->assertOpen();
+
+        $json = \is_string($request) ? $request : self::encode($request);
+
+        // Everything the fiber's closure touches ($this->ffi, $this->handle)
+        // is read once here and captured, the same as any other use($this).
+        $fiber = new \Fiber(function () use ($method, $json): array {
+            $trampoline = function ($chunkJson, $userData) {
+                $raw = \is_string($chunkJson) ? $chunkJson : \FFI::string($chunkJson);
+                \Fiber::suspend($raw);
+
+                return 0;
+            };
+            $err = $this->ffi->new('char*');
+            $rc = $this->ffi->llmux_stream($this->handle, $method, $json, $trampoline, null, \FFI::addr($err));
+
+            return [$rc, $rc === 0 ? null : $this->takeError($err)];
+        });
+
+        try {
+            $raw = $fiber->start();
+            while (!$fiber->isTerminated()) {
+                $decoded = \json_decode($raw, true);
+                yield [\is_array($decoded) ? $decoded : [], $raw];
+                $raw = $fiber->resume();
+            }
+        } finally {
+            if (!$fiber->isTerminated()) {
+                // Abandoned mid-stream. A suspended Fiber cannot simply be
+                // dropped — PHP raises FiberError out of a suspended Fiber's
+                // own destructor — and the llmux_stream call parked inside
+                // this one is still open, so cancel() (not close(), which
+                // would try to wait on this very call) is what gets it to
+                // return. Doing that HERE, in this finally, rather than
+                // leaving it for whenever the fiber object itself would be
+                // collected, is what makes the cancellation immediate instead
+                // of merely eventual.
+                $this->cancel();
+                while (!$fiber->isTerminated()) {
+                    $fiber->resume();
+                }
+            }
+        }
+
+        [$rc, $err] = $fiber->getReturn();
+        if ($rc !== 0 && $err !== 'context canceled') {
+            // A cancellation this method asked for, above, is not a failure
+            // worth throwing over; any OTHER error (a real upstream failure)
+            // still is.
+            throw new LlmuxException("llmux_stream({$method}): {$err}");
+        }
+    }
+
+    /**
+     * Abort every call in flight on this handle, without closing it: the
+     * handle stays open and usable, and the next call starts on a fresh
+     * context.
+     *
+     * This is the only way to get a blocked call() or stream() to return
+     * early from OUTSIDE the call itself — which matters here specifically
+     * because PHP's common CLI/FPM builds have no threads, so "outside the
+     * call" can only mean a Fiber that has stepped away from it (see
+     * streamGenerator()) or a pcntl signal handler (see README.md — measured,
+     * and more fragile than the Fiber path). Calling cancel() from INSIDE a
+     * stream() callback also works and is simpler when that is all you need.
+     *
+     * Measured on this machine, against a fake upstream sleeping 100 ms per
+     * chunk (sdks/fake-upstream.py), cancelling a ten-word stream after 3
+     * delivered chunks: the blocked stream() call returns/throws with
+     * "context canceled", the consumer sees exactly 3 chunks, and the
+     * upstream's own count at GET /generated also reads 3 — against 12 for a
+     * run left to finish. See README.md's Cancellation section for the full
+     * numbers.
+     *
+     * Cancelling is per HANDLE, not per call: it aborts every call in flight
+     * on this gateway, not just the one you meant to stop. Give a
+     * cancellation scope its own gateway if it needs to be independent.
+     *
+     * Cancelling an unknown or idle handle is a no-op, so cleanup paths can
+     * call it blindly, the same as close().
+     */
+    public function cancel(): void
+    {
+        if ($this->handle !== 0) {
+            $this->ffi->llmux_cancel($this->handle);
+        }
     }
 
     /**

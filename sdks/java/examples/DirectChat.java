@@ -17,7 +17,7 @@ import java.nio.file.Path;
  */
 public final class DirectChat {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         Path library = LlmuxDirect.findLibrary();
         System.out.println("library: " + library);
 

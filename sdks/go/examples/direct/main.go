@@ -21,6 +21,9 @@
 //
 //	# offline, against the repo's fake upstream (no keys, deterministic)
 //	./sdks/go/examples/run.sh direct
+//
+//	# cancellation, against sdks/fake-upstream.py (see -cancel-demo below)
+//	./sdks/go/examples/run.sh direct
 package main
 
 import (
@@ -34,6 +37,7 @@ import (
 	"time"
 
 	"github.com/vul-os/llmux/core/config"
+	"github.com/vul-os/llmux/core/gateway"
 	"github.com/vul-os/llmux/core/openai"
 	"github.com/vul-os/llmux/core/provider"
 	"github.com/vul-os/llmux/sdks/go/llmux"
@@ -53,6 +57,10 @@ func run() error {
 			"auto-detected from the environment.")
 	model := flag.String("model", "demo", "model to route")
 	prompt := flag.String("prompt", "count to four", "user message")
+	cancelDemo := flag.Bool("cancel-demo", false,
+		"run the context-cancellation walkthrough instead of the standard one "+
+			"(point -config at sdks/fake-upstream.py's CONFIG line, run with "+
+			"--chunk-delay-ms so there is something to cancel in the middle of)")
 	flag.Parse()
 
 	cfg, err := loadConfig(*cfgFlag)
@@ -75,6 +83,10 @@ func run() error {
 			fmt.Fprintln(os.Stderr, "warning: close:", cerr)
 		}
 	}()
+
+	if *cancelDemo {
+		return runCancelDemo(gw, cfg, *model)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -126,6 +138,104 @@ func run() error {
 		return fmt.Errorf("stream: %w", err)
 	}
 	fmt.Printf("chunks: %d\n", chunks)
+
+	return nil
+}
+
+// runCancelDemo is the Go-native equivalent of what every other llmux SDK
+// binds llmux_cancel to get: a way to walk away from a blocked streaming call
+// that genuinely stops the upstream generation, not just the delivery to this
+// process.
+//
+// Go never had a gap here to close. gw.ChatStream already takes a
+// context.Context as its first argument, and core/gateway threads it,
+// unmodified, down to the http.Request the passthrough provider makes
+// (core/provider/passthrough.go calls http.NewRequestWithContext(ctx, ...)
+// and reads the SSE body through that same request). Cancel the context and
+// net/http closes the connection out from under the read loop. There is no
+// symbol to bind because there is nothing missing: the standard library
+// already does, for free, what llmux_cancel does in C.
+//
+// This is proved by test in sdks/go/llmux/cancel_test.go against an in-process
+// counting fake. This demo runs the same shape against the real
+// sdks/fake-upstream.py harness so the numbers in README.md come from the same
+// tool every other language's README cites, not a same-repo lookalike.
+func runCancelDemo(gw *gateway.Gateway, cfg *config.Config, model string) error {
+	if len(cfg.Providers) == 0 {
+		return errors.New("cancel-demo: -config has no providers; point it at " +
+			"sdks/fake-upstream.py's CONFIG line")
+	}
+	// The fake upstream's own HTTP server serves GET /generated alongside
+	// /v1/chat/completions. Its base_url is that server's address plus "/v1";
+	// strip the suffix to reach /generated on the same server.
+	upstreamBase := strings.TrimSuffix(cfg.Providers[0].BaseURL, "/v1")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // in case we return before the callback ever fires
+
+	fmt.Print("stream: ")
+	var chunks int
+	err := gw.ChatStream(ctx, &openai.ChatCompletionRequest{
+		Model:    model,
+		Messages: []openai.Message{{Role: "user", Content: openai.Str("count to ten")}},
+		Stream:   true,
+	}, provider.ChunkFunc(func(c *openai.ChatCompletionChunk) error {
+		chunks++
+		for _, ch := range c.Choices {
+			fmt.Print(ch.Delta.Content)
+		}
+		if chunks == 3 {
+			// The idiomatic construct IS this context.CancelFunc. Calling it
+			// from inside the callback (rather than from another goroutine)
+			// is deliberate: it is the one place a single-threaded consumer
+			// can reach, and it must be safe to do so — no deadlock, unlike
+			// closing the gateway from inside a callback (see gw.Close's
+			// docs, and llmux_close's in ffi/include/llmux.h).
+			cancel()
+		}
+		return nil
+	}))
+	fmt.Println()
+
+	fmt.Printf("consumer chunks: %d\n", chunks)
+	if err != nil {
+		// This is the expected, successful outcome of a cancellation: the
+		// call reports the failure rather than swallowing it, because a
+		// cancelled stream that had already delivered chunks is a call that
+		// did not complete, and tokens already served are still metered.
+		fmt.Printf("stream error: %v\n", err)
+	} else {
+		fmt.Println("warning: stream returned no error; cancellation may not have reached it in time")
+	}
+
+	// How many chunks the upstream ACTUALLY produced is the number that
+	// matters — a cancellation that returns promptly here while the provider
+	// runs to completion behind it would look identical from every line
+	// printed above — and the harness serves it at GET /generated.
+	//
+	// This program does not read it. It prints the address instead and lets
+	// run.sh curl it, because this example dials NOTHING: it embeds the
+	// gateway rather than talking to one, and that is the contrast the
+	// direct/sidecar pair exists to draw. core/sovereign's egress guard
+	// enforces exactly that — every outbound dialer in the tree must be
+	// declared, and the declaration covering the sidecar example cites this
+	// file's silence as the reason it is safe. Fetching a counter would have
+	// been a harmless request that quietly cost the pair its meaning.
+	fmt.Printf("upstream counter: %s/generated\n", upstreamBase)
+
+	// One gateway, one cancellation scope: unlike llmux_cancel in the C ABI,
+	// which is per-HANDLE and would have aborted every other call in flight on
+	// the same gateway, this context was per-CALL. The gateway is untouched, so
+	// it still answers.
+	//
+	// Deliberately `models` and not a second stream. A second stream would run
+	// to completion through the same upstream and add its twelve chunks to the
+	// counter run.sh is about to read, turning the measured "3" into a "15"
+	// that means nothing without a subtraction — a demo that quietly spoils its
+	// own measurement to make a second point. That point is made properly by
+	// TestChatStreamCancelIsPerCall in sdks/go/llmux/cancel_test.go, which owns
+	// its own counter and can afford it.
+	fmt.Printf("handle after cancel: models -> %s\n", strings.Join(gw.Models(), ", "))
 
 	return nil
 }

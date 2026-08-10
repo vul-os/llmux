@@ -23,8 +23,10 @@ sdks/dotnet/run-examples.sh sidecar
 ```
 
 The script builds the shared library, builds the gateway binary, starts the fake
-upstream from `ffi/fakeupstream`, and runs the examples against it — no API key
-and no network.
+upstream from `ffi/fakeupstream`, starts a second fake — `sdks/fake-upstream.py`,
+which adds a per-chunk delay and a `GET /generated` counter — for the direct
+example's cancellation demo, and runs the examples against them: no API key and
+no network.
 
 ---
 
@@ -70,6 +72,12 @@ go build -o sdks/dotnet/bin/llmux ./cmd/llmux     # or: make sdk-bins
 llmux inside your process, through the C ABI documented in
 [`ffi/README.md`](../../ffi/README.md). Read that first; this covers only what
 is specific to .NET.
+
+The C ABI is seven functions — `llmux_abi_version`, `llmux_new`, `llmux_close`,
+`llmux_cancel`, `llmux_call`, `llmux_free`, `llmux_stream` — and `LlmuxDirect`
+binds all seven. Six of them are unremarkable plumbing; `llmux_cancel` is the
+one with a section of its own below, because it is the only way to get out of
+a blocked `Call` or `StreamAsync` without destroying the whole gateway.
 
 ```csharp
 using var llmux = LlmuxDirect.Open(configJson);
@@ -147,8 +155,72 @@ then discards three chunks that already cost money. The two versions are
 indistinguishable from outside the enumerable — only a counter inside the
 callback tells them apart. Hence capacity 1.
 
-Cancellation via the `CancellationToken` behaves the same way. Expect one chunk
-beyond your last consumed one: cancellation is prompt, not retroactive.
+**A plain `break` behaves as measured above: expect one chunk beyond your last
+consumed one**, because the native callback only learns to stop the next time
+it is invoked, and capacity 1 lets the producer run one chunk ahead.
+**Cancelling the `CancellationToken` does not have that lag**, and that
+distinction is the reason `StreamAsync` takes a token at all rather than
+leaving cancellation to `break` plus `Dispose`. See the next section.
+
+### Cancellation reaches `llmux_cancel`, not just the channel
+
+Cancelling `StreamAsync`'s token does not merely stop feeding the channel —
+`StreamAsync` registers a callback on the token that calls `Cancel()`
+immediately, on whatever thread cancelled it. That matters because
+`llmux_stream` spends most of a stream blocked in a network read on its own
+`LongRunning` thread, not sitting inside the chunk callback where a channel
+check could reach it. A bounded channel alone can only refuse the *next*
+chunk once it arrives; it cannot interrupt a read that is already in flight
+waiting for the one after that. `Cancel()` can, because it calls
+`llmux_cancel`, which aborts the blocked native call directly.
+
+**Measured**, against `sdks/fake-upstream.py` — ten words at 100 ms per
+chunk, cancelled after the third delivered chunk:
+
+```
+$ dotnet --version
+10.0.302
+$ sdks/dotnet/run-examples.sh direct
+...
+cancellation (measured): consumer saw 3 chunk(s); upstream reports {"generated": 3, "streams": 1, "disconnects": 0}
+```
+
+The consumer stopped at 3; the upstream generated **3 of 12** (ten word
+chunks plus a finish-reason frame plus a usage frame — the full count a run
+to completion produces). Without `llmux_cancel` reaching the blocked call,
+those other 9 frames would still have been generated, streamed over the
+loopback socket, and metered, on the strength of a cancellation the consumer
+believed had already taken effect.
+
+An already-cancelled token throws `OperationCanceledException` before
+`StreamAsync` does any native work at all — no gateway call is made on a
+token that was never going to let it run.
+
+**The exception you catch is `OperationCanceledException`, never the string
+`"context canceled"`.** That string is what the C ABI actually returns
+(`llmux_stream` fails with `*err` set to it); a .NET consumer should not have
+to catch a generic `LlmuxException` and string-match its `Message` to
+recognize its own cancellation. `StreamAsync` relies on
+`ChannelReader.ReadAllAsync(cancellationToken)` observing the same token to
+turn that into the exception type .NET consumers actually catch, and the
+pump thread's own `LlmuxException` (carrying that string) is swallowed once
+the stream has been told to stop — see the `catch (LlmuxException) when
+(state.Stopped)` in `StreamAsync`.
+
+**`Cancel()` — and therefore the token — is per-HANDLE, not per-stream.** It
+aborts *every* call in flight on that gateway, including another
+`StreamAsync` or `Call` you did not mean to touch. If your application needs
+independent cancellation scopes for concurrent streams, open one
+`LlmuxDirect` gateway per scope; there is no cheaper way to isolate them; a
+gateway is inert until called, so this is not the resource cost it sounds
+like (see "Latency is not the reason to embed" below).
+
+`Cancel()` is also exposed directly, for callers not consuming a stream at
+all: a stuck `Call`, or a callback-only host with no async iterator. It is
+documented in code as: aborts every call in flight on this handle, leaves the
+handle open and usable, safe from another thread and from inside a chunk
+callback, and a no-op when nothing is running, when called twice, or after
+the handle is already closed.
 
 ### The rule about exceptions
 
@@ -186,7 +258,7 @@ Not a footnote. Full detail in [`ffi/README.md`](../../ffi/README.md).
    in the runtime, and `Process.Start` uses `fork`+`exec`. The concrete victims
    are a P/Invoke to bare `fork(2)`, and any supervisor that forks the process
    after the library has loaded.
-3. **12–17 MB of shared library** — 12,787,504 bytes on darwin/arm64.
+3. **12–17 MB of shared library** — 12,823,104 bytes on darwin/arm64.
 4. **Platform coverage is the dealbreaker for .NET.** See below.
 5. **Latency is not the reason to embed.** ~4 µs in-process versus ~46 µs over
    loopback for the boundary itself; ~80–92 µs versus ~102–109 µs for a real
@@ -199,8 +271,8 @@ Not a footnote. Full detail in [`ffi/README.md`](../../ffi/README.md).
 
 | target | status |
 |---|---|
-| darwin/arm64 | built and smoke-tested. 12,787,504 bytes. The examples here were run on it. |
-| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,348,392 bytes. |
+| darwin/arm64 | built and smoke-tested. 12,823,104 bytes. The examples here were run on it. |
+| linux/arm64 | built and smoke-tested in a `golang:1.25` container. 17,356,264 bytes. |
 | linux/amd64 | built and tested in CI only. |
 | **windows/amd64** | **not built. No `llmux.dll` exists. Nobody has produced one.** |
 | **darwin/amd64** | **not built.** |
@@ -215,7 +287,7 @@ The **sidecar** has no such matrix.
 ## Toolchain this was built and run on
 
 - .NET SDK **10.0.302**, targeting **net8.0**
-- Go **1.25.12**, llmux **0.1.2**
+- Go **1.25.12**, llmux **0.1.5** (the release `llmux_cancel` shipped in)
 - darwin/arm64
 
 The examples project sets `RollForward=LatestMajor` so a net8.0 build starts on
@@ -238,5 +310,6 @@ sdks/dotnet/
   examples/Program.cs          picks one
   examples/Examples.csproj
   run-examples.sh              builds everything, runs both
-  tests/                       the sidecar test suite
+  tests/SidecarTests.cs        the sidecar test suite
+  tests/DirectCancelTests.cs   llmux_cancel / StreamAsync cancellation, gated on python3 + libllmux
 ```

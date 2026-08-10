@@ -316,8 +316,9 @@ web deployment even though Ruby's FFI itself is in good shape.
 | `examples/sidecar_chat.rb` | sidecar | spawn, models, chat, SSE stream, HTTP error, guaranteed stop |
 | `examples/direct_chat.rb` | direct | version probe, models, chat, callback stream, early stop, error path, GVL measurement, `Ffi.open` |
 | `examples/fork_probe.rb` | direct | reproduces the fork hazard, and the false green that hides it |
+| `examples/cancel_demo.rb` | direct | `llmux_cancel` via `#stream_enum`, against `sdks/fake-upstream.py`'s counting fake — see [Cancellation](#cancellation) |
 
-All three run against a fake upstream with no provider key:
+The first three run against a fake upstream with no provider key:
 
 ```sh
 go build -o /tmp/fakeupstream ./ffi/fakeupstream
@@ -327,4 +328,13 @@ CFG=$(…the CONFIG line it printed…)
 LLMUX_CONFIG_JSON="$CFG" LLMUX_MODEL=demo ruby sdks/ruby/examples/direct_chat.rb
 echo "$CFG" > /tmp/llmux.json
 LLMUX_CONFIG=/tmp/llmux.json LLMUX_MODEL=demo ruby sdks/ruby/examples/sidecar_chat.rb
+```
+
+`cancel_demo.rb` needs no setup at all — it spawns `sdks/fake-upstream.py`
+itself, because that harness (not `ffi/fakeupstream`) is the one with the
+per-chunk delay and the `/generated` counter the cancellation measurement
+needs:
+
+```sh
+ruby sdks/ruby/examples/cancel_demo.rb
 ```

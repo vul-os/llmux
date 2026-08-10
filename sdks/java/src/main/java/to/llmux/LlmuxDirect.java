@@ -54,6 +54,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * the library, not of this wrapper. {@link #stream} runs its callback on the
  * calling thread, synchronously, before {@code stream} returns.
  *
+ * <h2>Cancellation</h2>
+ * Before llmux 0.1.5 the only way out of a blocked {@link #call} or
+ * {@link #stream} was {@link #close()}, which destroys the handle and every
+ * other call running on it. {@link #cancel()} aborts what is in flight
+ * without closing anything, and interrupting the thread blocked in
+ * {@link #stream} reaches it too — see that method's own "Cancellation"
+ * section for the mechanism and {@link #cancel()}'s doc for the per-handle
+ * caveat that applies to both paths.
+ *
  * <h2>Lifetime</h2>
  * The shared library is loaded into {@link Arena#global()} and is never
  * unloaded: {@code dlclose} on a library carrying the Go runtime is not
@@ -81,6 +90,7 @@ public final class LlmuxDirect implements AutoCloseable {
         final MethodHandle abiVersion;   // const char* (void)
         final MethodHandle newGateway;   // uint64_t (const char*, char**)
         final MethodHandle closeGateway; // void (uint64_t)
+        final MethodHandle cancelGateway; // void (uint64_t)
         final MethodHandle call;         // char* (uint64_t, const char*, const char*, char**)
         final MethodHandle free;         // void (char*)
         final MethodHandle stream;       // int (uint64_t, const char*, const char*, cb, void*, char**)
@@ -102,6 +112,8 @@ public final class LlmuxDirect implements AutoCloseable {
             newGateway = down(linker, lookup, "llmux_new",
                     FunctionDescriptor.of(ValueLayout.JAVA_LONG, ValueLayout.ADDRESS, ValueLayout.ADDRESS));
             closeGateway = down(linker, lookup, "llmux_close",
+                    FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG));
+            cancelGateway = down(linker, lookup, "llmux_cancel",
                     FunctionDescriptor.ofVoid(ValueLayout.JAVA_LONG));
             call = down(linker, lookup, "llmux_call",
                     FunctionDescriptor.of(ValueLayout.ADDRESS, ValueLayout.JAVA_LONG,
@@ -264,9 +276,55 @@ public final class LlmuxDirect implements AutoCloseable {
      * rethrown here, after the library has unwound — an exception escaping an
      * FFM upcall stub would otherwise terminate the JVM.
      *
+     * <h2>Cancellation</h2>
+     * There are two ways out of a stream that has not finished on its own,
+     * and they answer different questions.
+     *
+     * <p><b>{@link #cancel()}</b> is the direct one: call it from any other
+     * thread and this call fails promptly, however far into the stream it is.
+     * That is what a controller thread that is watching the stream from
+     * outside should reach for.
+     *
+     * <p><b>Interrupting this thread</b> is the idiomatic Java one, and it is
+     * wired to reach the same place. A downcall into native code is not
+     * interruptible the way {@code Thread.sleep} or a channel read is —
+     * {@code Thread.interrupt()} only sets a flag, it does not unblock
+     * {@code llmux_stream}. What makes interruption work here is that
+     * {@code llmux_stream}'s callback runs on <b>this</b> thread once per
+     * chunk (see the class doc's "Threading" section), which is the one place
+     * this thread ever comes up for air while the call is blocked. So the
+     * trampoline checks {@link Thread#interrupted()} there: if this thread was
+     * interrupted since the last chunk, it calls {@link #cancel()} itself —
+     * from inside the callback, which the C ABI documents as safe, unlike
+     * {@link #close()} — and stops the stream. The result is
+     * {@link InterruptedException}, not {@link LlmuxException}, with the
+     * interrupt status left cleared exactly as {@code Thread.sleep} leaves it.
+     * This is why {@code ExecutorService} + {@code Future} work as expected:
+     * {@code Future.cancel(true)} does nothing but interrupt the thread
+     * running the task, and that is enough to reach {@code llmux_cancel}
+     * through this path. (What {@code future.get()} then throws is
+     * {@code CancellationException}, per the {@code Future} contract — it does
+     * not wait to see whether the task's own thread noticed the interrupt.)
+     *
+     * <p>One consequence of interruption being observed only between chunks:
+     * if the stream has not delivered a first chunk yet — still waiting on the
+     * network, still inside {@code stream_first_byte_timeout_seconds} — there
+     * is no callback invocation for the trampoline to catch the flag on, and
+     * interrupting does nothing until either a chunk arrives or llmux's own
+     * timeout does. {@link #cancel()} has no such gap: it reaches the network
+     * call directly and does not wait for a chunk.
+     *
+     * <p>Either path leaves the handle open: see {@link #cancel()}'s own doc
+     * for the per-handle caveat that matters most, which applies here too.
+     *
      * @return the number of chunks delivered
+     * @throws InterruptedException if this thread was interrupted while the
+     *         stream was in progress. The interrupt status is cleared, as
+     *         {@code Thread.sleep} leaves it — this method does not restore
+     *         it, because it is reporting the interruption directly rather
+     *         than swallowing one it cannot propagate.
      */
-    public int stream(String method, String requestJson, ChunkHandler handler) {
+    public int stream(String method, String requestJson, ChunkHandler handler) throws InterruptedException {
         long h = handle;
         if (h == 0) {
             throw new LlmuxException("this gateway is closed");
@@ -274,7 +332,7 @@ public final class LlmuxDirect implements AutoCloseable {
         if (handler == null) {
             throw new IllegalArgumentException("handler is null");
         }
-        StreamState state = new StreamState(handler);
+        StreamState state = new StreamState(handler, lib, h);
 
         try (Arena arena = Arena.ofConfined()) {
             MemorySegment cb = Linker.nativeLinker().upcallStub(
@@ -292,6 +350,17 @@ public final class LlmuxDirect implements AutoCloseable {
             } catch (Throwable t) {
                 throw new LlmuxException("llmux_stream failed", t);
             }
+            if (state.interrupted) {
+                // The trampoline saw this thread's interrupt flag, called
+                // llmux_cancel itself, and told llmux_stream to stop. The C
+                // ABI has no concept of a Java InterruptedException, so what
+                // comes back here is an ordinary failure (rc=-1, "context
+                // canceled") — free it and report the Java-idiomatic outcome
+                // instead of wrapping it in LlmuxException.
+                drainError(lib, errBox);
+                throw new InterruptedException(
+                        "llmux stream interrupted after " + state.chunks + " chunk(s)");
+            }
             if (state.thrown != null) {
                 drainError(lib, errBox);
                 throw new LlmuxException("the chunk handler threw", state.thrown);
@@ -304,14 +373,62 @@ public final class LlmuxDirect implements AutoCloseable {
         }
     }
 
+    /**
+     * Aborts every call in flight on this gateway — {@link #call} and
+     * {@link #stream} alike — without closing it: the handle stays open and
+     * the next call starts fresh. This is {@code llmux_cancel}; see
+     * {@code ffi/include/llmux.h} for the contract it is documented against.
+     *
+     * <p>Safe from any thread, including a thread other than the one blocked
+     * in {@link #call} or {@link #stream}, and safe to call from
+     * <b>inside</b> a {@link ChunkHandler} running inside {@code this
+     * object's} own {@link #stream} — unlike {@link #close()}, which must
+     * never be called from inside a handler because it waits (up to a few
+     * seconds) for the very call that is running the handler. A blocked
+     * {@link #stream} that is cancelled this way returns by throwing
+     * {@link LlmuxException} with the library's message ("context canceled"),
+     * not {@link InterruptedException} — this method does not touch any
+     * thread's interrupt status, so there is no interruption for
+     * {@link #stream} to detect. To get {@link InterruptedException} instead,
+     * interrupt the thread blocked in {@link #stream}; see that method's
+     * "Cancellation" section, which this call is also what powers.
+     *
+     * <p>A no-op on a closed handle, on a handle with nothing running, and
+     * safe to call twice — matching what {@code llmux_cancel} itself
+     * guarantees for an unknown or idle handle.
+     *
+     * <p><b>This is per-HANDLE, not per-call.</b> It aborts every call
+     * currently in flight on this gateway, not just the one you meant to
+     * stop — a concurrent {@link #call} or a sibling {@link #stream} on the
+     * very same {@code LlmuxDirect} is aborted too. If cancelling one logical
+     * request must not touch another running on the same object, they need
+     * separate gateways ({@link #open}), not separate calls on one.
+     */
+    public void cancel() {
+        long h = handle;
+        if (h == 0) {
+            return; // closed; llmux_cancel on an unknown handle is a documented no-op anyway
+        }
+        try {
+            lib.cancelGateway.invokeExact(h);
+        } catch (Throwable t) {
+            throw new LlmuxException("llmux_cancel failed", t);
+        }
+    }
+
     /** Per-stream state, reachable from the bound upcall and from nowhere else. */
     private static final class StreamState {
         final ChunkHandler handler;
+        final Native lib;
+        final long handle;
         int chunks;
         Throwable thrown;
+        boolean interrupted;
 
-        StreamState(ChunkHandler handler) {
+        StreamState(ChunkHandler handler, Native lib, long handle) {
             this.handler = handler;
+            this.lib = lib;
+            this.handle = handle;
         }
     }
 
@@ -321,7 +438,30 @@ public final class LlmuxDirect implements AutoCloseable {
         // stub takes the whole VM down, so a throwing handler is recorded and
         // turned into "stop the stream", which llmux_stream honours cleanly.
         try {
-            if (state.thrown != null) {
+            if (state.thrown != null || state.interrupted) {
+                return 1;
+            }
+            // Thread.interrupted() both reads AND CLEARS the flag, which is
+            // exactly what Thread.sleep does before it throws
+            // InterruptedException — this is the one point where the thread
+            // blocked in llmux_stream ever runs Java code, so it is the only
+            // place that flag can be observed. Finding it set means someone
+            // called Thread.interrupt() (directly, or via
+            // Future.cancel(true)) since the last chunk; reaching
+            // llmux_cancel FROM HERE, inside the callback, is what the header
+            // documents as safe — unlike llmux_close, which would deadlock
+            // waiting on this very call.
+            if (Thread.interrupted()) {
+                state.interrupted = true;
+                try {
+                    state.lib.cancelGateway.invokeExact(state.handle);
+                } catch (Throwable ignored) {
+                    // Best-effort: we are already unwinding for interruption,
+                    // and stream()'s own inspection of state.interrupted is
+                    // what drives the outcome from here, not this call's
+                    // success. A failure to even ask for cancellation still
+                    // means "stop": returning 1 below still ends the stream.
+                }
                 return 1;
             }
             // The chunk is owned by the library and valid only for this call.

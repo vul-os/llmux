@@ -2,7 +2,9 @@
 //
 // Header-only, C++17, no dependencies beyond the standard library and
 // <llmux.h>. Link against libllmux (or dlopen it yourself and assign the
-// function pointers — the C header declares the types for that).
+// function pointers — the C header declares the types for that). Building as
+// C++20 additionally unlocks a std::jthread/std::stop_token overload of
+// stream() — see CANCELLATION below — but nothing about C++17 use changes.
 //
 //     #include "llmux.hpp"
 //
@@ -41,6 +43,28 @@
 // LLMUX_NO_EXCEPTIONS before including this header (or build with
 // -fno-exceptions) to compile only the try_ layer.
 //
+// CANCELLATION. llmux_cancel aborts every call in flight on a handle without
+// closing it — the only way to get a thread out of a blocked llmux_stream
+// short of destroying the whole gateway. Two ways to reach it:
+//
+//   gw.cancel()                                  // the raw primitive: fire and
+//                                                 // forget, from any thread, or
+//                                                 // from inside the chunk
+//                                                 // callback itself
+//
+//   gw.stream(req, on_chunk, stop_token)          // C++20 only: register the
+//                                                 // token from a std::jthread
+//                                                 // (or any std::stop_source)
+//                                                 // and letting it go out of
+//                                                 // scope, or calling
+//                                                 // request_stop(), cancels
+//                                                 // the stream cooperatively
+//
+// Both are per-HANDLE, not per-stream: cancelling aborts every call in flight
+// on that Gateway, including ones you were not thinking about. One Gateway per
+// cancellation scope if that matters to you. See the README for the toolchain
+// wart that gates the stop_token overload on Apple's libc++.
+//
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
 #ifndef LLMUX_HPP
@@ -52,8 +76,21 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <version>  // for __cpp_lib_jthread, the stop_token feature test macro
 
 #include "llmux.h"
+
+// std::jthread/std::stop_token is a C++20 library feature, not a language one,
+// and some C++20-conforming toolchains still do not ship it — notably Apple's
+// libc++ as of Xcode/CLT through at least clang 17, which requires
+// -fexperimental-library to define this macro at all (see ../cpp/README.md).
+// Feature-test rather than assume: building this header under an older
+// standard, or a C++20 toolchain without the feature, degrades cleanly to
+// cancel() and the existing try_stream()/stream() overloads instead of a
+// compile error.
+#if defined(__cpp_lib_jthread)
+#include <stop_token>
+#endif
 
 #if !defined(LLMUX_NO_EXCEPTIONS) && !defined(__cpp_exceptions)
 #define LLMUX_NO_EXCEPTIONS 1
@@ -252,6 +289,27 @@ public:
 		}
 	}
 
+	/// Aborts every call in flight on this handle, WITHOUT closing it: the
+	/// handle stays open and the next call starts on a fresh context. This is
+	/// the only way to get another thread out of a blocked try_call/try_stream
+	/// short of destroying the whole Gateway.
+	///
+	/// Safe from another thread while a call blocks, and safe from INSIDE the
+	/// chunk callback of the very stream being cancelled — unlike close(),
+	/// which must never be called from a callback because it waits (up to a
+	/// few seconds) for the call running that callback to return. Calling
+	/// cancel() on a closed handle, or one with nothing running, is a no-op,
+	/// so it costs nothing to call defensively; noexcept for the same reason
+	/// close() is.
+	///
+	/// PER-HANDLE, NOT PER-STREAM: this aborts every call in flight on THIS
+	/// Gateway, not only the one you have in mind — the C ABI has no
+	/// per-stream cancellation token. Two streams sharing a Gateway share this
+	/// fate; give a stream its own Gateway if you need to cancel it alone.
+	void cancel() noexcept {
+		if (h_ != 0) llmux_cancel(h_);
+	}
+
 	// -- unary ------------------------------------------------------------
 
 	[[nodiscard]] StringResult try_call(const char *method, const char *request_json) {
@@ -343,6 +401,47 @@ public:
 		stream(request_json.c_str(), on_chunk);
 	}
 #endif
+
+#if defined(__cpp_lib_jthread)
+	// -- streaming with cooperative cancellation (C++20) -------------------
+
+	/// Same as try_stream() above, plus a std::stop_token: a std::jthread
+	/// calling request_stop() on its own token (which you pass here), the
+	/// jthread simply being destroyed, or any std::stop_source's
+	/// request_stop() reaches llmux_cancel through a std::stop_callback
+	/// registered for exactly the duration of this call — which is the C++20
+	/// idiom for "abandon this stream" and the reason it exists at all: without
+	/// it, cancelling would mean reaching for cancel() and a synchronization
+	/// primitive of your own, which is what this overload replaces.
+	///
+	/// The stop_callback is destroyed (and so unregistered) the moment
+	/// llmux_stream returns, so a stop request arriving after the stream has
+	/// already finished does nothing — the same no-op cancel() itself
+	/// guarantees. If the token can never be stopped (stop.stop_possible() is
+	/// false — e.g. a default-constructed std::stop_token bound to no source)
+	/// this skips the registration and behaves exactly like the overload
+	/// without a token.
+	///
+	/// PER-HANDLE, NOT PER-STREAM, same as cancel(): a stop request on this
+	/// token aborts every call in flight on this Gateway, not only the one it
+	/// was passed to. One Gateway per cancellation scope if that distinction
+	/// matters.
+	[[nodiscard]] VoidResult try_stream(const char *request_json, const ChunkFn &on_chunk,
+	                                     std::stop_token stop) {
+		if (!stop.stop_possible()) return try_stream(request_json, on_chunk);
+		std::stop_callback on_stop(stop, [this] { cancel(); });
+		return try_stream(request_json, on_chunk);
+	}
+
+#ifndef LLMUX_NO_EXCEPTIONS
+	void stream(const char *request_json, const ChunkFn &on_chunk, std::stop_token stop) {
+		detail::unwrap(try_stream(request_json, on_chunk, stop));
+	}
+	void stream(const std::string &request_json, const ChunkFn &on_chunk, std::stop_token stop) {
+		stream(request_json.c_str(), on_chunk, stop);
+	}
+#endif
+#endif  // __cpp_lib_jthread
 
 private:
 	explicit Gateway(std::uint64_t h) noexcept : h_(h) {}

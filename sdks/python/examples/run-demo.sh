@@ -54,6 +54,7 @@ export LLMUX_BINARY="${bin}"
 tmp="$(mktemp -d)"
 cleanup() {
   [ -n "${fake_pid:-}" ] && kill "${fake_pid}" 2>/dev/null || true
+  [ -n "${cancel_pid:-}" ] && kill "${cancel_pid}" 2>/dev/null || true
   rm -rf "${tmp}"
 }
 trap cleanup EXIT
@@ -84,6 +85,35 @@ export LLMUX_DEMO_MODEL=demo
 echo "    upstream:  $(sed -n 's/^URL //p' "${tmp}/fake.out")"
 echo "    library:   ${LLMUX_LIBRARY}"
 echo "    binary:    ${LLMUX_BINARY}"
+
+# --- the timed fake upstream, for direct_chat.py's cancellation demo -------
+# ffi/fakeupstream above answers instantly and counts nothing, which is fine
+# for models/chat/stream but cannot show whether a cancelled stream_iter()
+# actually stopped the PROVIDER rather than just stopping delivery to this
+# process. That needs a provider slow enough to interrupt mid-stream and
+# honest enough to report what it wrote: sdks/fake-upstream.py, stdlib
+# Python, no Go toolchain, shared with every other language's SDK for this
+# exact measurement.
+echo "==> starting the timed fake upstream for the cancellation demo (sdks/fake-upstream.py)"
+"${python}" "${root}/sdks/fake-upstream.py" \
+  --chunk-delay-ms 100 \
+  --text "one two three four five six seven eight nine ten" \
+  >"${tmp}/cancel.out" 2>"${tmp}/cancel.err" &
+cancel_pid=$!
+
+for _ in $(seq 1 100); do
+  grep -q '^CONFIG ' "${tmp}/cancel.out" 2>/dev/null && break
+  sleep 0.05
+done
+if ! grep -q '^CONFIG ' "${tmp}/cancel.out"; then
+  echo "run-demo: the timed fake upstream never printed a CONFIG line" >&2
+  cat "${tmp}/cancel.err" >&2
+  exit 1
+fi
+
+export LLMUX_CANCEL_CONFIG_JSON="$(sed -n 's/^CONFIG //p' "${tmp}/cancel.out")"
+export LLMUX_CANCEL_UPSTREAM_URL="$(sed -n 's/^URL //p' "${tmp}/cancel.out")"
+echo "    cancel upstream: ${LLMUX_CANCEL_UPSTREAM_URL} (100ms/chunk, GET /generated)"
 
 examples=("$@")
 if [ ${#examples[@]} -eq 0 ]; then

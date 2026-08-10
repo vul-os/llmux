@@ -203,6 +203,9 @@ def _bind(lib: ctypes.CDLL) -> None:
     lib.llmux_close.restype = None
     lib.llmux_close.argtypes = [ctypes.c_uint64]
 
+    lib.llmux_cancel.restype = None
+    lib.llmux_cancel.argtypes = [ctypes.c_uint64]
+
     lib.llmux_call.restype = _CharPtr
     lib.llmux_call.argtypes = [ctypes.c_uint64, ctypes.c_char_p, ctypes.c_char_p, _ErrPtr]
 
@@ -317,6 +320,52 @@ class Gateway:
         if not self._closed:
             self._closed = True
             self._lib.llmux_close(ctypes.c_uint64(self._handle))
+
+    def cancel(self) -> None:
+        """Abort every call in flight on this handle, without closing it.
+
+        The handle stays open and the next call on it starts on a fresh
+        context — this is the ABI's answer to "I lost interest in the call
+        that is running," not a substitute for :meth:`close`. A stream
+        cancelled this way does not return quietly: the blocked ``call`` or
+        ``stream`` raises :class:`LLMuxError` with the message
+        ``context canceled``, because tokens already served are still
+        metered and the caller should not mistake this for a normal end the
+        way a callback returning ``False`` is.
+
+        SAFE FROM ANOTHER THREAD while :meth:`call`, :meth:`stream`, or
+        :meth:`stream_iter` blocks on this handle. This is not incidental:
+        every ``ctypes.CDLL`` function releases the GIL for the duration of
+        the native call, which is what lets a second Python thread run at
+        all while the first is blocked inside ``llmux_stream`` — a
+        ``ctypes.PyDLL`` binding would not have this property, since it
+        assumes the GIL is already held and never lets go of it. Measured in
+        ``tests/test_direct.py``
+        (``test_cancel_from_another_thread_unblocks_a_blocked_stream``): the
+        blocked call returns in well under the time the full stream would
+        have taken.
+
+        Also SAFE FROM INSIDE A CHUNK CALLBACK, unlike :meth:`close`, which
+        must never be called from a callback because it waits (up to a few
+        seconds) for the very call that is running the callback — that would
+        be waiting on itself. A single-threaded host (a synchronous web
+        framework, a callback-only script) has nowhere else to call this
+        from, which is the reason it exists as a primitive separate from
+        ``close`` rather than a flag ``close`` checks.
+
+        A no-op if nothing is running on this handle, if the handle is
+        unknown to the library, or if it has already been closed — so it is
+        always safe to call, including from a ``finally`` block that does
+        not know whether anything is in flight.
+
+        PER-HANDLE, NOT PER-CALL: it aborts every call running on this
+        gateway, not only the one you were thinking of. Two streams sharing
+        one ``Gateway`` and cancelling one aborts both. If you need to cancel
+        streams independently, give each its own ``Gateway`` — construction
+        is inert (see the class docstring), so this costs you a handle, not
+        a connection.
+        """
+        self._lib.llmux_cancel(ctypes.c_uint64(self._handle))
 
     def __enter__(self) -> "Gateway":
         return self
@@ -444,14 +493,62 @@ class Gateway:
         without a second stack. :meth:`stream` is the honest shape of the ABI;
         this is the shape Python code wants. Pick per call site.
 
-        Abandoning the generator early (``break``) stops the stream at the next
-        chunk and joins the worker, so no thread outlives the loop.
+        ABANDONING THE GENERATOR REACHES ``llmux_cancel``. ``break`` out of the
+        ``for`` loop, an explicit ``.close()``, or simply letting the generator
+        be garbage collected all raise ``GeneratorExit`` at the ``yield`` below
+        — CPython does this synchronously in the common case, because a ``for``
+        loop drops its only reference to the iterator the instant the loop is
+        left, and dropping the last reference to a generator closes it
+        immediately (see the ``contextlib.closing`` note below for when that
+        timing is not good enough). The ``finally`` block below calls
+        :meth:`cancel`, and that is the fix for a real bug, not decoration:
+
+        A previous version of this method only set a local flag that the
+        callback consulted before forwarding the NEXT chunk to Python. That
+        stops chunks from reaching the consumer, but by itself it closes
+        nothing: measured against ``sdks/fake-upstream.py`` at 100 ms per
+        chunk, a consumer that broke after 3 of 10 words still left the
+        upstream generating (and llmux metering) a chunk the consumer never
+        asked for, because the local flag can only reject a chunk the
+        callback is handed AFTER it is already generated — it cannot reach
+        back and stop generation of the one already under way. Only
+        ``llmux_cancel`` closes the connection directly instead of waiting
+        for the next chunk to arrive and be refused. With ``cancel()`` wired
+        into abandonment, the same break leaves the upstream at exactly 3 —
+        measured in ``examples/direct_chat.py``.
+
+        ``cancel()`` is PER-HANDLE (see its docstring): abandoning one
+        ``stream_iter()`` aborts every OTHER call in flight on this
+        ``Gateway`` too, including a second ``stream_iter()`` you meant to
+        keep running. Give each stream you might cancel independently its
+        own ``Gateway``.
+
+        Do not rely on CPython's immediate refcounting to close this
+        generator promptly if you hold a reference to it that outlives the
+        loop (a variable assigned outside the ``for``), or on any Python
+        implementation other than CPython — PyPy's garbage collector does not
+        promise to run a generator's cleanup at any particular time.
+        ``contextlib.closing`` makes the cancellation happen exactly where you
+        say, on every implementation::
+
+            import contextlib
+
+            with contextlib.closing(gw.stream_iter(request)) as chunks:
+                for chunk in chunks:
+                    ...
+                    break  # cancel() has already run by the time this exits
         """
         done = object()
         chunks: queue.Queue[Any] = queue.Queue(maxsize=max(1, buffer))
         stop = threading.Event()
 
         def on_chunk(chunk: Any) -> Any:
+            # Belt-and-braces: stops a chunk that was already in flight when
+            # cancel() ran from being queued for a consumer that is gone. This
+            # is NOT what stops the upstream — cancel(), in the `finally`
+            # below, is. Without cancel() this flag alone reproduces the bug
+            # described above: the consumer stops seeing chunks, the provider
+            # keeps generating them.
             if stop.is_set():
                 return False
             chunks.put(chunk)
@@ -475,8 +572,33 @@ class Gateway:
                     raise item
                 yield item
         finally:
+            # Reached on every exit from the loop above: it running to
+            # completion (`item is done`, where cancel() below is a
+            # documented no-op — fact 4 in llmux_cancel's contract), a
+            # `break`, an explicit `.close()`, an exception raised out of the
+            # loop body, or this generator being garbage collected —
+            # GeneratorExit covers the last three. cancel() is safe to call
+            # unconditionally: idempotent, and safe to call from THIS thread
+            # even while the worker thread above is the one blocked inside
+            # `llmux_stream` (see cancel()'s docstring on the GIL — that is
+            # exactly the case it is measured against).
             stop.set()
-            # Unblock a worker parked on a full queue so it can see `stop`.
+            try:
+                self.cancel()
+            except Exception:
+                # A generator's __del__ can run arbitrarily late — including
+                # during interpreter shutdown, from atexit, after `ctypes` or
+                # `threading` module globals have already been rebound to
+                # None. Anything other than GeneratorExit escaping a
+                # generator's close() at that point becomes an "Exception
+                # ignored" message on stderr instead of a clean shutdown, and
+                # there is nothing left to cancel gracefully by then anyway,
+                # so this is deliberately unconditional rather than a narrower
+                # except clause naming the handful of AttributeErrors torn-
+                # down modules produce.
+                pass
+            # Unblock a worker parked on a full queue so it can see `stop` and
+            # exit even in the rare case cancel() above could not run.
             try:
                 while True:
                     chunks.get_nowait()

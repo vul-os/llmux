@@ -24,7 +24,7 @@ Everything below was executed on this machine, not inferred:
 | macOS | **15.7.3** (build 24G419), Apple silicon |
 | Xcode | **not installed** — Command Line Tools only. See [Testing](#testing) |
 | Package | SwiftPM, tools-version 5.9, platform floor macOS 13 |
-| llmux | 0.1.2 at capture time, whose `libllmux.dylib` was 12,769,346 bytes. Today's darwin/arm64 build is 12,823,104 — see [Platforms](#platforms) |
+| llmux | 0.1.2 at first capture, whose `libllmux.dylib` was 12,769,346 bytes. Recaptured at **0.1.5** (adds `llmux_cancel`, the seventh C ABI symbol) for the [Cancellation](#cancellation) section below; today's darwin/arm64 build is 12,823,104 bytes — see [Platforms](#platforms) |
 
 ## Run the examples
 
@@ -43,14 +43,16 @@ Real output:
 ```
 ==> direct (in-process, C ABI)
 library: /Users/pc/code/vulos/llmux/dist/ffi/darwin_arm64/libllmux.dylib
-abi:     0.1.2
-models:  1580 bytes in 0.103ms
-chat:    4.409ms
+abi:     0.1.5
+models:  1580 bytes in 0.069ms
+chat:    3.147ms
 refusal: llmux: "stream": true is not valid for llmux_call; use llmux_stream
 stream:  one two three four
-         6 chunks, first at 1.159ms, total 2.037ms
+         6 chunks, first at 1.936ms, total 2.926ms
 early:   broke out after 2 chunk(s) — stopping is not an error
 sync:    stopped after 3 chunk(s)
+cancel:  consumer stopped at 3 chunk(s) (Task cancelled)
+         upstream generated 3 of 12 (10 words + finish + usage chunk)
 bogus:   llmux: unknown method "no-such-method" (want one of: chat, embed, models)
 
 ==> sidecar (child process over HTTP)
@@ -98,6 +100,9 @@ freed, and is not.
 **Errors are `throws`,** with the library's own message in `LLMuxError.llmux`.
 That message is plain UTF-8 text and deliberately not JSON — do not parse it.
 
+**Cancellation** — `Gateway.cancel()`, and `chunks(_:)` wired to both breaking
+a loop and `Task` cancellation — has its own section, [below](#cancellation).
+
 ### No module map, no `unsafeFlags`
 
 The C ABI is reached with `dlopen`/`dlsym` and `@convention(c)` function types.
@@ -120,7 +125,7 @@ Probe the version at startup and refuse a mismatch — a shared library resolves
 off a load path you may not control:
 
 ```swift
-let gw = try Gateway(expectedVersion: "0.1.2")
+let gw = try Gateway(expectedVersion: "0.1.5")
 ```
 
 ### The library is loaded once and never unloaded
@@ -145,8 +150,8 @@ pull API. Bridging them needs somewhere for the blocking call to live, so
 cooperative thread pool, because blocking one of those threads for the length of
 a model's answer is how a Swift concurrency program deadlocks.
 
-Chunks are yielded **as they arrive**, so time-to-first-token is real (1.159 ms
-in the run above, against 2.037 ms total). But:
+Chunks are yielded **as they arrive**, so time-to-first-token is real (1.936 ms
+in the run above, against 2.926 ms total). But:
 
 > **`AsyncThrowingStream` does not propagate backpressure to a non-async
 > producer.** With `.unbounded` buffering, a consumer slower than the model
@@ -162,15 +167,82 @@ something that assumes flow control.
 The **sidecar's** stream does have real backpressure: `URLSession.bytes(for:)`
 means the async `for` loop drives the socket read.
 
-Breaking out of the loop, or cancelling the `Task`, terminates the stream: the
-callback sees the termination flag and returns non-zero, which stops it at the
-library. Stopping early is **not** an error.
+Breaking out of the loop, or cancelling the `Task`, terminates the stream.
+Stopping early is **not** an error — see [Cancellation](#cancellation) for
+what actually happens at the ABI when it does.
 
 **Panics/traps.** Swift has no catchable panics, so there is no `catch_unwind`
 equivalent in the trampoline (the Rust binding has one). A trap inside your
 chunk callback terminates the process rather than unwinding through the Go call
 frame — which is bad, but is at least not undefined behaviour. Keep the callback
 simple.
+
+## Cancellation
+
+`llmux_cancel(h)`, added in 0.1.5, is the seventh symbol in the C ABI and the
+only lever for abandoning a `llmux_call` or `llmux_stream` that is already
+blocked — before it, the sole way out was `llmux_close`, which destroys the
+gateway and every other call running on it. `Gateway.cancel()` binds it
+directly:
+
+```swift
+gw.cancel()   // aborts every call in flight on gw, leaves the handle open
+```
+
+It is safe to call from another thread while a call on the same handle is
+blocked, and safe from **inside a chunk callback** — unlike `llmux_close`,
+which must never be called from one, because it waits (up to a few seconds)
+for the very call that is running it. It is a no-op when nothing is running on
+the handle, and a no-op the second time.
+
+**`chunks(_:)` reaches it automatically.** `AsyncThrowingStream` calls
+`onTermination` with `.cancelled` exactly when a consumer abandons a
+sequence — breaking out of a `for try await` loop, or the consuming `Task`
+being cancelled — and `chunks(_:)` calls `cancel()` right there, rather than
+only setting a flag for the next chunk callback to notice. That distinction is
+the whole fix: a flag only takes effect once another chunk *arrives* to check
+it, and if the upstream has gone quiet between chunks, the blocking
+`llmux_stream` call is stuck deep in a network read with nothing scheduled to
+look at a flag. `llmux_cancel` is the one thing that reaches into that blocked
+call from another thread and makes it return immediately.
+
+**Measured**, against `sdks/fake-upstream.py --chunk-delay-ms 100 --text "one
+two three four five six seven eight nine ten"` — ten words, 100 ms apart, so a
+completed run generates 12 chunks (the ten words, a finish-reason chunk, and a
+usage chunk): a consumer that stops after 3 chunks — whether by breaking the
+loop (`breakingOutOfChunksStopsTheUpstream`) or by cancelling its `Task`
+(`taskCancellationStopsTheUpstream`) — leaves the upstream having generated
+**3 of those 12**. That is the `cancel:`/`generated:` pair in the run above,
+and it is the number this whole feature exists to make true: before
+`llmux_cancel`, a binding could stop reading locally while the provider ran to
+completion and llmux metered every token of it, indistinguishable from the
+outside.
+
+**The error a live consumer sees is `CancellationError`, not `context
+canceled`.** `chunks(_:)` catches `LLMuxError.llmux("context canceled")` —
+Go's `context.Canceled.Error()`, produced only by a cancelled context; llmux's
+own liveness timeouts (`stream_idle_timeout_seconds`,
+`stream_first_byte_timeout_seconds`) return differently worded errors, so the
+match is never ambiguous — and re-throws Swift's own `CancellationError`
+instead. That translation is only *observable*, though, when something other
+than the consuming `Task`'s own cancellation aborted the call:
+`AsyncThrowingStream` resolves a `next()` suspended by the consuming task's
+own cancellation to `nil`, ending the loop exactly like a normal completion,
+without ever surfacing what the producer finished with. See
+`taskCancellationStopsTheUpstream`, which asserts on the generated count and
+deliberately not on a thrown error, versus
+`explicitCancelOfAnActiveStreamThrowsCancellationError`, which calls
+`gw.cancel()` from elsewhere while the consuming task is not itself cancelled
+and does see `CancellationError` come out of the loop.
+
+**Per-handle, not per-call — the caveat worth internalizing before relying on
+this.** `llmux_cancel` aborts *every* call in flight on that gateway, not just
+the one you meant to stop. Two `chunks(_:)` sequences sharing one `Gateway`
+are not independently cancellable: breaking out of one aborts the other's call
+too, mid-stream, and its consumer gets the same `CancellationError` even
+though nothing asked to touch it. If you need independent cancellation scopes,
+the fix is one `Gateway` per scope — the ABI has no finer-grained cancel than
+the handle.
 
 ## Sidecar
 
@@ -203,13 +275,16 @@ blindly:
 swift test
 ```
 
-11 tests, all passing on the machine above. The ones needing a real `libllmux`
-are gated on it and **say which way they went** rather than reporting a silent
-pass:
+15 tests, all passing on the machine above — 4 of them the cancellation tests
+described [above](#cancellation), added alongside `llmux_cancel`. The ones
+needing a real `libllmux` are gated on it and **say which way they went**
+rather than reporting a silent pass; the cancellation tests need `python3` on
+`PATH` as well, to run `sdks/fake-upstream.py`, and skip themselves just as
+honestly when it is absent:
 
 ```
 libllmux found at …/dist/ffi/darwin_arm64/libllmux.dylib — direct tests RAN
-✔ Test run with 11 tests passed after 0.032 seconds.
+✔ Test run with 15 tests passed after 0.269 seconds.
 ```
 
 **The suite uses swift-testing (`import Testing`), not XCTest, and that was
@@ -273,9 +348,9 @@ arbitrary `dlopen`'d dylib or spawning child processes at all.
 ```
 sdks/swift/
   Package.swift                        no dependencies, no unsafeFlags
-  Sources/LLMux/Direct.swift           the C ABI binding — Gateway, deinit, AsyncSequence
+  Sources/LLMux/Direct.swift           the C ABI binding — Gateway, cancel(), deinit, AsyncSequence
   Sources/LLMux/Sidecar.swift          spawn/supervise `llmux serve`, URLSession + SSE
-  Sources/llmux-direct-example/
+  Sources/llmux-direct-example/        also spawns sdks/fake-upstream.py for the cancellation demo
   Sources/llmux-sidecar-example/
   Tests/LLMuxTests/DirectTests.swift   swift-testing; gated tests announce themselves
   run.sh                               runs the examples offline against ffi/fakeupstream

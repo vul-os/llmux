@@ -22,13 +22,16 @@ described.
 | [`examples/direct`](examples/direct) | imports the gateway, calls it in-process | **the default.** No port, no second process, no serialization |
 | [`examples/sidecar`](examples/sidecar) | spawns and supervises `llmux serve`, talks HTTP | per-tenant keys and budgets; one gateway shared by several processes; crash isolation |
 
-Run both offline, with no provider keys and no network, against the
-OpenAI-compatible fake in `ffi/fakeupstream`:
+Run all three offline, with no provider keys and no network — direct and
+sidecar against the OpenAI-compatible fake in `ffi/fakeupstream`, cancel
+against `sdks/fake-upstream.py` (see [below](#cancelling-a-stream-context-not-a-symbol)
+for why that one needs a different fake):
 
 ```
-./sdks/go/examples/run.sh            # both
+./sdks/go/examples/run.sh            # all three
 ./sdks/go/examples/run.sh direct
 ./sdks/go/examples/run.sh sidecar
+./sdks/go/examples/run.sh cancel
 ```
 
 Real output from `run.sh` on darwin/arm64, Go 1.25.12, llmux 0.1.2:
@@ -48,7 +51,22 @@ chat:   one two three four
 tokens: 7+5
 stream: one two three four
 chunks: 6
+
+==> starting sdks/fake-upstream.py (100ms/chunk, so there is something to cancel)
+    http://127.0.0.1:55658
+==> direct, context cancellation (cancel after 3 delivered chunks)
+stream: one two three
+consumer chunks: 3
+stream error: context canceled
+upstream counter: http://127.0.0.1:55658/generated
+handle after cancel: models -> openai/gpt-4o-mini, anthropic/claude-3-5-sonnet, ...
+upstream generated: {"generated": 3, "streams": 1, "disconnects": 0}
 ```
+
+The `chunks: 6` lines above are an **uninterrupted** four-word stream (four
+content chunks, a finish-reason chunk, a usage chunk) — nothing in the
+direct/sidecar walkthrough cancels anything. The cancellation numbers are
+covered on their own terms below.
 
 Against your own providers, drop the runner and pass a model:
 
@@ -114,6 +132,117 @@ Note that `Start` is **not** the sidecar. The sidecar is a separate `llmux
 serve` process — that is what [`examples/sidecar`](examples/sidecar) shows, and
 it is the one that gets you auth, budgets, sharing and crash isolation.
 
+## Cancelling a stream: context, not a symbol
+
+llmux v0.1.5 added `llmux_cancel` as the seventh symbol in the C ABI
+(`ffi/include/llmux.h`): a way to abort a blocked `llmux_stream` or
+`llmux_call` — from another thread, or safely from inside the chunk callback —
+without tearing down the whole gateway the way `llmux_close` does. Every other
+language in `sdks/` binds that symbol to get this. Go does not need to,
+because Go never had the gap `llmux_cancel` closes.
+
+`gw.Chat`, `gw.ChatStream`, and the HTTP handlers behind `Start`'s loopback
+server all take, or thread through, an ordinary `context.Context`, and
+`core/gateway` passes it unmodified all the way down to the `http.Request` the
+provider makes: `core/provider/passthrough.go` calls
+`http.NewRequestWithContext(ctx, ...)` and reads the streamed body through
+that same request. Cancel the context and `net/http` closes the connection out
+from under the read loop. That is the entire mechanism `llmux_cancel`
+implements in C — the Go standard library already does it, for every
+`ctx.Done()` in your program, whether or not llmux exists.
+
+```go
+ctx, cancel := context.WithCancel(context.Background())
+var chunks int
+err := gw.ChatStream(ctx, req, func(c *openai.ChatCompletionChunk) error {
+    chunks++
+    if chunks == 3 {
+        cancel() // safe from here, and from another goroutine — see below
+    }
+    return nil
+})
+// err wraps context.Canceled. Tokens already served are still metered.
+```
+
+This holds for both paths this package offers, and a Go user should not have
+to know which one they are on to get it:
+
+- **`New` / `gw.ChatStream`** (direct, in-process): proved by
+  `sdks/go/llmux/cancel_test.go`'s `TestChatStreamCancelStopsUpstream`,
+  against an in-process counting fake upstream.
+- **`Start` / `Local`** (the loopback HTTP shim): proved by the same file's
+  `TestStartStreamCancelStopsUpstream`. The caller cancels the context on
+  *their own* `http.NewRequestWithContext` call against
+  `local.OpenAIBaseURL()`; `net/http`'s server closes `r.Context()` when that
+  connection drops, and `core/server/chat.go`'s `streamChat` hands
+  `r.Context()` to `Gateway.ChatStreamSink` unchanged — the identical
+  propagation the direct path proves, one HTTP hop further out.
+
+Calling `cancel()` **from inside the chunk callback is safe** — it does not
+deadlock, unlike calling `gw.Close()` from inside a callback, which blocks
+waiting for the very call that is running the callback (see `llmux_close`'s
+doc comment in `ffi/include/llmux.h`; the same hazard applies to
+`(*gateway.Gateway).Close` here, and for the same reason). The callback is
+often the only place a single-threaded consumer — an early `break` out of an
+iterator, a `select` loop that has decided it is done — can reach, so this has
+to work, not merely be possible from a second goroutine.
+
+### The measured numbers
+
+Against `sdks/fake-upstream.py --chunk-delay-ms 100 --text "one two three four
+five six seven eight nine ten"` — the same harness the other languages'
+READMEs cite — cancelling after 3 delivered chunks:
+
+```
+stream: one two three
+consumer chunks: 3
+stream error: context canceled
+upstream counter: http://127.0.0.1:55658/generated
+handle after cancel: models -> openai/gpt-4o-mini, anthropic/claude-3-5-sonnet, ...
+upstream generated: {"generated": 3, "streams": 1, "disconnects": 0}
+```
+
+Consumer stopped at 3; the upstream generated **3 of 12**. Not 10 (the last
+word was never sent) and not 12 (ten content chunks plus the forced
+finish-reason chunk and usage chunk an uncancelled run always produces).
+
+The demo proves the gateway survived with a `models` call rather than a second
+stream, and the reason is the counter: `/generated` is cumulative for the life
+of the harness, so a second, uncancelled stream would add its twelve chunks and
+report 15 — a measurement spoiled to make a second point. That second point is
+made by `TestChatStreamCancelIsPerCall`, which owns its own counter.
+
+This is `./sdks/go/examples/run.sh cancel`, unedited, and it is also
+what `-cancel-demo` in `examples/direct` runs; the C ABI's own probe, against
+the same text and the same delay, measured the identical 3-vs-12 split. Go
+reaches the same number through the standard library instead of through
+`ffi/abi.go`.
+
+The "chunks: 6" figure earlier in this README is a different measurement and
+is not in tension with this one: it is the total chunk count of an
+**uninterrupted** four-word stream from `-text "one two three four"` — four
+content chunks, a finish-reason chunk, a usage chunk — from the plain
+`run.sh direct`/`sidecar` walkthrough, which never cancels anything. Neither
+number describes what the other measures.
+
+### Per-call, not per-handle
+
+`llmux_cancel(h)` in the C ABI is per-**handle**: it aborts every call
+currently in flight on that gateway, so a binding that hands its users a
+per-stream cancellation idiom (an `AbortSignal`, a `CancellationToken`) has to
+warn that cancelling one stream can abort an unrelated stream sharing the same
+handle, and recommend one gateway per cancellation scope where that matters.
+
+Go's `context.Context` is per-**call**: it is a parameter to `gw.ChatStream`,
+not state stored on `*gateway.Gateway`, so two concurrent calls on the same
+gateway with two different contexts are independent by construction —
+cancelling one's context never touches the other.
+`TestChatStreamCancelIsPerCall` in `cancel_test.go` asserts exactly that: a
+stream cancelled at 3 chunks runs alongside a second stream on the same
+gateway that completes all 12 chunks, untouched. There is no "one gateway per
+cancellation scope" caveat to write for Go, because a context already is a
+cancellation scope.
+
 ## Honesty notes
 
 These apply to every language's SDK. For Go, most of them are moot, and saying
@@ -141,11 +270,16 @@ which and why is the point.
 
 ```
 sdks/go/
-  llmux/            the convenience package (New, and the deprecated Start)
+  llmux/
+    llmux.go        the convenience package (New, and the deprecated Start)
+    cancel_test.go  proof that context cancellation reaches the upstream, for
+                     both New/ChatStream and Start/Local
   examples/
-    direct/         in-process gateway: models, chat, streaming chat
+    direct/         in-process gateway: models, chat, streaming chat, and
+                     (-cancel-demo) context cancellation against fake-upstream.py
     sidecar/        spawn `llmux serve`, then HTTP + SSE against it
-    run.sh          runs both offline against ffi/fakeupstream
+    run.sh          runs direct/sidecar/cancel offline, against
+                     ffi/fakeupstream and sdks/fake-upstream.py respectively
   README.md
 ```
 

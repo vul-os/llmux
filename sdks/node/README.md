@@ -46,6 +46,19 @@ it, and it is wired to `process.on("exit")` and `SIGINT` as well.
 Streaming is an ordinary SSE body, so `for await (const bytes of res.body)`
 works with no glue — see [`examples/sidecar.ts`](examples/sidecar.ts).
 
+Cancellation needs no llmux-specific wiring here, unlike direct mode: `index.ts`
+never touches streaming, so a request made through it is an ordinary `fetch`
+(or an ordinary `openai` client call), and the ordinary `signal` option on
+either one cancels it exactly like it would against any other HTTP endpoint.
+It also works differently from direct mode's `AbortSignal` in one respect
+worth knowing: there is no blocking native call sitting on the event loop
+here, so a timer-based abort fires exactly when armed instead of only after
+the fact. `examples/sidecar.ts` proves it against
+[`fake-upstream.mjs`](examples/fake-upstream.mjs)'s `/generated` counter —
+the same proof direct mode's [Cancellation](#cancellation) section uses —
+and measures an abort armed 90 ms into a ~360 ms stream landing after 2 of the
+10 chunks a full answer would produce, not after all 10.
+
 Two behavioural differences from direct mode, worth knowing:
 
 - The child inherits stdio, so llmux's own logs land on your stderr.
@@ -128,13 +141,13 @@ node examples/direct.ts
 ```
 node       v24.12.0 on darwin/arm64
 library    /Users/pc/code/vulos/llmux/dist/ffi/darwin_arm64/libllmux.dylib
-abi        0.1.2
+abi        0.1.5
 
 handle     1
 
-models       anthropic/claude-3-5-haiku, google/gemini-1.5-flash, deepseek/deepseek-chat, openai/gpt-4o, openai/gpt-4o-mini, anthropic/claude-3-5-sonnet, google/gemini-1.5-pro
+models       openai/gpt-4o, openai/gpt-4o-mini, anthropic/claude-3-5-sonnet, google/gemini-1.5-flash, deepseek/deepseek-chat, anthropic/claude-3-5-haiku, google/gemini-1.5-pro
 chat         "the quick brown fox jumps over the lazy dog"
-             blocked the event loop for 380 ms; timer fired 0x
+             blocked the event loop for 378 ms; timer fired 0x
 
 stream      the quick brown fox jumps over the lazy dog
              10 chunks
@@ -142,16 +155,29 @@ stream      the quick brown fox jumps over the lazy dog
 break       consumed 3 chunks; the C callback fired 3x (10 = the whole answer)
             no error raised — stopping is your decision, not a failure
 
+cancel      baseline:  consumed 11 chunks (callback fired 11x), upstream generated 11
+            cancelled: consumed 3 chunks, upstream generated 3 of 11
+            error: context canceled
+
+timer       50 ms abort armed against a 1015 ms stream; delivered 11 chunks (callback fired 11x) unharmed
+            listener fired at 1015 ms — after the stream ended, not during it
+            a timer cannot preempt the blocked event loop; only an abort from inside onChunk can
+
 error       no route for model "no-such-model" (providers: fake)
 stream:true llmux: "stream": true is not valid for llmux_call; use llmux_stream
 closed      llmux gateway is closed
 ```
 
 The example needs no API key and no network: it spawns
-[`examples/fake-upstream.mjs`](examples/fake-upstream.mjs), a 70-line
-OpenAI-compatible fixture that prints the llmux config routing `demo` at itself.
-`FAKE_DELAY_MS=40` makes it answer at a realistic pace, which is what the "380
-ms, 0 ticks" line above is measuring.
+[`examples/fake-upstream.mjs`](examples/fake-upstream.mjs), an OpenAI-compatible
+fixture that prints the llmux config routing `demo` at itself, counts the
+chunks it actually writes to a socket, and serves that count at `GET
+/generated` — see [Cancellation](#cancellation) below, which is what the
+`cancel` and `timer` lines above are measuring. `FAKE_DELAY_MS=40` makes the
+unary/streaming demos answer at a realistic pace, which is what the "378 ms, 0
+ticks" line is measuring; the cancellation demo spins up its own copy of the
+fixture at `FAKE_DELAY_MS=100` so a human-scale delay separates the three
+chunks it keeps from the seven it cuts off.
 
 ---
 
@@ -222,7 +248,7 @@ peer dependency** so the sidecar path installs with no native code at all.
 - **A hand-written N-API addon** — the honest alternative, and it would give us
   `napi_threadsafe_function`. It was rejected on cost: it means node-gyp and a C
   toolchain at install time, or `prebuildify` artifacts for every
-  platform × Node-ABI pair, for a six-function ABI. It would also not solve the
+  platform × Node-ABI pair, for a seven-function ABI. It would also not solve the
   problem above — the thread that cannot be joined is a property of the Go
   runtime, not of how we cross the boundary — so it would buy a build pipeline
   and no async streaming.
@@ -265,6 +291,101 @@ served are metered either way.
 
 ---
 
+## Cancellation
+
+`break`, above, is the consumer's OWN callback deciding to stop, and
+llmux honours that at the next chunk boundary with no error — you already know
+you stopped, so llmux does not hand your own decision back to you as one.
+`llmux_cancel` — added in llmux 0.1.5 — answers a different question: what if
+something ELSE decides the call should die? A caller-side timeout, a request
+that was itself cancelled, a supervisor giving up. Before 0.1.5 the only lever
+for that was `llmux_close`, which tears down the whole gateway and every other
+call running on it — not what you want for "stop this one stream."
+
+The idiomatic shape on Node is `AbortSignal`, threaded through as `stream`'s
+third argument:
+
+```js
+const ac = new AbortController();
+gw.stream({ model, messages }, (chunk) => {
+  if (shouldStop(chunk)) ac.abort();
+}, { signal: ac.signal });
+```
+
+`examples/direct.ts` measures three things about it, each a fact that would be
+easy to get wrong quietly rather than loudly:
+
+**Aborting from inside `onChunk` reaches llmux_cancel and genuinely stops the
+upstream — not just this binding's side of the callback.** `AbortSignal`'s
+`abort` event fires **synchronously**, so `ac.abort()` called from inside
+`onChunk` reaches `Gateway.cancel` — and therefore `llmux_cancel` — on the same
+call stack, before `onChunk` returns and before `llmux_stream`'s blocking call
+unwinds. This is the only place a single-threaded host can cancel from while
+the call is in flight, and it is verified safe: it does not deadlock, unlike
+calling `close()` from inside a callback (see that method's own comment for
+why that one does). Measured against
+[`fake-upstream.mjs`](examples/fake-upstream.mjs) at 100 ms/chunk, which
+counts every chunk it actually writes to a socket at `GET /generated` and
+stops the instant the client disconnects:
+
+| | consumed | upstream generated |
+|---|---|---|
+| baseline (uncancelled) | 11 | 11 |
+| cancelled after 3 chunks | 3 | **3** |
+
+(11, not 10 or 12: 10 words plus the trailing empty-delta "stop" chunk llmux
+always sends, and this fixture emits no usage frame — the Python harness used
+by the other SDKs in this repo reports 12 for the same text because it does.)
+The upstream stopped at 3. Nothing about the consumer's own chunk count could
+have shown that on its own — it takes as much on faith as `break`'s early exit
+did before `gw.stream`'s return value was measured against it — which is why
+this is checked against the provider's own counter and not asserted from the
+client side.
+
+A cancelled stream is also, correctly, a **failure**: `llmux_stream` returns
+`-1` with `*err` set to `context canceled`, unlike `break`'s `0`/no-error.
+Cancellation is llmux noticing the caller lost interest from outside; a
+`break` is the caller's own successful decision. Reporting them as the same
+shape would hide which one happened.
+
+**A signal armed from OUTSIDE the callback — a `setTimeout`, most obviously —
+cannot take effect until the call returns control to the event loop.** This
+follows directly from [Why direct mode on Node is
+synchronous](#why-direct-mode-on-node-is-synchronous): `llmux_stream` blocks
+that loop for the whole call, so a timer registered before the call starts has
+nowhere to run until after it ends — Node cannot preempt its own main thread to
+service it. Measured: a 50 ms abort armed against a stream that ran 1015 ms did
+not fire until the stream had already delivered every one of its 11 chunks; the
+listener ran a few milliseconds after `llmux_stream` returned, not 50 ms into
+it. This is not a corner case to route around — it is what "synchronous" means
+— so do not rely on a timer to cut a direct-mode stream short. Only an abort
+issued from inside `onChunk` can.
+
+**A signal that is already aborted when you call `stream` throws before any
+native call starts.** No round trip to the provider is paid for, and nothing is
+metered, just to be told to stop before you began.
+
+`cancel()` — and therefore the `signal` option — is **per-handle, not
+per-stream**: it aborts every call in flight on that gateway, including any
+other stream you happen to have running on the same handle. Node's own direct
+calls cannot overlap on one thread, so this cannot bite you by accident from
+within a single synchronous script the way it could in a language with real
+concurrency — but a handle shared across `worker_threads`, or reused by a
+second script instance, still shares one cancellation domain. One gateway per
+cancellation scope if you need isolation.
+
+The low-level primitive underneath all of this is `gw.cancel()`: it aborts
+whatever is running on the handle, is a no-op if nothing is running, is safe to
+call twice, and is safe to call on an already-closed `Gateway`. Reach for the
+`signal` option first, since it is wired to the one call it is meant to stop;
+call `gw.cancel()` directly only when you are not already inside `stream`'s own
+callback — a signal handler, or code running on a `worker_thread`, for example.
+
+The sidecar's own cancellation story is in its section above: it needs no
+changes here because it never wraps streaming in the first place.
+
+---
+
 ## The costs of direct mode
 
 Not footnotes. All of these are properties of `-buildmode=c-shared`, and
@@ -288,8 +409,8 @@ Not footnotes. All of these are properties of `-buildmode=c-shared`, and
    and forks workers. The rule is the same as everywhere else — **load the
    library after the fork, in the worker, never in the master.**
 
-3. **The library is 12–17 MB.** Measured: 12,787,504 bytes on darwin/arm64,
-   17,348,392 bytes on linux/arm64.
+3. **The library is 12–17 MB.** Measured: 12,823,104 bytes on darwin/arm64,
+   17,356,264 bytes on linux/arm64.
 
 4. **Prebuilt libraries exist for darwin/arm64 and linux/arm64 only.**
    linux/amd64 is built and tested in CI but not shipped from a developer
@@ -317,10 +438,11 @@ Not footnotes. All of these are properties of `-buildmode=c-shared`, and
 sdks/node/
   index.ts                    the sidecar (spawn + health poll + OpenAI helper)
   direct.ts                   the C ABI binding
-  examples/direct.ts          direct mode, end to end
-  examples/sidecar.ts         sidecar mode, end to end
+  examples/direct.ts          direct mode, end to end, including cancellation
+  examples/sidecar.ts         sidecar mode, end to end, including cancellation
   examples/fake-upstream.mjs  OpenAI-compatible fixture, so both run offline
   test/sidecar.test.ts        the sidecar contract suite
+  test/direct.test.ts         the direct-mode cancellation suite (gated on libllmux)
 ```
 
 `examples/fake-upstream.mjs` is deliberately plain JavaScript: the Deno and Bun
@@ -335,5 +457,5 @@ npm run lint                 # eslint, type-aware (strictTypeChecked)
 npm run typecheck            # tsc over index.ts + direct.ts + fixtures + tests
 npm run typecheck:examples   # tsc over examples/ (ESM, its own tsconfig)
 npm run check:lint-config    # proves the lint config resolves type information
-npm test                     # the sidecar contract suite
+npm test                     # the sidecar contract suite + the direct-mode cancellation suite (gated on libllmux)
 ```

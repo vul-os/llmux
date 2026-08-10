@@ -14,14 +14,17 @@ rules, the handle lifecycle and the signal-handler measurements all live in
 one C ABI is two places for a use-after-free.
 
 ```sh
-sdks/kotlin/run-examples.sh            # both
+sdks/kotlin/run-examples.sh            # direct + sidecar
 sdks/kotlin/run-examples.sh direct
 sdks/kotlin/run-examples.sh sidecar
+sdks/kotlin/run-examples.sh cancel     # llmux_cancel, against sdks/fake-upstream.py
 ```
 
 The script builds the shared library and the gateway binary, starts the fake
-upstream from `ffi/fakeupstream`, and runs both examples against it — no API
-key, no network.
+upstream from `ffi/fakeupstream`, and runs the examples against it — no API
+key, no network. `cancel` is its own mode: cancelling mid-stream needs an
+upstream with a chunk delay and a generation counter, which `ffi/fakeupstream`
+does not have — see [Cancellation](#cancellation).
 
 ---
 
@@ -53,8 +56,19 @@ Llmux.direct(configJson).use { llmux ->
 ```
 
 Requires **Java 22+** (the underlying binding is `java.lang.foreign`) and
-`--enable-native-access=ALL-UNNAMED`. Worked example:
-[`examples/DirectChat.kt`](examples/DirectChat.kt).
+`--enable-native-access=ALL-UNNAMED`. Worked examples:
+[`examples/DirectChat.kt`](examples/DirectChat.kt) (calls and streaming) and
+[`examples/CancelChat.kt`](examples/CancelChat.kt) (cancellation — see below).
+
+### The C ABI surface: seven symbols
+
+The Java SDK this wraps binds every function `ffi/include/llmux.h` declares:
+`llmux_abi_version`, `llmux_new`, `llmux_close`, `llmux_cancel`, `llmux_call`,
+`llmux_free`, `llmux_stream`. `llmux_cancel` is the newest, added in llmux
+0.1.5; before it, `close()` was the only way out of a blocked call, and it
+takes the whole handle down with it. [`LlmuxGateway.cancel()`](src/main/kotlin/to/llmux/kotlin/Direct.kt)
+is the thin Kotlin delegate for it, and [`chunks()`](#cancellation) is wired to
+reach it on its own.
 
 ### `chunks()` is a rendezvous, and that is the point
 
@@ -78,11 +92,79 @@ counter inside the callback tells them apart. `chunks()` therefore uses
 against a model emitting tokens.
 
 Cancellation is prompt, not retroactive: expect one chunk beyond your last
-collected one.
+collected one — or it was, before `llmux_cancel` existed. See below for what
+changed.
 
 The sidecar's `chatChunks()` cancels by closing the response body. How much the
 server had already produced is **not observable from the client** — the exact
 callback count above is a property the direct path has and the sidecar does not.
+
+### Cancellation
+
+`take(2)` above is the Flow completing *on its own terms* — the collector
+decided it had enough. This section is about the opposite case: something
+*outside* the collection decides to stop it — a coroutine cancelling another,
+a scope shutting down, a `withTimeout` expiring — and what that needs to reach
+is `llmux_cancel`, not just "the collector stopped asking".
+
+```kotlin
+// Cancelling the collecting coroutine directly:
+val job = launch { llmux.chunks(requestJson = streamRequestJson).collect { print(it) } }
+// ... from elsewhere ...
+job.cancel()
+
+// Or a deadline around the collection:
+withTimeout(500) {
+    llmux.chunks(requestJson = streamRequestJson).collect { print(it) }
+}
+```
+
+Both reach `llmux_cancel` — `chunks()`'s `awaitClose` calls
+[`LlmuxGateway.cancel()`](src/main/kotlin/to/llmux/kotlin/Direct.kt) itself
+rather than waiting for the next chunk to notice the channel closed, so a
+provider that is *between* chunks (no callback pending) still gets cut off
+promptly instead of running until it next comes up for air. And both throw
+[`CancellationException`](https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-core/kotlinx.coroutines/-cancellation-exception/)
+out of `collect` — `withTimeout`'s own `TimeoutCancellationException` is a
+subtype — never a wrapped `LlmuxException` about the "context canceled" that
+`llmux_stream` fails with underneath. Getting that second part right needed
+code, not just relying on it: the cancellation `chunks()` triggers on its own
+behalf, via its own `cancel()` call, comes back up through the exact same
+catch block as a genuine external failure would, so the two are told apart
+with a flag set before `cancel()` is called, not inferred after the fact.
+
+**Measured**, with `sdks/fake-upstream.py --chunk-delay-ms 100 --text "one two
+three four five six seven eight nine ten"` (ten words, one chunk each, plus a
+trailing usage frame the harness does not count — 12 chunks run to
+completion), cancelling once the collector had seen 3:
+
+| construct | consumer saw | upstream `generated` |
+|---|---|---|
+| `job.cancel()` | 3 | **3** |
+| `withTimeout(350)` | 3 | **3** |
+
+Both stop the provider well short of the 12 it takes to finish, and both leave
+the handle open — `examples/CancelChat.kt` calls `models` again afterward to
+prove it. Reproduce it with:
+
+```sh
+sdks/kotlin/run-examples.sh cancel
+```
+
+Contrast this with the [Java SDK's own cancellation measurement](../java/README.md#cancellation):
+there, interrupting the blocked thread (the idiomatic Java construct) is one
+chunk looser than calling `cancel()` directly, because a blocking native call
+can only notice a Java interrupt flag on its next chunk callback. Kotlin does
+not have that gap here, because `chunks()`'s `awaitClose` calls `cancel()`
+itself the instant the coroutine machinery decides to cancel — it does not
+wait for the blocked IO thread to notice anything.
+
+**`llmux_cancel` is per-HANDLE, not per-call.** It aborts *every* call
+currently in flight on that gateway — a concurrent `call()`, `stream()`, or a
+sibling `chunks()` collection on the very same `LlmuxGateway` is aborted too,
+not just the one being cancelled. If cancelling one collection must not touch
+another running on the same object, give it its own gateway (`Llmux.direct()`
+again) rather than sharing one.
 
 ---
 
@@ -162,7 +244,8 @@ dependencies {
 - OpenJDK **26.0.2** (Homebrew), darwin/arm64
 - Kotlin **2.4.10** (`kotlinc-jvm`), `-jvm-target 22`
 - kotlinx-coroutines-core-jvm **1.10.2**
-- Go **1.25.12**, llmux **0.1.2**
+- Go **1.25.12**, llmux **0.1.5** (the `llmux_cancel` measurements above are
+  from this version; earlier sections of this file predate it)
 
 `-jvm-target 22` is a floor, not a preference: `to.llmux.LlmuxDirect` is a Java
 22 class file and kotlinc must be able to read it.
@@ -176,9 +259,10 @@ Inherited from the environment (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`,
 
 ```
 sdks/kotlin/
-  src/main/kotlin/to/llmux/kotlin/Direct.kt    LlmuxGateway, Llmux.direct(), chunks(): Flow
+  src/main/kotlin/to/llmux/kotlin/Direct.kt    LlmuxGateway, Llmux.direct(), cancel(), chunks(): Flow
   src/main/kotlin/to/llmux/kotlin/Sidecar.kt   LlmuxSidecar, chatChunks(): Flow
   examples/DirectChat.kt                       runnable
   examples/SidecarChat.kt                      runnable
-  run-examples.sh                              builds everything, runs both
+  examples/CancelChat.kt                       runnable — llmux_cancel, see Cancellation
+  run-examples.sh                              builds everything, runs direct/sidecar/cancel
 ```

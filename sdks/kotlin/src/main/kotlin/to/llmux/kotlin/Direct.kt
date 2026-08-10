@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import to.llmux.LlmuxDirect
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Kotlin over [to.llmux.LlmuxDirect] — llmux running **in this JVM** through
@@ -60,7 +61,13 @@ public class LlmuxGateway internal constructor(
      * once per chunk on it. Return `false` from [onChunk] to stop; stopping is
      * a decision, not an error.
      *
-     * Prefer [chunks] unless you are deliberately staying off coroutines.
+     * Prefer [chunks] unless you are deliberately staying off coroutines. Note
+     * that the underlying [to.llmux.LlmuxDirect.stream] this delegates to
+     * declares a checked `InterruptedException` — Kotlin does not enforce
+     * catching it, but it can still reach you here if this thread is
+     * interrupted while blocked; see [to.llmux.LlmuxDirect.stream]'s
+     * "Cancellation" section (in the Java SDK) for why, and use [chunks]
+     * instead if you want cancellation as `CancellationException`.
      *
      * @return the number of chunks delivered
      */
@@ -71,27 +78,71 @@ public class LlmuxGateway internal constructor(
     ): Int = delegate.stream(method, requestJson, onChunk)
 
     /**
-     * The same stream as a cold [Flow] of chunk JSON documents.
+     * Aborts every call in flight on this gateway — [call] and [stream] (and
+     * every in-progress [chunks] collection) alike — without closing it. A
+     * thin delegate to [to.llmux.LlmuxDirect.cancel]; read that method's doc
+     * for the full contract, in particular that **it is per-HANDLE, not
+     * per-call**: it also aborts a sibling [call] or [stream] running
+     * concurrently on this same [LlmuxGateway]. [chunks] calls this itself
+     * when its `Flow` is cancelled or abandoned, so most callers never reach
+     * for it directly — it exists at this level for the same reason
+     * `to.llmux.LlmuxDirect.cancel` does: something else, entirely outside any
+     * one `Flow`, decided this gateway should stop.
+     */
+    public fun cancel(): Unit = delegate.cancel()
+
+    /**
+     * The same stream as a cold [Flow] of chunk JSON documents, cancellable
+     * the way coroutines expect: cancelling the collecting coroutine, the
+     * enclosing scope, or a `withTimeout` around the collection reaches
+     * `llmux_cancel`, and what a cancelled collector sees is
+     * [kotlinx.coroutines.CancellationException] — never a wrapped
+     * `LlmuxException` complaining "context canceled" about a cancellation
+     * this Flow caused on its own behalf.
      *
-     * Three properties worth knowing:
+     * Four properties worth knowing:
      *
-     * * **Cancelling the collector stops the Go stream.** When the flow's
-     *   channel closes, the send from the callback fails, the callback returns
-     *   "stop", and `llmux_stream` unwinds — llmux is not left producing tokens
-     *   into a void.
-     * * **That is why this flow is a RENDEZVOUS, not a buffer**, and it is the
-     *   one design decision here that is not cosmetic. Measured against the
-     *   fake upstream, on a five-chunk stream collected with `take(2)`:
-     *   with `Channel.BUFFERED` the callback fired **5** times — the producer
-     *   filled the 64-slot buffer before the collector ever cancelled, so
-     *   `take` discarded three chunks that had already been generated and
-     *   billed. With `Channel.RENDEZVOUS` it fired **3**: two collected and one
-     *   in flight at the handoff. Early cancellation only means anything with
-     *   backpressure, so this flow has it. The cost is one context switch per
-     *   chunk, which against a model emitting tokens is free.
-     * * **The blocking call runs on [Dispatchers.IO].** `llmux_stream` blocks
-     *   its thread for the life of the stream; that thread must not be a
-     *   coroutine dispatcher thread doing other work.
+     * * **Cancellation reaches `llmux_cancel` directly, not just by
+     *   abandonment.** [awaitClose] calls [to.llmux.LlmuxDirect.cancel]
+     *   itself, rather than relying solely on the next chunk noticing the
+     *   channel is closed and returning "stop" from the callback. The
+     *   difference matters when the provider is *between* chunks — mid
+     *   network read, no callback pending: without an explicit `cancel()`
+     *   there and then, `llmux_stream` keeps blocking until the provider
+     *   produces another chunk for the callback to notice on, which could be
+     *   a long time. `cancel()` unblocks it immediately instead, from another
+     *   thread — which its own contract calls safe.
+     * * **That is why this flow is also a RENDEZVOUS, not a buffer**, which
+     *   still matters independently of the point above: even with `cancel()`
+     *   wired in, a *buffered* channel lets the callback keep accepting
+     *   chunks the collector already stopped wanting, right up until the
+     *   buffer fills. Measured against the fake upstream, on a five-chunk
+     *   stream collected with `take(2)`: with `Channel.BUFFERED` the callback
+     *   fired **5** times — the producer filled the 64-slot buffer before the
+     *   collector ever cancelled, so `take` discarded three chunks that had
+     *   already been generated and billed. With `Channel.RENDEZVOUS` it fired
+     *   **3**: two collected and one in flight at the handoff. The cost is one
+     *   context switch per chunk, which against a model emitting tokens is
+     *   free.
+     * * **The blocking call runs on [Dispatchers.IO], and this is what makes
+     *   cancellation observable at all.** `llmux_stream` blocks its thread for
+     *   the life of the stream — it has no suspension point of its own — so if
+     *   it ran on the collector's dispatcher, cancelling the collector would
+     *   have nothing to interrupt: the thread running the blocking call would
+     *   never be freed up to notice. Running it on its own `Dispatchers.IO`
+     *   thread means the *producer's* cancellation (in [awaitClose], which
+     *   fires as soon as the collector or its scope cancels, independent of
+     *   what the IO thread is doing) is what reaches `cancel()`, not something
+     *   the blocked thread has to cooperate with on its own.
+     * * A cancellation this `Flow` caused on itself — via `awaitClose` — is
+     *   swallowed rather than handed to the collector as a `LlmuxException`:
+     *   `awaitClose` sets a flag before calling `cancel()`, and the internal
+     *   job's catch block checks that flag before deciding whether to close
+     *   the channel with the resulting error or cleanly. An *external*,
+     *   unrelated call to [cancel] — fact 6 in the C ABI's own docs,
+     *   "per-handle, not per-call" — still surfaces as a real
+     *   `LlmuxException`, because from this `Flow`'s perspective that is a
+     *   genuine disruption, not its own shutdown.
      *
      * Every chunk is one `chat.completion.chunk` object — the same JSON the
      * HTTP API writes after `data: `. Note that one chunk beyond your last
@@ -102,21 +153,48 @@ public class LlmuxGateway internal constructor(
         method: String = "chat",
         requestJson: String,
     ): Flow<String> = callbackFlow {
+        // Set BEFORE cancel() below, not inferred afterward from isActive: a
+        // flag written first and read once, on the thread that is actually
+        // deciding, is simpler to reason about than a race between two
+        // notifications (job cancellation, native call unwinding) landing in
+        // an unpredictable order.
+        val cancelledByAwaitClose = AtomicBoolean(false)
+
         // llmux_stream blocks, so it gets its own IO thread; the flow's
         // producer scope stays free to observe cancellation.
         val job = launch(Dispatchers.IO) {
             try {
                 delegate.stream(method, requestJson) { chunk ->
                     // Backpressure with a stop signal: a failed send means the
-                    // collector is gone, which is exactly when to stop.
+                    // collector is gone, which is exactly when to stop. This
+                    // is the FALLBACK path — cancel() below is the primary
+                    // one — for the case where a chunk was already in flight
+                    // when cancellation was requested.
                     trySendBlocking(chunk).isSuccess
                 }
                 close()
             } catch (t: Throwable) {
-                close(t)
+                // llmux_cancel has no concept of Kotlin cancellation: our own
+                // call to it below surfaces here as an ordinary
+                // LlmuxException ("context canceled"), exactly as an
+                // unrelated external cancel() would. Distinguish them by
+                // whether WE asked for this: if awaitClose already fired, the
+                // structured-concurrency machinery is already delivering
+                // CancellationException to the collector on its own, and
+                // handing it a second, different exception through the
+                // channel would replace that with a confusing wrapped error.
+                if (cancelledByAwaitClose.get()) close() else close(t)
             }
         }
-        awaitClose { job.cancel() }
+        awaitClose {
+            cancelledByAwaitClose.set(true)
+            // Reach llmux_cancel directly — see the third bullet above — then
+            // cancel the coroutine job for ordinary structured-concurrency
+            // bookkeeping. Order matters: the flag must be visible before the
+            // native call can possibly fail because of it.
+            delegate.cancel()
+            job.cancel()
+        }
     }.buffer(Channel.RENDEZVOUS).flowOn(Dispatchers.IO)
 
     /** Release the gateway. Idempotent; `use {}` calls it on every path out. */

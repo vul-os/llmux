@@ -22,6 +22,8 @@ import json
 import os
 import sys
 import threading
+import time
+import urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -31,6 +33,18 @@ from llmux import Gateway, LLMuxError  # noqa: E402
 
 MODEL = os.environ.get("LLMUX_DEMO_MODEL", "demo")
 CONFIG = os.environ.get("LLMUX_CONFIG_JSON") or None
+
+# ffi/fakeupstream (what CONFIG above routes at) answers instantly and counts
+# nothing, which is fine for models/chat/stream above but useless for showing
+# that a cancelled stream_iter() actually stopped the provider instead of just
+# stopping delivery to this process. That needs a provider slow enough to
+# interrupt mid-stream and honest enough to report what it wrote:
+# sdks/fake-upstream.py, the harness shared with every other language's SDK
+# for this exact measurement. run-demo.sh starts a second instance of it and
+# exports these two variables; run this file on its own and the section below
+# prints why it is skipping instead of guessing at an upstream to talk to.
+CANCEL_CONFIG = os.environ.get("LLMUX_CANCEL_CONFIG_JSON")
+CANCEL_UPSTREAM_URL = os.environ.get("LLMUX_CANCEL_UPSTREAM_URL")
 
 
 def delta(chunk: dict) -> str:
@@ -102,6 +116,42 @@ def main() -> int:
             if len(got) == 2:
                 break
         print(f"stream_iter  stopped early after {len(got)} chunks: {''.join(got)!r}")
+
+        # --- cancellation: abandoning stream_iter() must reach llmux_cancel -
+        # The section above shows `break` stopping DELIVERY of chunks to this
+        # process. That is not the same claim as stopping the PROVIDER from
+        # generating them, and conflating the two was the actual bug: a
+        # consumer that broke out of stream_iter() after 3 chunks saw the
+        # provider run all remaining words to completion anyway, metered in
+        # full, because the old implementation only set a local flag its
+        # callback checked before forwarding the NEXT chunk — nothing told
+        # the provider to stop. Proving the fix needs a provider slow enough
+        # to interrupt mid-stream and honest enough to say what it wrote;
+        # ffi/fakeupstream (what CONFIG above points at) is neither. See
+        # CANCEL_CONFIG's definition above for where this one comes from.
+        if CANCEL_CONFIG and CANCEL_UPSTREAM_URL:
+            with Gateway(CANCEL_CONFIG) as cancel_gw:
+                seen = 0
+                for _ in cancel_gw.stream_iter(
+                    {"model": "demo", "messages": [{"role": "user", "content": "go"}]}
+                ):
+                    seen += 1
+                    if seen == 3:
+                        break  # -> GeneratorExit at the yield -> finally: -> cancel()
+                # cancel() has already returned by the time break above does,
+                # but the upstream's own "has the client gone?" check runs on
+                # its next scheduled write (up to 100ms out, see
+                # sdks/fake-upstream.py's _peer_gone), not synchronously with
+                # our cancel. Give it a moment before asking what it wrote.
+                time.sleep(0.3)
+                with urllib.request.urlopen(f"{CANCEL_UPSTREAM_URL}/generated") as r:
+                    generated = json.load(r)["generated"]
+            print(f"cancel       stream_iter stopped the consumer at {seen}; "
+                  f"the upstream generated {generated} of 12")
+        else:
+            print("cancel       skipped: set LLMUX_CANCEL_CONFIG_JSON and "
+                  "LLMUX_CANCEL_UPSTREAM_URL, or run via run-demo.sh which "
+                  "starts the timed upstream this needs")
 
         # --- the error path -----------------------------------------------
         # Errors are plain UTF-8 text, not JSON. The library allocated that

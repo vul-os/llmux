@@ -14,11 +14,24 @@
 //
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <condition_variable>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <version>  // __cpp_lib_jthread: see llmux.hpp and the README for the Apple wart
+
+#if defined(__cpp_lib_jthread)
+#include <stop_token>
+#endif
 
 #include "llmux.hpp"
 
@@ -69,6 +82,57 @@ int count(std::string_view doc, std::string_view needle) {
 	     at = doc.find(needle, at + needle.size()))
 		n++;
 	return n;
+}
+
+// Read the first "key": <number>. sdks/fake-upstream.py's JSON comes from
+// Python's json.dumps, which puts a space after the colon by default, so this
+// skips it -- the same thing jsonpeek.c's seek() does for ../c. Returns -1 if
+// not found, which the one caller below treats as "could not measure."
+double peek_number(std::string_view doc, std::string_view key) {
+	const std::string needle = "\"" + std::string(key) + "\":";
+	size_t at = doc.find(needle);
+	if (at == std::string_view::npos) return -1;
+	at += needle.size();
+	while (at < doc.size() && doc[at] == ' ') at++;
+	return std::strtod(std::string(doc.substr(at)).c_str(), nullptr);
+}
+
+// One GET against sdks/fake-upstream.py's /generated endpoint, e.g.
+// {"generated": 3, "streams": 2, "disconnects": 2} -- outside the ABI
+// entirely, so it has no business in llmux.hpp. Not a general HTTP client;
+// see sidecar_chat.cpp for the fuller version this borrows its shape from.
+// Returns -1 on any failure to reach it.
+double fetch_generated(const char *upstream_url) {
+	int port = 0;
+	if (!upstream_url || std::sscanf(upstream_url, "http://127.0.0.1:%d", &port) != 1 || port <= 0)
+		return -1;
+
+	int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0) return -1;
+	sockaddr_in addr{};
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons(static_cast<uint16_t>(port));
+	::inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+	if (::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
+		::close(fd);
+		return -1;
+	}
+	const std::string req = "GET /generated HTTP/1.1\r\nHost: 127.0.0.1:" + std::to_string(port) +
+	                        "\r\nConnection: close\r\n\r\n";
+	if (::send(fd, req.data(), req.size(), 0) < 0) {
+		::close(fd);
+		return -1;
+	}
+	std::string raw;
+	char buf[4096];
+	for (;;) {
+		ssize_t n = ::recv(fd, buf, sizeof(buf), 0);
+		if (n <= 0) break;
+		raw.append(buf, static_cast<size_t>(n));
+	}
+	::close(fd);
+	if (raw.find("\r\n\r\n") == std::string::npos) return -1;
+	return peek_number(raw, "generated");
 }
 
 }  // namespace
@@ -129,6 +193,118 @@ int main(int argc, char **argv) {
 			});
 			std::cout << "stream        stopped after " << chunks << " chunks: \"" << text
 			          << "\" (no exception thrown)\n";
+		}
+
+		// --- llmux_cancel: aborting a stream from outside the read loop --------
+		//
+		// "Returning false" above stops the CONSUMER's read loop, from inside a
+		// chunk it already has -- and llmux.hpp still gets you a stopped upstream
+		// connection out of it. cancel() is for the shape of problem that has no
+		// chunk to return false from: another thread deciding to give up, or a
+		// timeout, while this one is blocked in try_stream/stream with nothing
+		// to hand back yet.
+		//
+		// `gw` above is wired to ffi/fakeupstream, which answers instantly and
+		// counts nothing, so there is no window in it to cancel into. This block
+		// needs sdks/fake-upstream.py's --chunk-delay-ms and its GET /generated
+		// counter, which run-demo.sh starts as a SECOND fake upstream just for
+		// this section and passes through LLMUX_CANCEL_CONFIG_JSON /
+		// LLMUX_CANCEL_UPSTREAM_URL. Run this binary by hand with neither set and
+		// the section says so and gets out of the way.
+		{
+			const char *cancel_config = std::getenv("LLMUX_CANCEL_CONFIG_JSON");
+			const char *cancel_upstream = std::getenv("LLMUX_CANCEL_UPSTREAM_URL");
+			if (!cancel_config || !*cancel_config) {
+				std::cout << "cancel        skipped: needs LLMUX_CANCEL_CONFIG_JSON, which\n"
+				             "              run-demo.sh sets from sdks/fake-upstream.py "
+				             "--chunk-delay-ms 100\n";
+			} else {
+				llmux::Gateway cgw(cancel_config);  // a second, independent handle
+				const std::string creq = chat_body("go");
+
+				// -- the raw primitive: another thread reaches in while this one
+				// blocks in try_stream. std::thread here is standing in for "some
+				// other part of the program decided to give up" -- a cancel button,
+				// a deadline timer, a request that hung up.
+				std::mutex mu;
+				std::condition_variable cv;
+				int chunks = 0;
+				std::string text;
+				std::thread canceller([&] {
+					std::unique_lock<std::mutex> lock(mu);
+					cv.wait(lock, [&] { return chunks >= 3; });
+					lock.unlock();
+					cgw.cancel();  // per-HANDLE: aborts every call in flight on cgw
+				});
+				const llmux::VoidResult r = cgw.try_stream(creq.c_str(), [&](std::string_view chunk) {
+					std::lock_guard<std::mutex> lock(mu);
+					chunks++;
+					peek_append_all(chunk, "content", text);
+					if (chunks == 3) cv.notify_one();
+					return true;
+				});
+				canceller.join();
+				std::cout << "cancel        (cancel(), another thread)  ok=" << std::boolalpha
+				          << r.ok() << " error=\"" << r.error() << "\"\n";
+				std::cout << "                                          consumer saw " << chunks
+				          << " chunks: \"" << text << "\"\n";
+				const double generated_a = fetch_generated(cancel_upstream);
+				if (generated_a >= 0) {
+					std::cout << "                                          upstream GET "
+					             "/generated: "
+					          << generated_a << " of 12\n";
+				}
+
+				// The handle survives a cancel: still open, still usable.
+				const llmux::StringResult m = cgw.try_models();
+				std::cout << "cancel        handle " << cgw.handle()
+				          << " answers \"models\" after cancel: "
+				          << (m.ok() ? "yes" : m.error()) << "\n";
+
+#if defined(__cpp_lib_jthread)
+				// -- the C++20 idiom: a std::jthread's stop_token cancels the stream
+				// cooperatively, through the stream(..., stop_token) overload. No
+				// mutex of OURS reaches into llmux this time -- the std::stop_callback
+				// llmux.hpp registers internally does that, and unregisters it the
+				// instant try_stream returns. The mutex below only protects `chunks2`
+				// between this thread and the watcher; it never touches cgw.
+				int chunks2 = 0;
+				std::string text2;
+				std::mutex mu2;
+				std::condition_variable cv2;
+				std::stop_source stopper;
+				std::jthread watcher([&](std::stop_token /* the jthread's own, unused */) {
+					std::unique_lock<std::mutex> lock(mu2);
+					cv2.wait(lock, [&] { return chunks2 >= 3; });
+					lock.unlock();
+					stopper.request_stop();
+				});
+				const llmux::VoidResult r2 = cgw.try_stream(
+				    creq.c_str(),
+				    [&](std::string_view chunk) {
+					    std::lock_guard<std::mutex> lock(mu2);
+					    chunks2++;
+					    peek_append_all(chunk, "content", text2);
+					    if (chunks2 == 3) cv2.notify_one();
+					    return true;
+				    },
+				    stopper.get_token());
+				std::cout << "cancel        (jthread + stop_token)      ok=" << std::boolalpha
+				          << r2.ok() << " error=\"" << r2.error() << "\"\n";
+				std::cout << "                                          consumer saw " << chunks2
+				          << " chunks: \"" << text2 << "\"\n";
+				const double generated_total = fetch_generated(cancel_upstream);
+				if (generated_a >= 0 && generated_total >= 0) {
+					std::cout << "                                          upstream GET "
+					             "/generated: "
+					          << (generated_total - generated_a) << " of 12\n";
+				}
+#else
+				std::cout << "cancel        (jthread + stop_token)      SKIPPED: this toolchain\n"
+				             "                                          does not define "
+				             "__cpp_lib_jthread (see README)\n";
+#endif
+			}
 		}
 
 		// --- an exception thrown inside the callback ---------------------------

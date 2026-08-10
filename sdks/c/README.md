@@ -50,6 +50,74 @@ tests, the C smoke test and the latency benchmark use, so both examples run with
 no provider account and no network. It builds `libllmux` and the `llmux` binary
 if they are not in `dist/` yet (that part needs a Go toolchain).
 
+`run-demo.sh` also starts a **second**, unrelated fake upstream —
+[`sdks/fake-upstream.py`](../fake-upstream.py) — just for `direct_chat.c`'s
+cancellation demo. `ffi/fakeupstream` answers instantly and counts nothing, so
+there is no window in it to cancel into and nothing to check a cancellation
+against; `fake-upstream.py` sleeps `--chunk-delay-ms` between chunks and
+answers `GET /generated` with what it actually wrote to the socket. Needs
+`python3` on `PATH`; nothing else in this script does.
+
+## Cancellation
+
+`llmux_cancel` aborts every call in flight on a handle without closing it —
+the only way to get a *blocked* `llmux_call` or `llmux_stream` to return short
+of destroying the whole gateway with `llmux_close`. `direct_chat.c` runs it two
+ways, both against `fake-upstream.py` so the numbers below are measured, not
+assumed:
+
+- **From another thread**, with a `pthread_create`d canceller waiting on a
+  condition variable until three chunks have arrived, then calling
+  `llmux_cancel` while the main thread is still blocked inside `llmux_stream`.
+- **From inside the chunk callback**, the route a single-threaded host (Node,
+  PHP, a fiber) has to use, because the callback is the only code of theirs
+  that runs while `llmux_stream` blocks. **Verified safe**: unlike
+  `llmux_close`, which would deadlock waiting on the very call running the
+  callback that invoked it, `llmux_cancel` does not wait.
+
+Both routes return the same way: `llmux_stream` returns `-1` with `*err` set to
+exactly `context canceled` — a **failure** return, unlike a callback returning
+non-zero, which returns `0` with no error. Chunks already delivered stay
+delivered, and the handle survives: `direct_chat.c` calls `llmux_call(h,
+"models", ...)` right after each cancel and it succeeds.
+
+Measured on this machine, against `fake-upstream.py --chunk-delay-ms 100`
+serving ten words (twelve `chat.completion.chunk` frames: ten words, one
+finish frame, one usage frame):
+
+```
+cancel        (another thread)   stream returned -1, err context canceled
+                                  consumer saw 3 chunks: "one two three "
+                                  upstream GET /generated: 3 of 12
+cancel        (inside callback)  stream returned -1, err context canceled
+                                  consumer saw 3 chunks: "one two three "
+                                  upstream GET /generated: 3 of 12
+```
+
+The consumer stopped at 3; the upstream generated 3 of 12 — for *both* routes.
+That is the whole point of measuring against `GET /generated` rather than
+trusting the return value: a cancellation that returns promptly to the caller
+while the provider keeps generating (and llmux keeps metering) in the
+background would look identical from the consumer's side, and this is the
+number that tells the two apart.
+
+This does **not** mean returning non-zero from the callback ("stopping early",
+demonstrated earlier in `direct_chat.c`) leaves the provider running — it does
+not: the library closes the upstream connection either way, and the provider
+observes a client disconnect and stops. The difference is which door is open
+to you. Returning non-zero from the callback only works from *inside* a chunk
+you already have; `llmux_cancel` is for abandoning a call from somewhere else
+entirely — another thread, a timeout, a request that hung up — with no chunk
+to return from.
+
+**`llmux_cancel` is per-HANDLE, not per-call.** It aborts *every* call in
+flight on that gateway, not only the one you have in mind. `direct_chat.c`'s
+two demos above run one after another on the same handle for exactly this
+reason: had they run concurrently, cancelling one would have killed the other
+too. If your program runs several streams at once and needs to cancel one
+without disturbing the rest, give it its own gateway — one gateway per
+cancellation scope.
+
 **These are examples, not tests.** The test is
 [`ffi/ctest/smoke.c`](../../ffi/ctest/smoke.c): it `dlopen()`s the library,
 resolves all seven symbols **by name**, and asserts 40 checks and then asserts
@@ -62,7 +130,7 @@ because that is how a program with an installed library is actually written.
 ## Building against libllmux
 
 ```
-cc -std=c11 -I<repo>/ffi/include -o direct_chat direct_chat.c jsonpeek.c \
+cc -std=c11 -I<repo>/ffi/include -o direct_chat direct_chat.c jsonpeek.c mini_http.c \
    -L<libdir> -lllmux -Wl,-rpath,<libdir> -lpthread
 ```
 
@@ -116,7 +184,9 @@ string, not a segfault in your address space — `direct_chat.c` demonstrates bo
 `pthread_self()` inside the callback and prints the verdict; `smoke.c` asserts
 it on every CI run. `chunk_json` is owned by the library and valid only for the
 duration of the call — copy it. Returning non-zero stops the stream and is **not**
-an error: the return is 0 and `*err` is untouched.
+an error: the return is 0 and `*err` is untouched. `llmux_cancel` is the other
+way to stop one — from outside the callback entirely, with a failure return
+rather than a clean one — see [Cancellation](#cancellation) above.
 
 ## Which mode to use from C
 
@@ -172,4 +242,8 @@ Neither is a component to reuse:
   works unchanged.
 - **`mini_http`** is not an HTTP client. It does one request to `127.0.0.1` with
   `Connection: close`, plus an SSE reader. No TLS, no chunked encoding, no
-  keep-alive, no redirects, no retries. Real programs link libcurl.
+  keep-alive, no redirects, no retries. Real programs link libcurl. Originally
+  `sidecar_chat.c`-only; `direct_chat.c` now links it too, for the one GET
+  against `fake-upstream.py`'s `/generated` in the cancellation demo — a
+  request that has nothing to do with the ABI, which is why it goes through
+  loopback HTTP rather than through libllmux.

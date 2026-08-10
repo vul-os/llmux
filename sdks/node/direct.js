@@ -21,6 +21,11 @@
 //
 // Everything here is JSON in, JSON out: the SAME JSON the HTTP API uses. A body
 // that works against POST /v1/chat/completions works here unchanged.
+//
+// To stop a call from outside its own onChunk decision — a caller-side
+// timeout, a request that was itself cancelled — see Gateway.cancel and
+// stream()'s `signal` option below, and README.md's "Cancellation" section
+// for what is and is not true about a timer trying to do the same thing.
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -130,6 +135,13 @@ function bind(libPath) {
         abi_version: lib.func("const char *llmux_abi_version()"),
         new_: lib.func("uint64_t llmux_new(const char *config_json, _Out_ void **err)"),
         close: lib.func("void llmux_close(uint64_t h)"),
+        // Added in llmux 0.1.5. Declared right next to llmux_close because the
+        // two are easy to confuse and are NOT interchangeable: close tears down
+        // the whole gateway and can block for a few seconds waiting on calls in
+        // flight; cancel only aborts those calls, returns immediately, and
+        // leaves the handle open for the next one. See Gateway.cancel's own
+        // comment for the full contract.
+        cancel: lib.func("void llmux_cancel(uint64_t h)"),
         // Declared `void*`, not `char*`, ON PURPOSE: koffi would decode a `char*`
         // result into a JS string and throw the pointer away, leaving nothing to
         // hand llmux_free. That is the leak this line prevents.
@@ -251,8 +263,47 @@ class Gateway {
      * which Node cannot do here (see the header) — or by buffering the whole
      * answer and replaying it as fake chunks, which would make time-to-first-token
      * a lie. If you want `for await (const chunk of ...)`, use the sidecar.
+     *
+     * `opts.signal` is the idiomatic way to cancel a stream from Node: it wires
+     * an `AbortSignal` to {@link cancel} so `controller.abort()` reaches
+     * llmux_cancel instead of leaving you to poke at the gateway directly. Three
+     * things about it are load-bearing, and all three are measured in
+     * ../README.md's Cancellation section rather than asserted here:
+     *
+     *   - A signal that is ALREADY aborted when you call `stream` throws before
+     *     anything native happens — no call is started just to be cancelled.
+     *   - Calling `controller.abort()` from INSIDE `onChunk` is the case that
+     *     matters on Node: the `abort` event fires synchronously, so it reaches
+     *     llmux_cancel on the same call stack, before `onChunk` returns and
+     *     before llmux_stream's blocking call unwinds. This is the only place a
+     *     single-threaded host can cancel from while the call is in flight, and
+     *     it is verified safe — it does not deadlock, unlike calling
+     *     {@link close} from a callback.
+     *   - A signal armed from a `setTimeout` or fired by something outside this
+     *     call CANNOT take effect until llmux_stream returns control to the
+     *     event loop, because that call blocks the loop for its entire
+     *     duration. This is not a bug to route around; it is what "synchronous"
+     *     means, and pretending otherwise would be exactly the kind of hollow
+     *     guarantee this module exists to avoid.
+     *
+     * `cancel()` — and therefore this signal — is per-HANDLE, not per-stream: it
+     * aborts every call in flight on this gateway. A signal that should only
+     * touch this one stream needs its own gateway.
      */
-    stream(request, onChunk) {
+    stream(request, onChunk, opts = {}) {
+        const { signal } = opts;
+        // Honour an already-aborted signal before any native call starts. Waiting
+        // for the first chunk to notice would still pay for a round trip to the
+        // provider and meter whatever it sent before we got around to checking —
+        // fetch() draws the same line for the same reason.
+        if (signal?.aborted) {
+            // signal.reason is an Error (a DOMException named "AbortError") on every
+            // runtime that sets one for us; rethrowing it verbatim preserves the
+            // caller's own reason instead of inventing ours.
+            if (signal.reason)
+                throw signal.reason;
+            throw new DOMException("llmux stream aborted before it started", "AbortError");
+        }
         const b = this.b;
         const h = this.live();
         const body = typeof request === "string" ? request : JSON.stringify({ ...request, stream: true });
@@ -278,6 +329,12 @@ class Gateway {
                 return 1;
             }
         }, b.chunkCbPtr);
+        // Reaches llmux_cancel through Gateway.cancel, not b.cancel directly, so a
+        // signal that fires after this Gateway has already been closed (from a
+        // `finally` racing the listener, say) is a no-op instead of a call into a
+        // stale handle.
+        const onAbort = () => { this.cancel(); };
+        signal?.addEventListener("abort", onAbort, { once: true });
         const err = [null];
         try {
             const rc = b.stream(h, "chat", body, cb, null, err);
@@ -292,9 +349,36 @@ class Gateway {
             // Unregister only after the native call has unwound. Doing it while the
             // library still holds the pointer is how this turns into a crash.
             k.unregister(cb);
+            signal?.removeEventListener("abort", onAbort);
             if (err[0])
                 b.free(err[0]);
         }
+    }
+    /**
+     * Aborts every call in flight on this handle, without closing it: the
+     * handle stays open and the next call starts on a fresh context. This is
+     * `llmux_cancel` — see ffi/include/llmux.h for the authoritative contract.
+     *
+     * Safe from another thread and, unlike {@link close}, safe from INSIDE a
+     * chunk callback: close() must never be called from a callback because it
+     * waits (up to a few seconds) for the very call running that callback,
+     * which is a deadlock. cancel() returns immediately either way — it asks
+     * the blocked llmux_call/llmux_stream to unwind, it does not wait for it.
+     *
+     * A no-op if this Gateway is already closed, if nothing is running on the
+     * handle, or if the handle is unknown — cancelling twice, or cancelling a
+     * gateway that finished on its own a moment earlier, is not an error.
+     *
+     * PER-HANDLE, NOT PER-CALL. This aborts every call in flight on this
+     * gateway, including ones you were not thinking about — a second stream
+     * started concurrently on the same handle dies too. If you need to cancel
+     * one stream without touching another, give them different gateways: one
+     * handle per cancellation scope.
+     */
+    cancel() {
+        if (this.closed)
+            return;
+        this.b.cancel(this.h);
     }
     /** Release the gateway, aborting any stream still running on it. Idempotent. */
     close() {
