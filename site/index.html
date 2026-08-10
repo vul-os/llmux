@@ -320,9 +320,22 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    hover ground, so "quieter" reads as a decision instead of as an omission. */
 .hdr-act .vulos-home{height:42px;width:46px;transition:opacity .18s,background .18s}
 .hdr-act .vulos-home:hover,.hdr-act .vulos-home:focus-visible{background:var(--panel);transform:none}
+/* The button shows the theme you are IN — a moon on the dark rack, a sun
+   under drafting-room light. Driven by the same data-theme the head script
+   settles before first paint, never by a script that runs later, so the glyph
+   is never briefly the wrong one. The media block covers the JavaScript-off
+   case, where no attribute is ever written and the palette above comes from
+   prefers-color-scheme alone: without it the page would be light and the
+   button would still be showing the moon. */
 #themeBtn .sun{display:none}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme]) #themeBtn .sun{display:block}
+  :root:not([data-theme]) #themeBtn .moon{display:none}
+}
 [data-theme="light"] #themeBtn .sun{display:block}
 [data-theme="light"] #themeBtn .moon{display:none}
+[data-theme="dark"] #themeBtn .sun{display:none}
+[data-theme="dark"] #themeBtn .moon{display:block}
 
 /* ═══ Bands — the alternating grounds that replace the endless card grid ═══
    The band rhythm is deliberately NOT flat. It used to be: every section 64px
@@ -433,17 +446,27 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 }
 
 /* ═══ HERO ════════════════════════════════════════════════════════════════ */
-.band.hero{padding:52px 0 0;border-bottom:1px solid var(--line)}
+.band.hero{padding:34px 0 0;border-bottom:1px solid var(--line)}
 /* On a phone the header, a 56px void, the spec strip, another 52px void and
    only then the headline put the first word of the page 288px down a 844px
-   screen — a third of the fold spent on nothing. The strip now hangs off the
-   header (see .toprail below) and the headline follows it directly. */
+   screen — a third of the fold spent on nothing. The strip is out of the way
+   entirely now (it moved into the side column: see .toprail below) and the
+   headline is the first thing under the header at every width. The band's own
+   top padding came down from 52 to 34 for the same reason — with nothing
+   between the header and the headline, 52 + the headline's own 52 was 104px
+   of nothing to open a page with. */
 @media (max-width:900px){
   .band.hero{padding-top:0}
   /* Specific enough to outrank `.hero-h{margin:52px 0 0}`, which is a shorthand
      declared further down the sheet. */
   .band.hero .hero-h{margin-top:38px}
 }
+/* ── The spec register ────────────────────────────────────────────────────
+   Five facts, ruled. It lives at the foot of the hero's side column now, under
+   the buttons whose fine print it is; the two forms below are the same
+   register laid on its side. The horizontal one is what a full-width row of it
+   looks like, which is what it gets between 901 and 1080 where the hero is one
+   column; above 1080 it is a 519px column and the register stands up. */
 .toprail{
   display:flex;flex-wrap:wrap;align-items:center;gap:0;
   border-top:1px solid var(--line);border-bottom:1px solid var(--line);
@@ -459,6 +482,20 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 .toprail span:last-child{border-right:0;border-left:1px solid var(--line);margin-left:auto;color:var(--teal-ink)}
 .toprail .live{display:inline-block;width:6px;height:6px;background:var(--teal);margin-right:8px;
   position:relative;top:-1px}
+
+/* ── The register stood up, above 1080 ────────────────────────────────────
+   One cell per row instead of one cell per column. `margin-left:auto` on the
+   version has to go with the row it was pushing against: in a single-column
+   grid it would push the cell's own box, not its content, and the rule under
+   it would stop short. */
+@media (min-width:1081px){
+  .hero-side .toprail{
+    display:grid;grid-template-columns:minmax(0,1fr);margin-top:32px;
+    border-top:1px solid var(--line-2);border-bottom:0;
+  }
+  .hero-side .toprail span{padding:10px 0;border-right:0;border-bottom:1px solid var(--line)}
+  .hero-side .toprail span:last-child{border-bottom:0;border-left:0;margin-left:0}
+}
 
 /* ── The strip below ~900px ───────────────────────────────────────────────
    This is not the desktop component at a smaller size, and every attempt to
@@ -1545,6 +1582,15 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   .vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
   .vulos-foot:hover { opacity: 1; text-decoration: none; }
   .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+  /* The shared Vulos mark is one flat #2E383A on transparency — drawn for
+     paper. On basin's ink it measured ~1.3:1: a smudge rather than a dimmed
+     logo. brightness(0) invert(1) recolours a single-colour stencil losslessly,
+     counters included. basin stamps data-theme on the root and falls back to
+     dark, so :not([data-theme="light"]) is the correct guard here. The markup
+     is shared suite chrome and is untouched — check-suite-chrome asserts the
+     element and blanks style blocks before it looks. */
+  :root:not([data-theme="light"]) .vulos-foot img,
+  :root:not([data-theme="light"]) .vulos-home img { filter: brightness(0) invert(1); }
 
 /* Hit area for the two suite-chrome controls. Deliberately written OUTSIDE the
    block above so that block stays byte-identical across the suite and can still
@@ -1553,6 +1599,17 @@ html.js .band.hero .hero-side{animation-delay:.28s}
    and 18px <img> inside, not the transparent box around it. */
 .vulos-home{width:44px;height:44px}
 .vulos-foot{min-height:44px}
+/* The one page in the suite where :not([data-theme="light"]) is not the whole
+   story. Every other product paints dark whenever the attribute is absent;
+   this one also has a prefers-color-scheme palette for readers with
+   JavaScript off, so "no attribute" there means a LIGHT page — and the
+   correction above would knock the mark out to white on it, invisible. Scoped
+   to exactly that case, and written outside the shared block so the block
+   stays byte-identical across the suite. */
+@media (prefers-color-scheme:light){
+  :root:not([data-theme]) .vulos-foot img,
+  :root:not([data-theme]) .vulos-home img { filter: none; }
+}
 </style>
 </head>
 <body>
@@ -1595,16 +1652,6 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="toprail rv in">
-      <span><i class="live" aria-hidden="true"></i>self-hosted</span>
-      <span>MIT or Apache-2.0</span>
-      <span>no accounts, bearer tokens only</span>
-      <span>no telemetry</span>
-      <!-- Must equal VERSION at the repo root. It said v0.1.1 while VERSION
-           said 0.1.2 — the landing was advertising the previous release. -->
-      <span>v0.1.6</span>
-    </div>
-
     <div class="hero-grid">
       <h1 class="hero-h disp rv in">
         <span class="l1">One endpoint.</span>
@@ -1636,6 +1683,26 @@ html.js .band.hero .hero-side{animation-delay:.28s}
           </a>
           <a class="btn" href="#gate">See the gate</a>
           <a class="btn" href="./docs.html">Read the docs</a>
+        </div>
+
+        <!-- The spec register, and the third thing in this column.
+             It used to be a full-width strip above the headline, where it did
+             two things badly: it read as a second tier of chrome hanging off
+             the header, and it was the only thing standing between a reader
+             and the first word of the page. Here it is the fine print of the
+             call to action directly above it — you have just been invited to
+             get started, and these five lines are what getting started costs:
+             no account, no telemetry, no licence to negotiate. That is a real
+             relationship, and it is what closes the ~170px of air the buttons
+             used to hang over at 1440. -->
+        <div class="toprail">
+          <span><i class="live" aria-hidden="true"></i>self-hosted</span>
+          <span>MIT or Apache-2.0</span>
+          <span>no accounts, bearer tokens only</span>
+          <span>no telemetry</span>
+          <!-- Must equal VERSION at the repo root. It said v0.1.1 while VERSION
+               said 0.1.2 — the landing was advertising the previous release. -->
+          <span>v0.1.7</span>
         </div>
       </div>
     </div>
@@ -2923,6 +2990,12 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   });
   paintShots();
 
+  /* The toggle is two-state and writes an explicit value on every click, and
+     ONLY on a click — a load never stores anything, so merely visiting can
+     never leave a reader carrying a "choice" that outranks their machine. A
+     reader on a light machine who clicks to dark and back therefore ends on a
+     stored light: the same pixels as following the machine, and a state the
+     button can actually show. */
   var btn=document.getElementById('themeBtn');
   if(btn){
     btn.addEventListener('click',function(){
@@ -2932,6 +3005,21 @@ html.js .band.hero .hero-side{animation-delay:.28s}
       try{localStorage.setItem(KEY,next);}catch(e){}
       paintShots();
     });
+  }
+
+  /* Until something is stored, "follow the machine" keeps being live: change
+     the OS theme with the page open and the page follows. */
+  if(window.matchMedia){
+    var mql=window.matchMedia('(prefers-color-scheme: light)');
+    var onSystem=function(){
+      var stored=null;
+      try{stored=localStorage.getItem(KEY);}catch(e){}
+      if(stored==='light'||stored==='dark') return;
+      document.documentElement.setAttribute('data-theme', mql.matches?'light':'dark');
+      paintShots();
+    };
+    if(mql.addEventListener) mql.addEventListener('change',onSystem);
+    else if(mql.addListener) mql.addListener(onSystem);
   }
 
   /* ── Scroll reveal ─────────────────────────────────────────────────────

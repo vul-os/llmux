@@ -9,6 +9,39 @@ Versioning: [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-08-10
+
+### Changed
+
+- **The C ABI version string is derived, not declared.** `ffi/abi.go` used to
+  hold a hand-typed `const Version`, and in v0.1.3 it came apart from `VERSION`:
+  the release was tagged with the constant a patch behind, so the library told
+  every host it was old when it was current. It now reads `llmux.Version`, which
+  is `go:embed`ed from `VERSION` at compile time — there is no second copy left
+  to forget, and a build with no `VERSION` file does not compile at all.
+
+  Two approaches were tried and rejected on evidence rather than taste:
+  `//go:embed ../VERSION` is `invalid pattern syntax`, and a symlink is
+  `cannot embed irregular file`. `-ldflags` was rejected because a default that
+  can ship is the failure mode being fixed.
+
+  The root-module guard is kept and retargeted: it no longer compares two copies
+  of a version, it **parses the AST and asserts no version-shaped literal exists
+  in the file at all**. A regex was tried first and flagged the version inside
+  its own explanatory comment — a false positive that gets a test deleted
+  eventually.
+
+### Fixed
+
+- **The release workflow's tag check could not fail.** It built with
+  `-X main.Version=${TAG#v}` and then asserted the binary reported `${TAG#v}` —
+  it injected the value it went on to check. Demonstrated: with tag `v0.1.7`
+  against a `VERSION` of `0.1.6`, the old gate printed
+  `Version check passed: 0.1.7`. Now the tag is compared to the `VERSION` file
+  first, and the ldflag round-trip is kept because it does prove that path is
+  wired. **This can now fail where it previously could not**; release artifacts
+  are otherwise byte-identical.
+
 ## [0.1.6] - 2026-08-10
 
 ### Added
@@ -462,7 +495,8 @@ section before upgrading anyway.
 
 Initial release.
 
-[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/vul-os/llmux/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/vul-os/llmux/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/vul-os/llmux/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/vul-os/llmux/compare/v0.1.4...v0.1.5
 [0.1.4]: https://github.com/vul-os/llmux/compare/v0.1.3...v0.1.4
