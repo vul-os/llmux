@@ -89,3 +89,6 @@ coverage.html
 /ffi/*.dll
 /ffi/*.h
 !/ffi/include/*.h
+
+# BEAM crash dumps — an Elixir NIF fault drops one of these at the repo root.
+erl_crash.dump

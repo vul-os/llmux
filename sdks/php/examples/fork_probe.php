@@ -11,13 +11,26 @@ declare(strict_types=1);
  *
  *   php sdks/php/examples/fork_probe.php before chat   # expect: HUNG
  *   php sdks/php/examples/fork_probe.php after  chat   # expect: exited 0
- *   php sdks/php/examples/fork_probe.php before models # expect: exited 0  <-- the trap
+ *   php sdks/php/examples/fork_probe.php before models # expect: HUNG, after answering
  *
- * The third line is the point. `models` is answered from memory and needs
- * nothing from the Go scheduler or netpoller, so it works in a broken child and
- * a smoke test built on it reports a healthy system. `chat` opens a socket and
- * hangs forever. The difference between a passing test and production is which
- * method you called.
+ * The third line is the point, and it changed shape in 0.1.5 — for the better.
+ *
+ * `models` is answered from memory and needs nothing from the Go scheduler or
+ * netpoller, so it still succeeds in a broken child: you will see
+ * `child: models returned 1580 bytes` scroll past. Through 0.1.4 the child then
+ * exited 0, and a smoke test built on `models` reported a healthy system. That
+ * was the trap: the difference between a passing test and production was which
+ * method you happened to call.
+ *
+ * Since 0.1.5 `llmux_close` drains in-flight work with a grace period, and a
+ * fork-broken runtime cannot complete that drain — so the child now hangs on
+ * the way out instead of exiting 0. The false green is gone: the answer is
+ * still wrong-headed, but the process no longer pretends otherwise. `chat`
+ * hangs as it always did, on the call rather than the close.
+ *
+ * That the fix for a different problem removed this one is luck, not design.
+ * Do not rely on close() to catch a fork for you — use the `spawn` start
+ * method, or the sidecar.
  *
  * Requires ext-pcntl (CLI only). Environment: LLMUX_LIBRARY, LLMUX_CONFIG_JSON.
  */
