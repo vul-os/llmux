@@ -318,6 +318,22 @@ jobs:
       - name: Build
         run: npm run build
 
+      # index.js, index.d.ts, direct.js and direct.d.ts are COMMITTED — they
+      # are the package's entry point and types, and committing them is what
+      # makes `npm pack` work from a clean checkout (openrate did neither and
+      # its pack produced a tarball of two files, neither of which was code).
+      #
+      # The cost of that choice is drift: nothing stopped the committed
+      # JavaScript from falling behind the TypeScript beside it, and a stale
+      # entry point is invisible here because the step above rebuilds it before
+      # the tests run. The rebuild is now required to change nothing.
+      - name: The committed build output is what the TypeScript produces
+        run: |
+          if ! git diff --exit-code -- . ; then
+            echo "::error::the committed JS/d.ts under sdks/node is stale — run 'npm run build' and commit the result"
+            exit 1
+          fi
+
   # sdks/rust is a real crate (Cargo.toml + src/ + tests/) that neither the Go
   # build/test above nor the Node SDK job touches — without this job `cargo
   # build`, `cargo test`, and `cargo clippy -D warnings` never actually ran in
