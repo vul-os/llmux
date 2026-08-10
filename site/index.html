@@ -288,23 +288,68 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   border-bottom:2px solid transparent;transition:color .18s,border-color .18s;
 }
 .secnav a:hover{color:var(--ink);border-bottom-color:var(--teal)}
-.hdr-act{display:flex;align-items:center;gap:6px;flex:none}
-.hbtn{
-  height:44px;min-width:44px;flex:none;
-  display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  padding:0 12px;border:1px solid var(--line-2);background:transparent;color:var(--muted);
-  font-family:var(--mono);font-size:12.2px;cursor:pointer;transition:color .18s,border-color .18s;
+
+/* The action cluster is ONE patch strip, not four unrelated controls.
+   It used to be three separately-bordered boxes with the Vulos mark set loose
+   beside them, bare and dimmed — two visual languages in nine centimetres of
+   header, and the odd one out was the one element the reader has least context
+   for. So the border moves OUT to the group and the divisions move IN: one
+   hairline rectangle, square, with each control separated from its neighbour
+   by a single internal rule. The Vulos mark becomes the last segment of that
+   strip rather than a stray glyph next to it. Same idiom as the toprail below
+   and the endpoint matrix further down: cells in a ruled register. */
+.hdr-act{
+  display:flex;align-items:stretch;gap:0;flex:none;
+  border:1px solid var(--line-2);
 }
-.hbtn:hover{color:var(--ink);border-color:var(--line-3)}
+.hdr-act > * + *{border-left:1px solid var(--line-2)}
+.hbtn{
+  height:42px;min-width:44px;flex:none;
+  display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:0 13px;border:0;background:transparent;color:var(--muted);
+  font-family:var(--mono);font-size:12.2px;cursor:pointer;
+  transition:color .18s,background .18s;
+}
+.hbtn:hover{color:var(--ink);background:var(--panel)}
 .hbtn svg{width:15px;height:15px;flex:none}
 .hbtn.sq{padding:0;width:44px}
 .hbtn img{width:17px;height:17px;border-radius:4px}
+/* The suite mark keeps its own drawn size and its quieter weight — it points
+   off this product, and should not compete with the product's own controls —
+   but it now sits inside the strip on the same 42px rhythm, with the same
+   hover ground, so "quieter" reads as a decision instead of as an omission. */
+.hdr-act .vulos-home{height:42px;width:46px;transition:opacity .18s,background .18s}
+.hdr-act .vulos-home:hover,.hdr-act .vulos-home:focus-visible{background:var(--panel);transform:none}
 #themeBtn .sun{display:none}
 [data-theme="light"] #themeBtn .sun{display:block}
 [data-theme="light"] #themeBtn .moon{display:none}
 
-/* ═══ Bands — the alternating grounds that replace the endless card grid ═══ */
-.band{position:relative;background:var(--band-a);padding:64px 0 70px}
+/* ═══ Bands — the alternating grounds that replace the endless card grid ═══
+   The band rhythm is deliberately NOT flat. It used to be: every section 64px
+   from the one above it, every section 70px from the one below, at every
+   viewport width — so a 1440px screen got the same separation as a 390px one
+   (too little there, and nothing to tell the reader that one of these seven
+   channels carries the argument the whole product is for), and the page read as
+   seven equal slabs.
+
+   Three levels now:
+
+     STANDARD   the six supporting channels. Fluid, so the separation grows with
+                the screen instead of staying at a phone's measure on a desk.
+     ELEVATED   the GATE (ch 03) and the START (ch 07) — the thesis and the
+                close. Roughly half again the air, and a larger section title,
+                so the eye has two places to land on the way down rather than
+                treating the page as an undifferentiated scroll.
+
+   The elevation is spacing and title size only. No band gains a decoration the
+   others do not have; the ink band's darker ground was already doing that job
+   and does not need help. */
+.band{position:relative;background:var(--band-a);
+  padding:clamp(50px,5.4vw,84px) 0 clamp(54px,5.9vw,92px)}
+.band.ink,#start.band{
+  padding-top:clamp(62px,8.2vw,124px);padding-bottom:clamp(66px,8.6vw,130px);
+}
+.band.ink h2.sec,#start.band h2.sec{font-size:clamp(29px,4vw,52px)}
 /* The alternate ground carries its own surface tokens rather than only a
    background: on the dark theme a background swap alone is invisible, and the
    panels sitting on it have to move with it or they vanish into the band. */
@@ -377,14 +422,28 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    viewport, dragging the rule beside it off the edge and scrolling the whole
    page sideways. Below 520 it is allowed to wrap onto a second line and the
    tracking eases off; nothing is hidden, so no label text is lost. */
+/* Wrapping alone left the rule as a 110px stub floating to the right of the
+   label — a hairline that starts nowhere and stops nowhere. Given its own row
+   it becomes what it is on the desktop layout: the rule the channel label sits
+   against, crossing the whole column. */
 @media (max-width:520px){
-  .chead{flex-wrap:wrap;row-gap:6px;gap:10px;letter-spacing:.1em}
-  .chead .cl{flex:1 1 auto;min-width:0;white-space:normal}
-  .chead .cr{flex:1 1 40px}
+  .chead{flex-wrap:wrap;row-gap:9px;gap:10px;letter-spacing:.1em;margin-bottom:22px}
+  .chead .cl{flex:0 1 auto;min-width:0;white-space:normal}
+  .chead .cr{flex:1 0 100%;order:9}
 }
 
 /* ═══ HERO ════════════════════════════════════════════════════════════════ */
-.band.hero{padding:56px 0 0;border-bottom:1px solid var(--line)}
+.band.hero{padding:52px 0 0;border-bottom:1px solid var(--line)}
+/* On a phone the header, a 56px void, the spec strip, another 52px void and
+   only then the headline put the first word of the page 288px down a 844px
+   screen — a third of the fold spent on nothing. The strip now hangs off the
+   header (see .toprail below) and the headline follows it directly. */
+@media (max-width:900px){
+  .band.hero{padding-top:0}
+  /* Specific enough to outrank `.hero-h{margin:52px 0 0}`, which is a shorthand
+     declared further down the sheet. */
+  .band.hero .hero-h{margin-top:38px}
+}
 .toprail{
   display:flex;flex-wrap:wrap;align-items:center;gap:0;
   border-top:1px solid var(--line);border-bottom:1px solid var(--line);
@@ -393,27 +452,52 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 }
 .toprail span{padding:11px 18px;border-right:1px solid var(--line)}
 .toprail span:first-child{padding-left:0;color:var(--ink)}
-.toprail span:last-child{border-right:0;margin-left:auto;color:var(--teal-ink)}
+/* The version is the strip's right-hand register. It is pushed to the far edge,
+   so it needs a rule on the side it is pushed AWAY from — otherwise the run of
+   empty strip between "no telemetry" and the version reads as a gap in the row
+   rather than as the last, deliberately wide cell. */
+.toprail span:last-child{border-right:0;border-left:1px solid var(--line);margin-left:auto;color:var(--teal-ink)}
 .toprail .live{display:inline-block;width:6px;height:6px;background:var(--teal);margin-right:8px;
   position:relative;top:-1px}
-/* Below ~900px the five cells no longer fit on one line, and a wrapping flex
-   row makes a mess of a rule set that assumes one: the last cell on each
-   wrapped row keeps its border-right and leaves a divider hanging in mid-air;
-   `padding-left:0` only ever applies to the very first cell, so every wrapped
-   row starts indented against the ones above; and `margin-left:auto` on the
-   version throws it to the far right of a half-empty row with a gap where the
-   dividers should be. A grid has explicit columns, so each of those can be
-   addressed by position instead of by hoping the row breaks somewhere useful. */
+
+/* ── The strip below ~900px ───────────────────────────────────────────────
+   This is not the desktop component at a smaller size, and every attempt to
+   make it one has failed in a different way. As a wrapping FLEX ROW the last
+   cell of each wrapped row kept its divider and left it hanging in mid-air.
+   As a two-column GRID — the previous fix — five cells produced a 2×2 whose
+   neighbouring cells wrapped to different heights and fought each other, with
+   the version stranded alone on a third row, right-aligned, against dead
+   space. Both are the same mistake: a five-cell ruled register needs a row to
+   live in, and a phone has not got one.
+
+   So at this width it stops being a register and becomes what it actually is —
+   one sentence of specification, set as running text that wraps like text,
+   with the desktop's cell divider kept as an inline hairline between clauses.
+   Nothing is hidden, nothing is stranded, there are no cell heights left to
+   disagree, and the whole strip costs about a third of the height the grid
+   did. It also stops floating: with no top rule it hangs directly off the
+   header's own bottom edge and reads as a second tier of chrome rather than as
+   an orphaned box between the nav and the headline.
+
+   The separator is a middot in the CONTENT, not the desktop's drawn hairline,
+   and it is glued to the clause in front of it with a no-break space. Both of
+   those are load-bearing. A drawn divider is an inline box preceded by markup
+   whitespace, so the line can break in front of it and every wrapped line then
+   opens with a stray vertical rule sitting where a bullet would be; the
+   no-break space moves the only break opportunity to AFTER the separator, so a
+   separator can never start a line. (The clause that used to read "no accounts
+   · bearer tokens only" now reads "…, bearer tokens only" for the same reason:
+   with a middot doing the separating, a middot inside a clause reads as a
+   clause boundary that is not one.) */
 @media (max-width:900px){
-  .toprail{display:grid;grid-template-columns:1fr 1fr;font-size:11px}
-  .toprail span{padding:9px 12px;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
-  .toprail span:first-child{padding-left:12px}
-  .toprail span:nth-child(2n){border-right:0}
-  /* Five cells in two columns leaves the version alone on the last row. Given
-     the whole row it reads as a footer to the strip rather than as a cell with
-     a divider beside nothing. */
-  .toprail span:last-child{grid-column:1/-1;border-right:0;border-bottom:0;margin-left:0;text-align:right}
-  .toprail span:nth-last-child(2),.toprail span:nth-last-child(3){border-bottom:0}
+  .toprail{
+    display:block;border-top:0;padding:9px 0 10px;
+    font-size:11px;letter-spacing:.09em;line-height:1.85;
+  }
+  .toprail span,.toprail span:first-child,.toprail span:last-child{
+    display:inline;padding:0;border:0;margin:0;
+  }
+  .toprail span + span::before{content:"\00a0· ";color:var(--line-3);letter-spacing:0}
 }
 
 /* The hero is one grid, not a headline followed by a two-column block. The
@@ -430,6 +514,10 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    read as heavy rather than confident. 82px still carries the page without
    the headline becoming the only thing on it. */
 .hero-h .l1,.hero-h .l2{display:block;font-size:clamp(38px,6vw,82px)}
+/* 38px is 300px of "One endpoint." and a 320px screen has 284px to give it, so
+   the clamp's own floor broke the headline into four lines and put "One" alone
+   on the first. Only the narrowest class of phone needs this. */
+@media (max-width:360px){.hero-h .l1,.hero-h .l2{font-size:33px}}
 .hero-tag{
   grid-column:1;grid-row:2;margin:26px 0 0;
   font-family:var(--display);font-weight:600;font-variation-settings:'wdth' 104;
@@ -438,20 +526,37 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 }
 .hero-tag em{font-style:normal;color:var(--teal-ink)}
 .hero-copy{grid-column:1;grid-row:3;margin-top:30px}
-/* The side column is shorter than the copy column, so rather than leaving a
-   ragged tail under the buttons it is justified across the same two rows: the
-   panel sits level with the standfirst, the buttons land level with the last
-   line of copy, and the hero reads as one settled block. */
+/* The side column carries two things that belong to each other — the one-line
+   diff that IS the integration, and the buttons that act on it — so they are
+   stacked as one module with a single measured gap.
+
+   They used to be justified to the full height of the copy column instead, on
+   the theory that levelling the buttons with the last line of prose made the
+   hero "one settled block". Measured at 1440 that theory cost 213px of empty
+   column between the panel and the buttons: the single largest void above the
+   fold, and it broke the only relationship the two elements have. A shorter
+   right column against a longer left one is what an asymmetric hero looks
+   like; a hole punched through the middle of the right column is not. */
 .hero-side{
-  grid-column:2;grid-row:2 / span 2;margin-top:26px;align-self:stretch;
-  display:flex;flex-direction:column;justify-content:space-between;
+  grid-column:2;grid-row:2 / span 2;margin-top:26px;align-self:start;
+  display:flex;flex-direction:column;justify-content:flex-start;
 }
-@media (max-width:960px){
+.hero-side .cta{margin-top:34px}
+/* Stacks at 1080, not 960. Between the two the grid technically fit, but it fit
+   by giving the copy a 475px column and the side a 457px one, which left the
+   code panel narrow AND opened a 340px gap under the buttons — the two-column
+   arrangement was costing more than it bought. 1080 is also where the signal
+   bus appears, so the hero and the page's spine change shape at the same
+   width instead of at two nearby ones. */
+@media (max-width:1080px){
   .hero-grid{grid-template-columns:minmax(0,1fr)}
   .hero-tag,.hero-copy,.hero-side{grid-column:1;grid-row:auto}
   .hero-side{margin-top:30px;display:block}
 }
-.hero-copy p{margin:0;color:var(--muted);font-size:16.5px;line-height:1.65}
+/* Uncapped, the standfirst copy ran the full 712px of a 768px tablet — about
+   95 characters a line. Above 1080 the grid column is already narrower than
+   this, so the cap only ever bites where the hero is one column. */
+.hero-copy p{margin:0;color:var(--muted);font-size:16.5px;line-height:1.65;max-width:640px}
 .hero-copy p b{color:var(--ink);font-weight:600}
 .hero-copy p + p{margin-top:16px}
 
@@ -1273,6 +1378,33 @@ ul.chips li em{font-style:normal;color:var(--faint);font-size:11px;letter-spacin
   border-right:1px solid var(--line);border-bottom:1px solid var(--line);flex:1 0 auto;text-align:center;
 }
 
+/* ═══ The fifteen language packages ═══════════════════════════════════════
+   Not the sdks/README table restated — that table has five columns and lives
+   with the code, where it can be kept true. This is the one column a reader
+   actually chooses on: which mechanism this language gets BY DEFAULT, and the
+   count in each group. Three ledger rows, fifteen chips, every chip a deep link
+   into that language's worked first call in the docs.
+
+   The chips are hairline and neutral. Teal on this page means one thing — a
+   signal that was permitted — and the only chip that earns a distinguishing
+   mark is Go, because Go is genuinely not the same mechanism as the other
+   fourteen: it is a package import with no C boundary at all. */
+.pkgrow{display:flex;flex-wrap:wrap;gap:7px}
+.pk{
+  display:inline-flex;align-items:baseline;gap:8px;min-height:32px;padding:6px 11px;
+  border:1px solid var(--line-2);color:var(--muted);
+  font-family:var(--mono);font-size:12.6px;line-height:1.3;
+  transition:color .16s,border-color .16s,background .16s;
+}
+.pk:hover{color:var(--ink);border-color:var(--line-3);background:var(--panel)}
+.pk em{font-style:normal;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint)}
+.pk:hover em{color:var(--teal-ink)}
+.pk.lead-pkg{border-left:2px solid var(--teal);color:var(--ink)}
+.pk.lead-pkg em{color:var(--teal-ink)}
+/* The count belongs to the group label, not to a chip. */
+.pkgs .lrow dt .c{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--faint);
+  font-weight:400;margin-left:8px}
+
 /* ═══ Screenshots — presented in instrument chrome ═══════════════════════ */
 /* Each capture is 2560×1600, and each one runs out of content at a DIFFERENT
    height — the keys tab is four rows and ends barely two thirds down, the
@@ -1466,11 +1598,11 @@ html.js .band.hero .hero-side{animation-delay:.28s}
     <div class="toprail rv in">
       <span><i class="live" aria-hidden="true"></i>self-hosted</span>
       <span>MIT or Apache-2.0</span>
-      <span>no accounts · bearer tokens only</span>
+      <span>no accounts, bearer tokens only</span>
       <span>no telemetry</span>
       <!-- Must equal VERSION at the repo root. It said v0.1.1 while VERSION
            said 0.1.2 — the landing was advertising the previous release. -->
-      <span>v0.1.4</span>
+      <span>v0.1.5</span>
     </div>
 
     <div class="hero-grid">
@@ -1925,6 +2057,100 @@ html.js .band.hero .hero-side{animation-delay:.28s}
           </tbody>
         </table>
       </div>
+    </div>
+
+    <!-- THE FIFTEEN. The modes table above names the four mechanisms; this says
+         which one each language actually gets when you install its package, and
+         gives every one of the fifteen a name and a link. The grouping is the
+         recommendation column of sdks/README.md and nothing else from it — the
+         per-language mechanism, streaming type and the measurement behind each
+         recommendation live there and in docs/sdks.md, both linked, rather than
+         being copied here where they would rot. Counts are stated so a reader
+         can see at a glance that the sidecar is the majority answer. -->
+    <div class="rv" style="margin-top:46px">
+      <div class="chead"><span class="ch">Packages</span><span class="cl">Fifteen languages</span>
+        <span class="cr"></span><span class="cm">one engine behind all of them</span></div>
+      <p class="lead" style="margin-top:0">Fifteen language packages ship in this repo, and they are
+        <b>wrappers, not reimplementations</b> — one routing engine, one sovereignty gate, one budget
+        ledger, one price catalog, reached from all fifteen. What differs is only how your process
+        reaches it, and the honest default is not the same in every language.</p>
+
+      <dl class="ledger pkgs" style="margin-top:30px">
+        <div class="lrow">
+          <dt><span class="n">In your process</span>Direct by default<span class="c">7</span></dt>
+          <dd>
+            <div class="pkgrow">
+              <a class="pk lead-pkg" href="./docs.html#sdks~go">Go <em>package import</em></a>
+              <a class="pk" href="./docs.html#sdks~c">C</a>
+              <a class="pk" href="./docs.html#sdks~c-header-only">C++</a>
+              <a class="pk" href="./docs.html#sdks~rust">Rust</a>
+              <a class="pk" href="./docs.html#sdks~swift">Swift</a>
+              <a class="pk" href="./docs.html#sdks~deno">Deno</a>
+              <a class="pk" href="./docs.html#sdks~bun">Bun</a>
+            </div>
+          </dd>
+        </div>
+        <div class="lrow">
+          <dt><span class="n">A child process on loopback</span>Sidecar by default<span class="c">7</span></dt>
+          <dd>
+            <div class="pkgrow">
+              <a class="pk" href="./docs.html#sdks~nodejs">Node.js</a>
+              <a class="pk" href="./docs.html#sdks~python">Python</a>
+              <a class="pk" href="./docs.html#sdks~java">Java</a>
+              <a class="pk" href="./docs.html#sdks~kotlin">Kotlin</a>
+              <a class="pk" href="./docs.html#sdks~net-and-c">.NET / C#</a>
+              <a class="pk" href="./docs.html#sdks~php">PHP</a>
+              <a class="pk" href="./docs.html#sdks~elixir">Elixir</a>
+            </div>
+            <p class="aside">Each of the seven has a stated reason — a pre-forking host, a runtime whose
+              signal handlers the library replaces, a thread that cannot be retired, or a platform with no
+              library to load. Elixir has <b style="color:var(--muted)">no direct mode at all</b>, on
+              purpose.</p>
+          </dd>
+        </div>
+        <div class="lrow">
+          <dt><span class="n">Your deployment decides</span>Depends<span class="c">1</span></dt>
+          <dd>
+            <div class="pkgrow">
+              <a class="pk" href="./docs.html#sdks~ruby">Ruby</a>
+            </div>
+            <p class="aside">Unicorn, Passenger and clustered Puma fork, so they need the sidecar; single-mode
+              Puma, Falcon, Sidekiq and CLI tools do not, and direct is fine there.</p>
+          </dd>
+        </div>
+      </dl>
+
+      <div class="triptych" style="margin-top:34px">
+        <div>
+          <span class="n">Go</span>
+          <b>The one that is not a wrapper</b>
+          <p>Go does not load a shared library and does not cross a C boundary: it
+            <code>import</code>s <code>core/gateway</code> and calls it. No FFI, no
+            <code>libllmux</code>, <b style="color:var(--muted)">no platform matrix to check</b> — if your
+            program builds, the gateway is in it. Every other language is reading its own row against
+            this one.</p>
+        </div>
+        <div>
+          <span class="n">Streaming</span>
+          <b>In-process, on your own thread</b>
+          <p>Direct mode streams: <code>llmux_stream</code> delivers one chunk per callback, and the
+            callback runs on <b style="color:var(--muted)">the thread that made the call</b> — measured
+            with <code>pthread_self()</code> on darwin/arm64 and linux/arm64, not assumed. Languages that
+            cannot safely take a callback there say so in their own row above.</p>
+        </div>
+        <div>
+          <span class="n">Platforms</span>
+          <b>Where direct mode exists</b>
+          <p>Prebuilt shared libraries are <b style="color:var(--muted)">darwin/arm64 and
+            linux/arm64</b>. linux/amd64 is built in CI only, and
+            <b style="color:var(--muted)">no Windows library ships</b> — not untested, never built. The
+            sidecar has no such gap: it is the same binary, and it cross-compiles everywhere.</p>
+        </div>
+      </div>
+
+      <p class="aside" style="margin-top:20px">
+        <a href="./docs.html#sdks" style="color:var(--teal-ink);font-weight:600">A first call in every language →</a>
+        <a href="https://github.com/vul-os/llmux/blob/main/sdks/README.md" target="_blank" rel="noopener" style="color:var(--teal-ink);font-weight:600;margin-left:18px">The package index, and the measurement behind each recommendation →</a></p>
     </div>
 
     <div class="triptych rv">

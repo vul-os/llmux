@@ -105,11 +105,24 @@ document.documentElement.setAttribute('data-theme',s==='light'||s==='dark'?s:(ma
 
   /* Reading measure. Deliberately px, not ch: `ch` is the width of "0", and
      Instrument Sans draws a wide figure (1ch ≈ .666em), so 70ch measures well
-     over 800px — i.e. no cap at all. 660px is ~78 characters at the 16.5px
-     body size. Code fences, tables, diagrams and images deliberately are NOT
-     capped: a wide snippet gets the whole column while the paragraphs stay
-     readable. */
-  --measure:660px;
+     over 800px — i.e. no cap at all. Code fences, tables, diagrams and images
+     deliberately are NOT capped: a wide snippet gets the whole column while the
+     paragraphs stay readable.
+
+     604px, not the 660px this carried before, and the reason is that 660's
+     stated justification was wrong. Measured — every paragraph of every
+     rendered document concatenated, set at a series of widths, lines counted
+     from the block's own height over its line-height:
+
+       520px → 64 chars    600px → 74 chars    700px → 89 chars
+       560px → 69 chars    628px → 80 chars    789px → 100 chars
+                           660px → 83 chars
+
+     So the old comment's "660px is ~78 characters" was out by five characters
+     and the column was running at 83 — past the point where the eye reliably
+     finds the start of the next line. 604px sets at ~75, the top of the
+     comfortable band. Nothing else about the rule changed. */
+  --measure:604px;
 
   /* ── Syntax highlighting ─────────────────────────────────────────────────
      The shared Vulos code palette, byte-identical to index.html's, and
@@ -272,16 +285,29 @@ img{max-width:100%;display:block}
 }
 .secnav a:hover{color:var(--ink);border-bottom-color:var(--teal)}
 .secnav a.here{color:var(--ink);border-bottom-color:var(--teal)}
-.hdr-act{display:flex;align-items:center;gap:6px;flex:none}
-.hbtn{
-  height:44px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
-  padding:0 12px;border:1px solid var(--line-2);background:transparent;color:var(--muted);
-  font-family:var(--mono);font-size:12.2px;cursor:pointer;transition:color .18s,border-color .18s;
+
+/* The action cluster is ONE patch strip — the landing's header, verbatim. It
+   used to be separately-bordered boxes with the Vulos mark left bare and dimmed
+   beside them, which read as two visual languages in one header and made the
+   suite mark look like an element that had lost its styling. The border moves
+   out to the group, the divisions move in, and the mark becomes the strip's
+   last segment. */
+.hdr-act{
+  display:flex;align-items:stretch;gap:0;flex:none;
+  border:1px solid var(--line-2);
 }
-.hbtn:hover{color:var(--ink);border-color:var(--line-3)}
+.hdr-act > * + *{border-left:1px solid var(--line-2)}
+.hbtn{
+  height:42px;min-width:44px;display:inline-flex;align-items:center;justify-content:center;gap:7px;
+  padding:0 13px;border:0;background:transparent;color:var(--muted);
+  font-family:var(--mono);font-size:12.2px;cursor:pointer;transition:color .18s,background .18s;
+}
+.hbtn:hover{color:var(--ink);background:var(--panel)}
 .hbtn svg{width:15px;height:15px;flex:none}
 .hbtn.sq{padding:0;width:44px}
 .hbtn img{width:17px;height:17px;border-radius:4px}
+.hdr-act .vulos-home{height:42px;width:46px;transition:opacity .18s,background .18s}
+.hdr-act .vulos-home:hover,.hdr-act .vulos-home:focus-visible{background:var(--panel);transform:none}
 #themeBtn .sun{display:none}
 [data-theme="light"] #themeBtn .sun{display:block}
 [data-theme="light"] #themeBtn .moon{display:none}
@@ -455,13 +481,22 @@ img{max-width:100%;display:block}
   .nav-sub a{min-height:44px;font-size:14.5px}
   .nav-sub-more{min-height:44px}
 }
-/* …and it stands down the moment the ON THIS PAGE rail appears. Rendered at
-   1440 they were two identical twelve-item lists 900px apart, and the nested
-   copy pushed the REST of the index — the thing the left rail is for — a
-   screen and a half down. The rail is also strictly the better surface where
-   it exists: it carries h3s, this does not. Same breakpoint and same reasoning
-   as the in-document CONTENTS ledger below, which stands down here too. */
-@media (min-width:1240px){
+/* …and it stands down the moment ANY other surface answers the same question.
+   At 1440 it and the ON THIS PAGE rail were two identical twelve-item lists
+   900px apart, and the nested copy pushed the REST of the index — the thing the
+   left rail is for — a screen and a half down. That was fixed at 1240.
+
+   1024 is the same bug one breakpoint lower, and it survived the first fix: the
+   in-document CONTENTS ledger appears BELOW 1240, so between 1024 and 1239 the
+   reader got the active document's sections twice on one screen — once nested
+   in the rail and once as a two-column ledger under the lede — and the rail
+   again spent its height on the document already open instead of on the
+   seventeen that are not. The ledger wins there for the same reason the rail
+   wins above it: it is where the eye already is, it is numbered, and it does
+   not cost the index anything. Below 1024 the index is a phone bottom sheet and
+   the ledger is a collapsed <details>, so the nesting is the only structure
+   there is and it stays. */
+@media (min-width:1024px){
   .nav-sub,.nav-sub-more{display:none}
 }
 
@@ -518,6 +553,14 @@ img{max-width:100%;display:block}
   .rail-search{position:sticky;top:0;z-index:2;background:var(--panel);
     margin:0 0 14px;padding:16px 0 12px}
   .rail-eyebrow{margin:16px 0 10px}
+  /* Eighteen documents in six groups, and at the 44px touch floor a 1440px
+     screen showed eleven of them — a directory whose whole job is to say how
+     much documentation there is, showing about half. 38px is still well clear
+     of WCAG 2.2's 24px minimum target on a pointer-driven width, and it brings
+     the SYSTEM and REFERENCE groups above the fold. Below 1024 the index is a
+     bottom sheet on a touchscreen and keeps its 48px rows untouched. */
+  .nav-item{min-height:38px;padding:7px 9px}
+  .nav-grp+.nav-grp{margin-top:13px}
 }
 
 /* ── Index: phone & tablet ────────────────────────────────────────────────
@@ -597,14 +640,25 @@ img{max-width:100%;display:block}
   font-family:var(--mono);font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint);
 }
 .toc-h .th-r{flex:1;height:1px;background:var(--line)}
+/* This rail only exists from 1240px up — a pointer-driven width — and it is a
+   position readout, not a set of controls the thumb has to find. Every entry
+   was on the 44px touch floor, which for a twenty-heading document meant 880px
+   of rail: the reader could see about half of "where am I in this page" at
+   once, which is most of what the rail is for. 30px keeps every entry clear of
+   WCAG 2.2's 24px target-size minimum and shows the whole outline of most
+   documents without scrolling.
+   The two levels are also told apart properly now. They were the same colour
+   and 0.5px apart in size, distinguished only by an indent; the h3s are now the
+   quieter of the two, so the h2 spine reads first. */
 .toc-list{list-style:none;margin:0;padding:0;border-left:1px solid var(--line)}
 .toc-list a{
-  display:flex;align-items:center;min-height:44px;padding:6px 0 6px 13px;margin-left:-1px;
+  display:flex;align-items:center;min-height:30px;padding:5px 0 5px 13px;margin-left:-1px;
   border-left:1px solid transparent;
-  color:var(--muted);font-size:12.7px;line-height:1.4;transition:color .16s,border-color .16s;
+  color:var(--body);font-size:12.9px;line-height:1.36;transition:color .16s,border-color .16s;
 }
 .toc-list a:hover{color:var(--ink);border-left-color:var(--line-3)}
-.toc-list a.lv3{padding-left:24px;font-size:12.2px}
+.toc-list a.lv3{padding-left:24px;font-size:12.1px;color:var(--faint)}
+.toc-list a.lv3:hover{color:var(--ink)}
 .toc-list a.here{color:var(--teal-ink);border-left-color:var(--teal);font-weight:600}
 
 /* ═══ Document head — the landing's toprail, one document wide ════════════ */
@@ -619,23 +673,42 @@ img{max-width:100%;display:block}
 .doc-rail a{color:var(--muted);transition:color .16s}
 .doc-rail a:hover{color:var(--teal-ink)}
 .doc-rail .dr-grp{color:var(--ink)}
-.doc-rail .dr-ix{border-right:0;margin-left:auto;color:var(--teal-ink)}
+/* Pushed to the far edge, so it takes its rule on the side it was pushed away
+   from — otherwise the run of empty rail between the group and the counter
+   reads as a gap in the row rather than as its last, deliberately wide cell.
+   Same fix, same reason, as the landing's toprail version register. */
+.doc-rail .dr-ix{border-right:0;border-left:1px solid var(--line);margin-left:auto;color:var(--teal-ink)}
+@media (max-width:520px){.doc-rail .dr-ix{border-left:0}}
 @media (max-width:520px){
   .doc-rail span,.doc-rail a{padding:9px 11px;font-size:11px}
   .doc-rail .dr-ix{margin-left:0}
 }
 
 /* ═══ Article ════════════════════════════════════════════════════════════ */
-.markdown{font-size:16.5px;line-height:1.72;overflow-wrap:anywhere;color:var(--body)}
+/* The padding, not a margin on the title, is what separates the document from
+   the breadcrumb rail above it. `.markdown>*:first-child{margin-top:0}` — which
+   has to stay, or the first block of every document indents differently
+   depending on what kind of block it is — zeroes any margin the h1 declares, so
+   the previous 26px never applied at all and the title's cap-line sat 13px off
+   the rail's hairline at 46px type. Padding on the container is immune to that
+   and works whatever the first block turns out to be. */
+.markdown{font-size:16.5px;line-height:1.72;overflow-wrap:anywhere;color:var(--body);
+  padding-top:clamp(22px,2.6vw,40px)}
 .markdown>*:first-child{margin-top:0}
 .markdown p,.markdown ul,.markdown ol,.markdown blockquote,
 .markdown h3,.markdown h4,.markdown h5,.markdown h6{max-width:var(--measure)}
 .markdown h1,.markdown h2,.markdown h3,.markdown h4,.markdown h5,.markdown h6{
   font-family:var(--display);color:var(--ink);scroll-margin-top:calc(var(--header-h) + 22px);
 }
+/* The title needs room to be a title. It used to open 26px under the breadcrumb
+   rail's bottom hairline at every width, which at 46px display size put the
+   cap-line practically on the rule — the two read as one collided element
+   rather than as chrome and then a document. The space now scales with the type
+   it is separating. */
 .markdown h1{
   font-weight:700;font-variation-settings:'wdth' 112;
-  font-size:clamp(31px,3.6vw,46px);letter-spacing:-.03em;line-height:1.04;margin:26px 0 .5em;max-width:20ch;
+  font-size:clamp(31px,3.6vw,46px);letter-spacing:-.03em;line-height:1.04;
+  margin:clamp(30px,3.6vw,52px) 0 .46em;max-width:min(100%,14em);
 }
 /* Every h2 crosses the whole column on a hairline with a teal tick hung on
    its left edge — the ledger rule that gives a long document its rhythm.
@@ -644,15 +717,25 @@ img{max-width:100%;display:block}
 .markdown h2{
   position:relative;font-weight:700;font-variation-settings:'wdth' 108;
   font-size:clamp(21px,2.1vw,27px);letter-spacing:-.022em;line-height:1.22;
-  margin:2.7em 0 .8em;padding-top:1.15em;border-top:1px solid var(--line-2);max-width:none;
+  margin:2.15em 0 .8em;padding-top:1.1em;border-top:1px solid var(--line-2);max-width:none;
 }
 .markdown h2::before{content:"";position:absolute;left:0;top:-1px;width:26px;height:3px;background:var(--teal)}
 .markdown h3{font-weight:700;font-variation-settings:'wdth' 104;font-size:19px;letter-spacing:-.014em;margin:2em 0 .5em}
 .markdown h4{font-weight:600;font-size:16px;letter-spacing:0;margin:1.7em 0 .4em}
 .markdown h5,.markdown h6{font-weight:600;font-size:14.5px;margin:1.5em 0 .4em;color:var(--muted)}
 .markdown p{margin:0 0 1.05em}
-/* The paragraph directly under the page title is the document's lede. */
-.markdown>h1+p{font-size:18.5px;line-height:1.6;color:var(--muted);margin-bottom:1.4em;max-width:64ch}
+/* The paragraph directly under the page title is the document's lede. It is the
+   one block on the page that was exempt from --measure, and it was exempt via
+   `64ch` — the exact unit the --measure comment above exists to warn against.
+   In Instrument Sans 64ch is 789px, so the widest, first, most-read paragraph in
+   every document set at 100 characters a line while the prose under it set at
+   75. It is now the same measure as everything else, one step up in size. */
+.markdown>h1+p{font-size:18px;line-height:1.6;color:var(--muted);margin-bottom:1.5em;
+  max-width:calc(var(--measure) + 34px)}
+/* A step up in size is a step up only where there is a column to spend it in.
+   In a 334px phone column 18px sets the lede at ~35 characters a line, so the
+   document's longest paragraph becomes its narrowest-measured one. */
+@media (max-width:600px){.markdown>h1+p{font-size:16.8px;line-height:1.62}}
 .markdown ul,.markdown ol{padding-left:1.35em;margin:0 0 1.15em}
 .markdown li{margin:.32em 0}
 .markdown li::marker{color:var(--line-3)}
@@ -669,7 +752,12 @@ img{max-width:100%;display:block}
 
 /* Heading anchor — surfaces the deep link that already works (#slug~anchor)
    without changing how it works. */
-.h-anchor{margin-left:.4em;color:var(--line-3);font-weight:400;font-size:max(11px,.62em);opacity:0;text-decoration:none;transition:opacity .15s,color .15s;font-family:var(--mono)}
+/* --faint, not --line-3: this only ever appears on hover, but when it does it
+   is a link the reader is meant to see and click, and --line-3 is a RULE colour
+   — measured as text it sits under 4.5:1 in both themes. --faint clears it
+   (5.90:1 dark, 5.87:1 light) and is still quieter than the heading it hangs
+   off. */
+.h-anchor{margin-left:.4em;color:var(--faint);font-weight:400;font-size:max(11px,.62em);opacity:0;text-decoration:none;transition:opacity .15s,color .15s;font-family:var(--mono)}
 .markdown h2:hover .h-anchor,.markdown h3:hover .h-anchor,.markdown h4:hover .h-anchor,.h-anchor:focus-visible{opacity:1}
 .h-anchor:hover{color:var(--teal-ink)}
 
@@ -698,7 +786,7 @@ img{max-width:100%;display:block}
 .contents-list li{break-inside:avoid}
 .contents-list a{
   display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px;align-items:baseline;
-  min-height:44px;padding:5px 0;color:var(--muted);font-size:14.2px;line-height:1.35;transition:color .16s;
+  min-height:34px;padding:5px 0;color:var(--muted);font-size:14.2px;line-height:1.35;transition:color .16s;
 }
 .contents-list a:hover{color:var(--ink)}
 .contents-list a:hover .cl-n{color:var(--teal-ink)}
