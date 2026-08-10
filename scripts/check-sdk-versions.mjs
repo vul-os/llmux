@@ -122,8 +122,13 @@ function check(root) {
     { re: new RegExp(`${PROJECT}_(\\d+\\.\\d+\\.\\d+)_`, 'g'), what: 'a release asset name', scoped: true },
   ];
   const docs = [];
-  const readmeP = join(root, 'README.md');
-  if (existsSync(readmeP)) docs.push(['README.md', readFileSync(readmeP, 'utf8')]);
+  // ROADMAP.md is in here because the publishing plan lives there and is full of
+  // registry coordinates. A file that talks about package names and is not
+  // scanned is the obvious place for a wrong one to settle.
+  for (const f of ['README.md', 'ROADMAP.md']) {
+    const fp = join(root, f);
+    if (existsSync(fp)) docs.push([f, readFileSync(fp, 'utf8')]);
+  }
   const docsDir = join(root, 'docs');
   if (existsSync(docsDir)) {
     for (const f of readdirSync(docsDir)) {
