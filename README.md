@@ -227,6 +227,23 @@ never implies more than it checked.
 `make verify-selftest` runs 24 synthetic-origin cases asserting that each
 refusal still fires; CI runs the same matrix on every push.
 
+### The site's contrast is measured, not reviewed
+
+`node scripts/check-contrast-rendered.mjs` loads the landing and every docs
+chapter in a real browser, at two widths and in both themes, and computes WCAG
+AA contrast from the **composited** pixels — cumulative ancestor `opacity`,
+each background's alpha, then the text colour — rather than from the hex values
+in the stylesheet. That distinction is the point: a gate that reads colour
+values cannot see a fade. This one found `.lang-tab-icon` at `opacity:.72`,
+which put the language codes in the docs tab strip at 3.67:1 in light theme
+while every token involved was individually fine.
+
+`--selftest` breaks the page eight ways and requires each to be refused,
+including an opacity fade, an unparseable colour function, prose hidden behind
+`aria-hidden`, and text at `opacity:0` that hovering never reveals. It also
+requires the unmodified page to pass, because a gate that refuses everything
+refuses every mutation too.
+
 ## Fifteen languages, two ways
 
 llmux is not a Go-only library with an HTTP port bolted on. There are **fifteen

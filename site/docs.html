@@ -1079,9 +1079,16 @@ img{max-width:100%;display:block}
   flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;
   min-width:22px;padding:1px 4px;border:1px solid currentColor;
   font-family:var(--mono);font-size:11px;font-weight:500;line-height:1.35;
-  letter-spacing:0;opacity:.72;
+  letter-spacing:0;
+  /* No opacity here. It used to carry `opacity:.72` to de-emphasise the
+     unselected tabs, which multiplied --muted down to 3.67:1 in light theme —
+     under AA, on the language codes (py, js, go, rs …) that tell a reader
+     which tab they are about to click. The token was never wrong, which is
+     why only a composited measurement finds this. The icon now simply matches
+     the colour of the tab label beside it, and the selected tab is still
+     distinct by colour and border below. */
 }
-.lang-tab[aria-selected="true"] .lang-tab-icon{opacity:1;border-color:var(--teal-edge);color:var(--teal-ink)}
+.lang-tab[aria-selected="true"] .lang-tab-icon{border-color:var(--teal-edge);color:var(--teal-ink)}
 .lang-panels{margin-top:0}
 .lang-panel{display:none}
 .lang-panel.active{display:block}

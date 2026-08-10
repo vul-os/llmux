@@ -353,3 +353,38 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: go test -count=1 -run Live ./... || true
+
+  rendered-contrast:
+    name: Text contrast measured from composited pixels
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Playwright is not vendored: this repo ships no npm tree and no
+      # lockfile, and the site is plain HTML/CSS with no build step. It is
+      # installed here, for this job only, and --no-save keeps it out of the
+      # checkout.
+      - name: Install Playwright (chromium only)
+        run: |
+          set -euo pipefail
+          npm install --no-save --silent playwright@1
+          npx --yes playwright install --with-deps chromium
+
+      # There is no token-reading contrast gate in this repo to complement, so
+      # this one is the whole of it — which is also why it has to measure the
+      # pixels rather than the stylesheet. It found `.lang-tab-icon` sitting at
+      # opacity:.72, which put the language codes in the docs tab strip (py,
+      # js, go, rs …) at 3.67:1 in light theme. Nothing in any colour VALUE was
+      # wrong, so nothing that reads values could have found it.
+      #
+      # --selftest first: eight deliberate breakages, each required to be
+      # refused, plus a positive control — a gate that refuses everything
+      # refuses every mutation too.
+      - name: Every visible string clears WCAG AA, composited
+        run: |
+          node scripts/check-contrast-rendered.mjs --selftest
+          node scripts/check-contrast-rendered.mjs

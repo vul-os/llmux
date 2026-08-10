@@ -388,6 +388,15 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    it inverts to ink, in dark it sinks below the canvas. */
 .band.ink{
   --band-a:#0B1315;--panel:#111C1F;--sunk:#080F11;
+  /* This band is dark in BOTH themes, so every ground token it inherits has to
+     be re-pointed at its own ground — including --canvas, which the first
+     version of this block forgot. Two rules read --canvas as "the colour of
+     what this sits on" and then paint it as a FOREGROUND: the CH chip
+     (color:var(--canvas) on background:var(--teal)) and ::selection. In light
+     theme --canvas is #EBEFED, so inside this dark band the CH·04 chip
+     rendered near-white on teal at 1.60:1 — unreadable, and invisible to a
+     gate that reads tokens, because both tokens are individually fine. */
+  --canvas:var(--band-a);
   --ink:#EDF3F1;--muted:#A4B2B1;--faint:#8A9B9A;
   --line:#1E2C2F;--line-2:#2A3C40;--line-3:#3A5257;
   --teal:#2DD4BF;--teal-ink:#3EDBC7;--teal-wash:#0D2C2A;--teal-edge:#1F5C56;
