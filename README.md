@@ -266,30 +266,39 @@ mechanisms**:
 | [Go](docs/sdks.md#go) | `go get github.com/vul-os/llmux/core/gateway` | package import — **no FFI at all** | ✓ | **direct** |
 | [C](docs/sdks.md#c) | `#include "llmux.h"`, link `libllmux` | ✓ | ✓ | **direct** |
 | [C++](docs/sdks.md#c-header-only) | header-only `llmux.hpp` | ✓ RAII | ✓ | **direct** |
-| [Rust](docs/sdks.md#rust) | crate `llmux` | ✓ `libloading` | ✓ | direct |
+| [Rust](docs/sdks.md#rust) | crate `vulos-llmux` | ✓ `libloading` | ✓ | direct |
 | [Swift](docs/sdks.md#swift) | SwiftPM `LLMux` | ✓ C interop | ✓ | direct |
-| [Deno](docs/sdks.md#deno) | `@vul-os/llmux` | ✓ `Deno.dlopen` | ✓ | direct |
-| [Bun](docs/sdks.md#bun) | `@vul-os/llmux-bun` | ✓ `bun:ffi` | ✓ | direct |
-| [Node.js](docs/sdks.md#nodejs) | npm `llmux` | ✓ koffi | ✓ | **sidecar** for servers |
-| [Python](docs/sdks.md#python) | package `llmux` | ✓ `ctypes` | ✓ | **sidecar** |
-| [Java](docs/sdks.md#java) | `to.llmux:llmux` | ✓ FFM, JDK 22+ | ✓ | **sidecar** |
-| [Kotlin](docs/sdks.md#kotlin) | `to.llmux:llmux-kotlin` | ✓ over the Java binding | ✓ | **sidecar** |
-| [.NET / C#](docs/sdks.md#net-and-c) | NuGet `Llmux` | ✓ `LibraryImport` | ✓ | **sidecar** |
-| [Ruby](docs/sdks.md#ruby) | gem `llmux` | ✓ `fiddle` (stdlib) | ✓ | depends on your server |
-| [PHP](docs/sdks.md#php) | composer `llmux/llmux` | ✓ ext-`FFI` | ✓ | **sidecar** |
-| [Elixir](docs/sdks.md#elixir) | hex `:llmux` | **none, deliberately** | ✓ | **sidecar** |
+| [Deno](docs/sdks.md#deno) | JSR `@vulos/llmux` | ✓ `Deno.dlopen` | ✓ | direct |
+| [Bun](docs/sdks.md#bun) | npm `@vulos/llmux-bun` | ✓ `bun:ffi` | ✓ | direct |
+| [Node.js](docs/sdks.md#nodejs) | npm `@vulos/llmux` | ✓ koffi | ✓ | **sidecar** for servers |
+| [Python](docs/sdks.md#python) | PyPI `vulos-llmux` | ✓ `ctypes` | ✓ | **sidecar** |
+| [Java](docs/sdks.md#java) | `org.vulos:llmux` | ✓ FFM, JDK 22+ | ✓ | **sidecar** |
+| [Kotlin](docs/sdks.md#kotlin) | `org.vulos:llmux-kotlin` | ✓ over the Java binding | ✓ | **sidecar** |
+| [.NET / C#](docs/sdks.md#net-and-c) | NuGet `Vulos.Llmux` | ✓ `LibraryImport` | ✓ | **sidecar** |
+| [Ruby](docs/sdks.md#ruby) | gem `vulos-llmux` | ✓ `fiddle` (stdlib) | ✓ | depends on your server |
+| [PHP](docs/sdks.md#php) | composer `vulos/llmux` | ✓ ext-`FFI` | ✓ | **sidecar** |
+| [Elixir](docs/sdks.md#elixir) | hex `vulos_llmux` | **none, deliberately** | ✓ | **sidecar** |
 
-Those are the coordinates each package will publish under. **None of them is
-published yet** — checked 2026-08-10 against npm, PyPI, crates.io, RubyGems and
-NuGet, where every one of these names is either unregistered or somebody else's.
-This table used to carry `pip install llmux` in the Python row and a note saying
-it was the one registry line that worked, which was the opposite of the truth:
+Those are the coordinates each package will publish under, and they are all
+scoped to Vulos. **None of them is published yet** — every one was checked free
+on 2026-08-10 across npm, JSR, PyPI, crates.io, RubyGems, NuGet, Packagist and
+Hex before being written down here.
+
+The bare name was never available, which is why the scoping is not cosmetic:
 
 > **Do not run `pip install llmux` or add the crates.io `llmux` crate.** Both
-> names are taken by unrelated projects — PyPI `llmux` is "LLM inference for
-> power users" by another author, and crates.io `llmux` is at 2.4.0 and
-> describes itself as a hook-driven LLM multiplexer. Neither is this. Following
-> the old instruction installed a stranger's code and then called our API on it.
+> belong to unrelated projects — PyPI `llmux` is "LLM inference for power users"
+> by another author, and crates.io `llmux` is at 2.4.0 and describes itself as a
+> hook-driven LLM model multiplexer, which is close enough to this one to be
+> genuinely confusing. This table used to carry `pip install llmux` and call it
+> the one registry line that worked. Following it installed a stranger's code
+> and then called our API on it.
+
+The rename is to the PUBLISHED coordinates only. `import llmux`, `use llmux::`,
+`require "llmux"`, the `:llmux` OTP application and the `llmux_*` C symbols are
+all unchanged — the Rust crate publishes as `vulos-llmux` with its library still
+named `llmux`, and the Python distribution is `vulos-llmux` with its import
+package still `llmux`.
 
 **The path that works for all fifteen is a checkout**: each `sdks/<lang>` is a
 working package directory, and every language has a runnable example that boots

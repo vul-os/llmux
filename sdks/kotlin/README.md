@@ -234,7 +234,7 @@ depend on the artifact rather than this tree:
 
 ```kotlin
 dependencies {
-    implementation("to.llmux:llmux-kotlin:0.1.0")       // not yet published
+    implementation("org.vulos:llmux-kotlin:0.1.7")      // not yet published
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 }
 ```

@@ -14,7 +14,7 @@
       The SIDECAR half (Llmux.cs) contains no unsafe code.
     -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <PackageId>Llmux</PackageId>
+    <PackageId>Vulos.Llmux</PackageId>
     <Version>0.1.7</Version>
     <Description>The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

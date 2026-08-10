@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 Gem::Specification.new do |spec|
-  spec.name = "llmux"
+  # Published as vulos-llmux; `require "llmux"` is unchanged.
+  spec.name = "vulos-llmux"
   spec.version = "0.1.7"
   spec.summary = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
   spec.description = "Thin Ruby wrapper that bundles the llmux gateway binary, " \

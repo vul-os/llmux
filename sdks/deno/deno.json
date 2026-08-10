@@ -1,5 +1,5 @@
 {
-  "name": "@vul-os/llmux",
+  "name": "@vulos/llmux",
   "version": "0.1.7",
   "exports": "./mod.ts",
   "license": "MIT",

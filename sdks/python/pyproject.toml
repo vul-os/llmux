@@ -3,7 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "llmux"
+# Published as vulos-llmux — PyPI has no namespaces and plain `llmux` is an
+# unrelated project. The IMPORT name is still `llmux`, so `import llmux` is
+# unchanged.
+name = "vulos-llmux"
 version = "0.1.7"
 description = "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider."
 readme = "README.md"

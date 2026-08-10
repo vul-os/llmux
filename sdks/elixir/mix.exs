@@ -32,6 +32,10 @@ defmodule Llmux.MixProject do
 
   defp package do
     [
+      # The OTP application is still :llmux — renaming the atom would break
+      # every Application.get_env(:llmux, ...) call. Only the published Hex
+      # name is scoped.
+      name: "vulos_llmux",
       licenses: ["MIT"],
       links: %{"Homepage" => "https://llmux.to", "GitHub" => "https://github.com/vul-os/llmux"},
       # priv/bin holds the bundled binary (gitignored; built via `make sdk-bins`).

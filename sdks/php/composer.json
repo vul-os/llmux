@@ -1,10 +1,18 @@
 {
-  "name": "llmux/llmux",
-  "description": "The LLM multiplexer, embedded locally — one OpenAI-compatible client for every provider.",
+  "name": "vulos/llmux",
+  "description": "The LLM multiplexer, embedded locally \u2014 one OpenAI-compatible client for every provider.",
   "type": "library",
   "license": "MIT",
   "homepage": "https://llmux.to",
-  "keywords": ["llm", "gateway", "openai", "anthropic", "gemini", "proxy", "litellm"],
+  "keywords": [
+    "llm",
+    "gateway",
+    "openai",
+    "anthropic",
+    "gemini",
+    "proxy",
+    "litellm"
+  ],
   "require": {
     "php": ">=7.4"
   },
@@ -13,7 +21,7 @@
   },
   "suggest": {
     "openai-php/client": "For the Llmux::openai() convenience client pointed at the local gateway",
-    "ext-ffi": "For Llmux\\Ffi, the in-process C-ABI mode. Needs ffi.enable=1 outside the CLI SAPI; see README.md — the sidecar is the recommended default for PHP.",
+    "ext-ffi": "For Llmux\\Ffi, the in-process C-ABI mode. Needs ffi.enable=1 outside the CLI SAPI; see README.md \u2014 the sidecar is the recommended default for PHP.",
     "ext-pcntl": "For examples/fork_probe.php, which demonstrates why the sidecar is the default"
   },
   "autoload": {

@@ -119,9 +119,13 @@ support, and every **Run** line is a command that exists in this repository —
 each drives a runner that boots a fake upstream, so it works offline with no
 provider keys.
 
-**On getting the packages.** Coordinates are given per language, and **none of
-them is published** — checked 2026-08-10 against npm, PyPI, crates.io, RubyGems
-and NuGet. This page used to say Python's was the one working registry install
+**On getting the packages.** Coordinates are given per language, all scoped to
+Vulos, and **none of them is published** — every one was checked free on
+2026-08-10 across npm, JSR, PyPI, crates.io, RubyGems, NuGet, Packagist and Hex
+before being written down. The scoping is not cosmetic: the bare `llmux` was
+never available on PyPI or crates.io. Only the published coordinates changed —
+`import llmux`, `use llmux::`, `require "llmux"`, the `:llmux` OTP application
+and the Java/PHP source namespaces are all unchanged. This page used to say Python's was the one working registry install
 line, which was exactly backwards: `llmux` on PyPI is an unrelated project, and
 so is the `llmux` crate on crates.io (2.4.0, "hook-driven LLM model
 multiplexer"). Following that line installed somebody else's code. **The path
@@ -318,14 +322,14 @@ More: [`sdks/swift`](https://github.com/vul-os/llmux/tree/main/sdks/swift)
 
 ### Deno
 
-Direct, via `Deno.dlopen`. Module `@vul-os/llmux`, no third-party dependencies.
+Direct, via `Deno.dlopen`. Module `@vulos/llmux` on JSR, no third-party dependencies.
 This is the one JavaScript runtime where direct mode is not a compromise: it
 declares `llmux_call` a second time with `nonblocking: true` — `mod.ts` names
 that alias `llmux_call_async`, and it is a Deno-side symbol declaration, not a
 seventh C export — which keeps the isolate responsive.
 
 ```typescript
-import { abiVersion, Gateway } from "./mod.ts";     // module name: @vul-os/llmux
+import { abiVersion, Gateway } from "./mod.ts";     // module name: @vulos/llmux
 
 using gw = Gateway.open({ expectVersion: abiVersion() });
 
@@ -346,10 +350,10 @@ More: [`sdks/deno`](https://github.com/vul-os/llmux/tree/main/sdks/deno)
 
 ### Bun
 
-Direct, via `bun:ffi`. Package `@vul-os/llmux-bun`, no runtime dependencies.
+Direct, via `bun:ffi`. Package `@vulos/llmux-bun` on npm, no runtime dependencies.
 
 ```typescript
-import { abiVersion, Gateway } from "./index.ts";   // package name: @vul-os/llmux-bun
+import { abiVersion, Gateway } from "./index.ts";   // package name: @vulos/llmux-bun
 
 await using gw = Gateway.open({ expectVersion: abiVersion() });
 
@@ -395,7 +399,8 @@ More: [`sdks/node`](https://github.com/vul-os/llmux/tree/main/sdks/node)
 
 ### Python
 
-Sidecar by default, because Python forks. Package `llmux`, Python 3.8+.
+Sidecar by default, because Python forks. PyPI `vulos-llmux` (the import is
+still `llmux`), Python 3.8+.
 
 **`llmux` on PyPI is not this project** — it is "LLM inference for power users"
 by another author, so the `pip install llmux` that used to be here installed a
@@ -431,7 +436,8 @@ More: [`sdks/python`](https://github.com/vul-os/llmux/tree/main/sdks/python)
 ### Java
 
 Sidecar by default — see the signal-handler paragraph above. Coordinates
-`to.llmux:llmux:0.1.0`; the sidecar path needs only Java 11, direct needs
+`org.vulos:llmux:0.1.7` — the groupId is the reverse-DNS of vulos.org, which we
+control; the Java package in the source is unchanged; the sidecar path needs only Java 11, direct needs
 Java 22+ and `--enable-native-access=ALL-UNNAMED`.
 
 ```java
@@ -547,7 +553,8 @@ More: [`sdks/ruby`](https://github.com/vul-os/llmux/tree/main/sdks/ruby)
 ### PHP
 
 Sidecar by default, and this is not a hedge — php-fpm forks in every `pm` mode.
-Composer package `llmux/llmux`, PHP 7.4+, PSR-4 under `Llmux\`.
+Composer package `vulos/llmux`, PHP 7.4+, PSR-4 under `Llmux\` (the namespace
+is unchanged; only the published name is scoped).
 
 ```php
 <?php

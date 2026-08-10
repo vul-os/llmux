@@ -177,14 +177,20 @@ function check(root) {
   // UNPUBLISHED is the claim being held, and it is meant to shrink: when a
   // package really is published, delete its entry here and the command becomes
   // legal. Checked 2026-08-10 against every registry below.
+  // Both spellings: the vulos-scoped name we will publish under, and the bare
+  // one we must never tell anyone to install. The bare name is not merely
+  // unpublished — on PyPI and crates.io it belongs to unrelated projects, so
+  // documenting it hands the reader somebody else's code.
+  const NAME = `(?:vulos[-_.]?)?${PROJECT}`;
   const UNPUBLISHED = [
-    { re: new RegExp(`pip install\\s+${PROJECT}\\b`, 'g'), registry: 'PyPI' },
-    { re: new RegExp(`npm i(?:nstall)?\\s+(?:@vul-os/)?${PROJECT}\\b`, 'g'), registry: 'npm' },
-    { re: new RegExp(`gem install\\s+${PROJECT}\\b`, 'g'), registry: 'RubyGems' },
-    { re: new RegExp(`cargo add\\s+${PROJECT}\\b`, 'g'), registry: 'crates.io' },
-    { re: new RegExp(`dotnet add package\\s+${PROJECT}\\b`, 'gi'), registry: 'NuGet' },
-    { re: new RegExp(`composer require\\s+${PROJECT}/${PROJECT}\\b`, 'g'), registry: 'Packagist' },
+    { re: new RegExp(`pip install\\s+${NAME}\\b`, 'g'), registry: 'PyPI' },
+    { re: new RegExp(`npm i(?:nstall)?\\s+(?:@vul-?os/)?${NAME}\\b`, 'gi'), registry: 'npm' },
+    { re: new RegExp(`gem install\\s+${NAME}\\b`, 'g'), registry: 'RubyGems' },
+    { re: new RegExp(`cargo add\\s+${NAME}\\b`, 'g'), registry: 'crates.io' },
+    { re: new RegExp(`dotnet add package\\s+(?:Vulos\\.)?${PROJECT}\\b`, 'gi'), registry: 'NuGet' },
+    { re: new RegExp(`composer require\\s+(?:vulos|${PROJECT})/${PROJECT}\\b`, 'g'), registry: 'Packagist' },
   ];
+
   const sdkDocs = [...docs];
   const sdksRoot = join(root, 'sdks');
   if (existsSync(sdksRoot)) {
