@@ -101,27 +101,24 @@ func TestNewDoesNotAdoptTheHostsDatabaseURL(t *testing.T) {
 // connects eagerly, exactly as the header says.
 func TestNewStillConnectsWhenTheDocumentNamesADSN(t *testing.T) {
 	db := newDeadListener(t)
-	doc := fmt.Sprintf(`{"server":{"addr":":4000"},"postgres":%q}`, db.dsn())
+	// A 1s connect bound so this runs synchronously and leaves no goroutine
+	// behind: the listener never completes the handshake, so the call fails —
+	// what is asserted is the DIAL, not the outcome.
+	doc := fmt.Sprintf(`{"server":{"addr":":4000"},"postgres":%q,"postgres_connect_timeout_seconds":1}`,
+		db.dsn())
 
-	done := make(chan struct{})
-	go func() {
-		defer close(done)
-		if h, err := openGateway(doc); err == nil {
-			closeGateway(h)
-		}
-	}()
-	// It will not finish — the listener never completes the handshake. What is
-	// being asserted is the dial, not the outcome.
-	deadline := time.After(15 * time.Second)
-	for db.conns.Load() == 0 {
-		select {
-		case <-done:
-			t.Fatal("openGateway returned without ever dialling the DSN the document named — " +
-				"the eager-connect behaviour llmux.h documents is gone, and the test above is " +
-				"then asserting nothing")
-		case <-deadline:
-			t.Fatal("no connection to the configured DSN within 15s")
-		case <-time.After(20 * time.Millisecond):
-		}
+	start := time.Now()
+	h, err := openGateway(doc)
+	if err == nil {
+		closeGateway(h)
+		t.Fatal("openGateway succeeded against a listener that never answers")
+	}
+	if took := time.Since(start); took > 15*time.Second {
+		t.Errorf("took %s for a 1s connect bound", took)
+	}
+	if db.conns.Load() == 0 {
+		t.Fatal("openGateway never dialled the DSN the document named — the eager-connect " +
+			"behaviour llmux.h documents is gone, and TestNewDoesNotAdoptTheHostsDatabaseURL " +
+			"is then asserting nothing")
 	}
 }
