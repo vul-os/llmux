@@ -5,8 +5,9 @@
 //
 // WHY
 // ───
-// llmux tagged and published 0.1.2 while six of its fifteen package manifests
-// still said 0.1.0 — bun, deno, node (and its lockfile), java, dotnet, rust.
+// llmux tagged and published 0.1.7 while ALL NINE of its version-carrying
+// manifests still said 0.1.0 — six releases of drift in bun, deno, node (and
+// its lockfile), java, dotnet, rust, python and ruby.
 // Nothing compared them, so nothing noticed. A published package whose manifest
 // declares the wrong version is not a cosmetic problem: it is what a registry,
 // a lockfile and a consumer's resolver all believe.
@@ -37,6 +38,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SDKS = join(ROOT, 'sdks');
+// This repo's own name, used to tell our release pins from a third party's.
+const PROJECT = 'llmux';
 
 // One entry per SDK that ships a manifest carrying a version literal.
 // `read` returns the declared version, or null if the file does not declare one.
@@ -89,6 +92,77 @@ function check(root) {
   }
   if (checked < MANIFESTS.length) {
     problems.push(`only ${checked} of ${MANIFESTS.length} manifests were actually read — the rest are counted above`);
+  }
+
+  // Anything a reader is told to RUN that names a release tag must name this
+  // one. docs/quickstart.md told people to fetch verify.sh from v0.1.3 and
+  // check a v0.1.3 artifact, five releases after that stopped being the
+  // release — while README.md, three files away, had v0.1.8. Nobody compared
+  // them, and a stale pin here is worse than a stale sentence: the reader runs
+  // it, and verifies the wrong bytes against the wrong manifest.
+  //
+  // Only COMMANDS and release URLs, and only THIS project's. Prose that dates
+  // a change ("since 0.1.5", "until 0.1.5") is history and must stay as
+  // written.
+  //
+  // Scoping to this project is not fussiness — the first version of this matched
+  // any `--tag vX.Y.Z` and immediately failed patala on
+  //
+  //   cargo install --git .../NordSecurity/uniffi-bindgen-go --tag v0.5.0+v0.29.5
+  //
+  // which is a third party's tag and has nothing to do with the release. A
+  // check that flags correct lines gets switched off, so each pattern below
+  // either carries this repo's own path or must appear beside verify.sh, which
+  // is ours.
+  const SELF = new RegExp(`(?:vul-os/${PROJECT}\\b|\\bverify\\.sh\\b)`);
+  const PINNED = [
+    { re: new RegExp(`raw\\.githubusercontent\\.com/[^/]+/${PROJECT}/v(\\d+\\.\\d+\\.\\d+)`, 'g'), what: 'a raw.githubusercontent URL', scoped: true },
+    { re: new RegExp(`releases/tag/v(\\d+\\.\\d+\\.\\d+)`, 'g'), what: 'a releases/tag link', scoped: false },
+    { re: /--tag\s+v(\d+\.\d+\.\d+)(?![+\w.-])/g, what: 'a --tag argument', scoped: false },
+    { re: new RegExp(`${PROJECT}_(\\d+\\.\\d+\\.\\d+)_`, 'g'), what: 'a release asset name', scoped: true },
+  ];
+  const docs = [];
+  const readmeP = join(root, 'README.md');
+  if (existsSync(readmeP)) docs.push(['README.md', readFileSync(readmeP, 'utf8')]);
+  const docsDir = join(root, 'docs');
+  if (existsSync(docsDir)) {
+    for (const f of readdirSync(docsDir)) {
+      if (f.endsWith('.md')) docs.push([`docs/${f}`, readFileSync(join(docsDir, f), 'utf8')]);
+    }
+  }
+  if (docs.length < 3) problems.push(`only ${docs.length} docs read — the release-pin check verified NOTHING`);
+
+  // Docs may reference the release with a PLACEHOLDER instead of a literal —
+  // `--tag <tag>`, `llmux_<v>_source.zip`. patala does exactly that, and it
+  // is the better choice where it reads well: a placeholder cannot go stale.
+  // They count toward "this check examined something" without being compared
+  // against anything, because there is nothing in them to be wrong.
+  const PLACEHOLDER = /(?:--tag\s+<[a-z]+>|releases\/tag\/<[a-z]+>|\/<[a-z]+>\/scripts\/verify\.sh|_<[a-z]+>_)/g;
+  let placeholders = 0;
+  let pins = 0;
+  for (const [name, text] of docs) {
+    for (const { re, what, scoped } of PINNED) {
+      for (const m of text.matchAll(re)) {
+        // An unscoped pattern must prove it is talking about US: the same line
+        // has to carry this repo's path or our own verify.sh.
+        if (!scoped) {
+          const lineStart = text.lastIndexOf('\n', m.index) + 1;
+          let lineEnd = text.indexOf('\n', m.index);
+          if (lineEnd < 0) lineEnd = text.length;
+          // verify.sh is usually invoked on the line after it is fetched, so
+          // allow the two lines above as context for that one signal.
+          const ctxStart = Math.max(0, text.lastIndexOf('\n', Math.max(0, lineStart - 2)) - 200);
+          if (!SELF.test(text.slice(ctxStart, lineEnd))) continue;
+        }
+        pins += 1;
+        if (m[1] !== want) problems.push(`${name} pins ${what} at ${m[1]}, but the release is ${want} — a reader running that line fetches the wrong release`);
+      }
+    }
+  }
+  for (const [, text] of docs) placeholders += [...text.matchAll(PLACEHOLDER)].length;
+  if (pins + placeholders === 0) {
+    problems.push('no release reference — pinned or placeholder — was found in README.md or docs/; ' +
+      'the release-pin check verified NOTHING');
   }
 
   // Completeness: no SDK may be silently outside this check.
