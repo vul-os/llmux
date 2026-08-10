@@ -308,9 +308,22 @@ img{max-width:100%;display:block}
 .hbtn img{width:17px;height:17px;border-radius:4px}
 .hdr-act .vulos-home{height:42px;width:46px;transition:opacity .18s,background .18s}
 .hdr-act .vulos-home:hover,.hdr-act .vulos-home:focus-visible{background:var(--panel);transform:none}
+/* The button shows the theme you are IN — a moon on the dark rack, a sun
+   under drafting-room light. Driven by the same data-theme the head script
+   settles before first paint, never by a script that runs later, so the glyph
+   is never briefly the wrong one. The media block covers the JavaScript-off
+   case, where no attribute is ever written and the palette above comes from
+   prefers-color-scheme alone: without it the page would be light and the
+   button would still be showing the moon. */
 #themeBtn .sun{display:none}
+@media (prefers-color-scheme:light){
+  :root:not([data-theme]) #themeBtn .sun{display:block}
+  :root:not([data-theme]) #themeBtn .moon{display:none}
+}
 [data-theme="light"] #themeBtn .sun{display:block}
 [data-theme="light"] #themeBtn .moon{display:none}
+[data-theme="dark"] #themeBtn .sun{display:none}
+[data-theme="dark"] #themeBtn .moon{display:block}
 @media (max-width:860px){.secnav{display:none}}
 /* From 1024 the index rail is bolted to the left edge of the VIEWPORT, so the
    chrome above it lines up with the rail instead of with a centred wrapper,
@@ -1127,6 +1140,19 @@ img{max-width:100%;display:block}
 .vulos-foot { display: inline-flex; align-items: center; gap: 9px; font-size: 13.5px; line-height: 1.45; text-decoration: none; color: inherit; opacity: .85; transition: opacity .15s ease; }
 .vulos-foot:hover { opacity: 1; text-decoration: none; }
 .vulos-foot img { display: block; width: 18px; height: 18px; border-radius: 5px; flex: 0 0 auto; }
+/* The shared Vulos mark is one flat #2E383A on transparency — drawn for
+   paper. On this page's ink it measures ~1.3:1: a smudge rather than a dimmed
+   logo. brightness(0) invert(1) recolours a single-colour stencil losslessly,
+   counters included. llmux stamps data-theme on the root and falls back to
+   dark, so :not([data-theme="light"]) is the correct guard here. The markup
+   is shared suite chrome and is untouched — check-suite-chrome asserts the
+   element and blanks style blocks before it looks.
+
+   The landing has carried this since the mark went dark; the docs page did
+   not, so the mark changed shape between the two — which is the one thing the
+   suite chrome exists to prevent. */
+:root:not([data-theme="light"]) .vulos-foot img,
+:root:not([data-theme="light"]) .vulos-home img { filter: brightness(0) invert(1); }
 
 /* Hit area for the two suite-chrome controls. Deliberately written OUTSIDE the
    block above so that block stays byte-identical across the suite and can still
@@ -1135,6 +1161,17 @@ img{max-width:100%;display:block}
    and 18px <img> inside, not the transparent box around it. */
 .vulos-home{width:44px;height:44px}
 .vulos-foot{min-height:44px}
+/* The one page in the suite where :not([data-theme="light"]) is not the whole
+   story. Every other product paints dark whenever the attribute is absent;
+   this one also has a prefers-color-scheme palette for readers with
+   JavaScript off, so "no attribute" there means a LIGHT page — and the
+   correction above would knock the mark out to white on it, invisible. Scoped
+   to exactly that case, and written outside the shared block so the block
+   stays byte-identical across the suite. */
+@media (prefers-color-scheme:light){
+  :root:not([data-theme]) .vulos-foot img,
+  :root:not([data-theme]) .vulos-home img { filter: none; }
+}
 </style>
 <script src="./assets/vendor/marked.umd.js"></script>
 <script src="./assets/vendor/mermaid.min.js"></script>
@@ -2438,14 +2475,31 @@ load(current());
 // choice made on either page is honoured on the other (see the head script).
 (function(){
   var THEME_KEY='llmux-site-theme';
+  // Stored only on a click, never on a load: a visit must not leave a reader
+  // carrying a preference they never expressed, because a stored value
+  // outranks their machine on every later visit.
   var btn=document.getElementById('themeBtn');
-  if(!btn) return;
-  btn.addEventListener('click', function(){
-    var cur=document.documentElement.getAttribute('data-theme');
-    var next=cur==='light'?'dark':'light';
-    document.documentElement.setAttribute('data-theme', next);
-    try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
-  });
+  if(btn){
+    btn.addEventListener('click', function(){
+      var cur=document.documentElement.getAttribute('data-theme');
+      var next=cur==='light'?'dark':'light';
+      document.documentElement.setAttribute('data-theme', next);
+      try{ localStorage.setItem(THEME_KEY, next); }catch(e){}
+    });
+  }
+  // Nothing stored means "follow the machine", live, for as long as the page
+  // is open.
+  if(window.matchMedia){
+    var mql=window.matchMedia('(prefers-color-scheme: light)');
+    var onSystem=function(){
+      var stored=null;
+      try{ stored=localStorage.getItem(THEME_KEY); }catch(e){}
+      if(stored==='light'||stored==='dark') return;
+      document.documentElement.setAttribute('data-theme', mql.matches?'light':'dark');
+    };
+    if(mql.addEventListener) mql.addEventListener('change',onSystem);
+    else if(mql.addListener) mql.addListener(onSystem);
+  }
 })();
 </script>
 </body>

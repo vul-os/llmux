@@ -281,10 +281,20 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
 }
 .brand .word .mux{color:var(--teal-ink)}
 .hdr .spacer{flex:1}
+/* white-space:nowrap and flex:none are the load-bearing pair here, and the
+   reason is that the failure they prevent is invisible to measurement. The
+   anchors are `height:44px` with `align-items:center`: when the eighth channel
+   made the row too long, the flex items shrank, "01 · Wire" broke over two
+   lines and both lines OVERFLOWED the fixed 44px box — so the strip rendered
+   as two ragged rows while `.secnav`'s measured height was still exactly 44.
+   Nothing short of looking at it would have caught that. Now the anchors
+   refuse to shrink and refuse to wrap, and the strip either fits or the
+   1140px rule below has already hidden it. */
 .secnav{display:flex;gap:2px}
 .secnav a{
-  font-family:var(--mono);font-size:12.2px;letter-spacing:.04em;color:var(--muted);
-  padding:0 11px;height:44px;display:inline-flex;align-items:center;
+  font-family:var(--mono);font-size:11.8px;letter-spacing:.02em;color:var(--muted);
+  padding:0 7px;height:44px;display:inline-flex;align-items:center;
+  flex:none;white-space:nowrap;
   border-bottom:2px solid transparent;transition:color .18s,border-color .18s;
 }
 .secnav a:hover{color:var(--ink);border-bottom-color:var(--teal)}
@@ -343,13 +353,13 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
    viewport width — so a 1440px screen got the same separation as a 390px one
    (too little there, and nothing to tell the reader that one of these seven
    channels carries the argument the whole product is for), and the page read as
-   seven equal slabs.
+   equal slabs.
 
    Three levels now:
 
      STANDARD   the six supporting channels. Fluid, so the separation grows with
                 the screen instead of staying at a phone's measure on a desk.
-     ELEVATED   the GATE (ch 03) and the START (ch 07) — the thesis and the
+     ELEVATED   the GATE (ch 04) and the START (ch 08) — the thesis and the
                 close. Roughly half again the air, and a larger section title,
                 so the eye has two places to land on the way down rather than
                 treating the page as an undifferentiated scroll.
@@ -420,16 +430,43 @@ code{font-family:var(--mono);font-size:.88em;color:var(--ink)}
   .band.hero .bus::before{top:4px}
 }
 
-/* ═══ Channel header — the rack-unit label that opens every band ══════════ */
+/* ═══ Channel header — the rack-unit label that opens every band ══════════
+   There are two ranks of these and they used to be the same object. Eight
+   `CH·0n` labels open the eight chapters; four more — Matrix, Modes, Order,
+   Refusals — open a block inside one. All twelve were the same 12px mono line
+   with the same teal leader, so a reader scanning the left edge of the page
+   for the spine found twelve entries and no way to tell which four were not
+   part of it. The rhythm of the page was in its spacing and its headline
+   sizes, which you cannot scan.
+
+   So the chapter number is now a struck tag — teal ground, canvas type, the
+   one filled mark in the whole rack idiom — and the sub-heads (.chead.sub)
+   drop the leader to --faint, drop a size and keep the hairline. Chapter
+   openers are the only teal blocks on the left margin; everything else in
+   this position is grey. That is the whole hierarchy, and it survives being
+   squinted at.
+
+   `--canvas` for the tag's type, not a literal: --teal is light on the dark
+   palette and dark on the light one, and --canvas inverts with it, so one
+   declaration is legible in both. Measured 10.35:1 dark, 5.29:1 light. */
 .chead{
   display:flex;align-items:center;gap:14px;margin:0 0 26px;
   font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;
 }
-.chead .ch{color:var(--teal-ink);font-weight:600;flex:none}
-.chead .cl{color:var(--ink);font-weight:500;flex:none}
+.chead .ch{
+  color:var(--canvas);background:var(--teal);font-weight:700;flex:none;
+  padding:5px 9px;letter-spacing:.14em;
+}
+.chead .cl{color:var(--ink);font-weight:600;flex:none}
 .chead .cr{flex:1;height:1px;background:var(--line-2);min-width:14px}
 .chead .cm{color:var(--faint);flex:none}
 @media (max-width:620px){.chead .cm{display:none}}
+
+/* The second rank: a block heading inside a chapter, not a chapter. */
+.chead.sub{gap:11px;margin-bottom:20px;font-size:11px;letter-spacing:.13em}
+.chead.sub .ch{background:none;color:var(--faint);padding:0;font-weight:600;letter-spacing:.13em}
+.chead.sub .cl{color:var(--ink);font-weight:500}
+.chead.sub .cr{background:var(--line)}
 /* The section label is `flex:none` and set in wide-tracked uppercase, so on a
    narrow screen it simply refused to shrink — 246px of label in a 320px
    viewport, dragging the rule beside it off the edge and scrolling the whole
@@ -1624,11 +1661,12 @@ html.js .band.hero .hero-side{animation-delay:.28s}
     <nav class="secnav" aria-label="Channels">
       <a href="#wire">01 · Wire</a>
       <a href="#library">02 · Library</a>
-      <a href="#gate">03 · Gate</a>
-      <a href="#routes">04 · Routes</a>
-      <a href="#controls">05 · Controls</a>
-      <a href="#panel">06 · Panel</a>
-      <a href="#start">07 · Start</a>
+      <a href="#packages">03 · Packages</a>
+      <a href="#gate">04 · Gate</a>
+      <a href="#routes">05 · Routes</a>
+      <a href="#controls">06 · Controls</a>
+      <a href="#panel">07 · Panel</a>
+      <a href="#start">08 · Start</a>
     </nav>
     <span class="spacer"></span>
     <div class="hdr-act">
@@ -2007,7 +2045,7 @@ html.js .band.hero .hero-side{animation-delay:.28s}
     <!-- The full endpoint surface: every route the gateway serves, not just the
          three headline ones, with which of the two coverage models each gets. -->
     <div class="rv" style="margin-top:44px">
-      <div class="chead"><span class="ch">Matrix</span><span class="cl">Endpoint surface</span>
+      <div class="chead sub"><span class="ch">Matrix</span><span class="cl">Endpoint surface</span>
         <span class="cr"></span><span class="cm">12 routes</span></div>
       <div class="tscroll">
         <table class="spec">
@@ -2111,7 +2149,7 @@ html.js .band.hero .hero-side{animation-delay:.28s}
     <!-- Four modes, and what each one costs. The "you pay" column is the point
          of the table: a mode with an empty cost column is a sales page. -->
     <div class="rv" style="margin-top:44px">
-      <div class="chead"><span class="ch">Modes</span><span class="cl">Four ways to run it</span>
+      <div class="chead sub"><span class="ch">Modes</span><span class="cl">Four ways to run it</span>
         <span class="cr"></span><span class="cm">none of them is the default answer</span></div>
       <div class="tscroll">
         <table class="spec">
@@ -2124,100 +2162,6 @@ html.js .band.hero .hero-side{animation-delay:.28s}
           </tbody>
         </table>
       </div>
-    </div>
-
-    <!-- THE FIFTEEN. The modes table above names the four mechanisms; this says
-         which one each language actually gets when you install its package, and
-         gives every one of the fifteen a name and a link. The grouping is the
-         recommendation column of sdks/README.md and nothing else from it — the
-         per-language mechanism, streaming type and the measurement behind each
-         recommendation live there and in docs/sdks.md, both linked, rather than
-         being copied here where they would rot. Counts are stated so a reader
-         can see at a glance that the sidecar is the majority answer. -->
-    <div class="rv" style="margin-top:46px">
-      <div class="chead"><span class="ch">Packages</span><span class="cl">Fifteen languages</span>
-        <span class="cr"></span><span class="cm">one engine behind all of them</span></div>
-      <p class="lead" style="margin-top:0">Fifteen language packages ship in this repo, and they are
-        <b>wrappers, not reimplementations</b> — one routing engine, one sovereignty gate, one budget
-        ledger, one price catalog, reached from all fifteen. What differs is only how your process
-        reaches it, and the honest default is not the same in every language.</p>
-
-      <dl class="ledger pkgs" style="margin-top:30px">
-        <div class="lrow">
-          <dt><span class="n">In your process</span>Direct by default<span class="c">7</span></dt>
-          <dd>
-            <div class="pkgrow">
-              <a class="pk lead-pkg" href="./docs.html#sdks~go">Go <em>package import</em></a>
-              <a class="pk" href="./docs.html#sdks~c">C</a>
-              <a class="pk" href="./docs.html#sdks~c-header-only">C++</a>
-              <a class="pk" href="./docs.html#sdks~rust">Rust</a>
-              <a class="pk" href="./docs.html#sdks~swift">Swift</a>
-              <a class="pk" href="./docs.html#sdks~deno">Deno</a>
-              <a class="pk" href="./docs.html#sdks~bun">Bun</a>
-            </div>
-          </dd>
-        </div>
-        <div class="lrow">
-          <dt><span class="n">A child process on loopback</span>Sidecar by default<span class="c">7</span></dt>
-          <dd>
-            <div class="pkgrow">
-              <a class="pk" href="./docs.html#sdks~nodejs">Node.js</a>
-              <a class="pk" href="./docs.html#sdks~python">Python</a>
-              <a class="pk" href="./docs.html#sdks~java">Java</a>
-              <a class="pk" href="./docs.html#sdks~kotlin">Kotlin</a>
-              <a class="pk" href="./docs.html#sdks~net-and-c">.NET / C#</a>
-              <a class="pk" href="./docs.html#sdks~php">PHP</a>
-              <a class="pk" href="./docs.html#sdks~elixir">Elixir</a>
-            </div>
-            <p class="aside">Each of the seven has a stated reason — a pre-forking host, a runtime whose
-              signal handlers the library replaces, a thread that cannot be retired, or a platform with no
-              library to load. Elixir has <b style="color:var(--muted)">no direct mode at all</b>, on
-              purpose.</p>
-          </dd>
-        </div>
-        <div class="lrow">
-          <dt><span class="n">Your deployment decides</span>Depends<span class="c">1</span></dt>
-          <dd>
-            <div class="pkgrow">
-              <a class="pk" href="./docs.html#sdks~ruby">Ruby</a>
-            </div>
-            <p class="aside">Unicorn, Passenger and clustered Puma fork, so they need the sidecar; single-mode
-              Puma, Falcon, Sidekiq and CLI tools do not, and direct is fine there.</p>
-          </dd>
-        </div>
-      </dl>
-
-      <div class="triptych" style="margin-top:34px">
-        <div>
-          <span class="n">Go</span>
-          <b>The one that is not a wrapper</b>
-          <p>Go does not load a shared library and does not cross a C boundary: it
-            <code>import</code>s <code>core/gateway</code> and calls it. No FFI, no
-            <code>libllmux</code>, <b style="color:var(--muted)">no platform matrix to check</b> — if your
-            program builds, the gateway is in it. Every other language is reading its own row against
-            this one.</p>
-        </div>
-        <div>
-          <span class="n">Streaming</span>
-          <b>In-process, on your own thread</b>
-          <p>Direct mode streams: <code>llmux_stream</code> delivers one chunk per callback, and the
-            callback runs on <b style="color:var(--muted)">the thread that made the call</b> — measured
-            with <code>pthread_self()</code> on darwin/arm64 and linux/arm64, not assumed. Languages that
-            cannot safely take a callback there say so in their own row above.</p>
-        </div>
-        <div>
-          <span class="n">Platforms</span>
-          <b>Where direct mode exists</b>
-          <p>Prebuilt shared libraries are <b style="color:var(--muted)">darwin/arm64 and
-            linux/arm64</b>. linux/amd64 is built in CI only, and
-            <b style="color:var(--muted)">no Windows library ships</b> — not untested, never built. The
-            sidecar has no such gap: it is the same binary, and it cross-compiles everywhere.</p>
-        </div>
-      </div>
-
-      <p class="aside" style="margin-top:20px">
-        <a href="./docs.html#sdks" style="color:var(--teal-ink);font-weight:600">A first call in every language →</a>
-        <a href="https://github.com/vul-os/llmux/blob/main/sdks/README.md" target="_blank" rel="noopener" style="color:var(--teal-ink);font-weight:600;margin-left:18px">The package index, and the measurement behind each recommendation →</a></p>
     </div>
 
     <div class="triptych rv">
@@ -2261,12 +2205,116 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   </div>
 </section>
 
-<!-- ══════ CH 03 · THE GATE — the darkest band in both themes ════════════ -->
+
+<!-- ══════ CH 03 · THE PACKAGES ══════════════════════════════════════════
+     This was the back half of CH·02, and it made CH·02 the longest band on
+     the page: two code panels, a four-row modes table and a triptych, and
+     then a second standfirst, a three-row ledger, a SECOND triptych and a
+     second set of links — with the two triptychs meeting back to back at the
+     seam. The packages were already wearing a chapter's furniture (their own
+     rack label, their own standfirst, their own footer of links) inside
+     someone else's band; they are a chapter, and this is it. The headline is
+     that rack label's own two halves, promoted: "Fifteen languages" and "one
+     engine behind all of them". Nothing here is new copy.
+     ══════════════════════════════════════════════════════════════════════ -->
+<section class="band" id="packages">
+  <div class="wrap">
+    <span class="bus" aria-hidden="true"></span>
+
+    <div class="chead rv"><span class="ch">CH·03</span><span class="cl">The packages</span>
+      <span class="cr"></span><span class="cm">wrappers, not reimplementations</span></div>
+
+    <h2 class="sec rv">Fifteen languages. One engine behind all of them.</h2>
+    <p class="lead rv">Fifteen language packages ship in this repo, and they are
+      <b>wrappers, not reimplementations</b> — one routing engine, one sovereignty gate, one budget
+      ledger, one price catalog, reached from all fifteen. What differs is only how your process
+      reaches it, and the honest default is not the same in every language.</p>
+
+    <dl class="ledger pkgs rv" style="margin-top:30px">
+      <div class="lrow">
+        <dt><span class="n">In your process</span>Direct by default<span class="c">7</span></dt>
+        <dd>
+          <div class="pkgrow">
+            <a class="pk lead-pkg" href="./docs.html#sdks~go">Go <em>package import</em></a>
+            <a class="pk" href="./docs.html#sdks~c">C</a>
+            <a class="pk" href="./docs.html#sdks~c-header-only">C++</a>
+            <a class="pk" href="./docs.html#sdks~rust">Rust</a>
+            <a class="pk" href="./docs.html#sdks~swift">Swift</a>
+            <a class="pk" href="./docs.html#sdks~deno">Deno</a>
+            <a class="pk" href="./docs.html#sdks~bun">Bun</a>
+          </div>
+        </dd>
+      </div>
+      <div class="lrow">
+        <dt><span class="n">A child process on loopback</span>Sidecar by default<span class="c">7</span></dt>
+        <dd>
+          <div class="pkgrow">
+            <a class="pk" href="./docs.html#sdks~nodejs">Node.js</a>
+            <a class="pk" href="./docs.html#sdks~python">Python</a>
+            <a class="pk" href="./docs.html#sdks~java">Java</a>
+            <a class="pk" href="./docs.html#sdks~kotlin">Kotlin</a>
+            <a class="pk" href="./docs.html#sdks~net-and-c">.NET / C#</a>
+            <a class="pk" href="./docs.html#sdks~php">PHP</a>
+            <a class="pk" href="./docs.html#sdks~elixir">Elixir</a>
+          </div>
+          <p class="aside">Each of the seven has a stated reason — a pre-forking host, a runtime whose
+            signal handlers the library replaces, a thread that cannot be retired, or a platform with no
+            library to load. Elixir has <b style="color:var(--muted)">no direct mode at all</b>, on
+            purpose.</p>
+        </dd>
+      </div>
+      <div class="lrow">
+        <dt><span class="n">Your deployment decides</span>Depends<span class="c">1</span></dt>
+        <dd>
+          <div class="pkgrow">
+            <a class="pk" href="./docs.html#sdks~ruby">Ruby</a>
+          </div>
+          <p class="aside">Unicorn, Passenger and clustered Puma fork, so they need the sidecar; single-mode
+            Puma, Falcon, Sidekiq and CLI tools do not, and direct is fine there.</p>
+        </dd>
+      </div>
+    </dl>
+
+    <div class="triptych rv" style="margin-top:34px">
+      <div>
+        <span class="n">Go</span>
+        <b>The one that is not a wrapper</b>
+        <p>Go does not load a shared library and does not cross a C boundary: it
+          <code>import</code>s <code>core/gateway</code> and calls it. No FFI, no
+          <code>libllmux</code>, <b style="color:var(--muted)">no platform matrix to check</b> — if your
+          program builds, the gateway is in it. Every other language is reading its own row against
+          this one.</p>
+      </div>
+      <div>
+        <span class="n">Streaming</span>
+        <b>In-process, on your own thread</b>
+        <p>Direct mode streams: <code>llmux_stream</code> delivers one chunk per callback, and the
+          callback runs on <b style="color:var(--muted)">the thread that made the call</b> — measured
+          with <code>pthread_self()</code> on darwin/arm64 and linux/arm64, not assumed. Languages that
+          cannot safely take a callback there say so in their own row above.</p>
+      </div>
+      <div>
+        <span class="n">Platforms</span>
+        <b>Where direct mode exists</b>
+        <p>Prebuilt shared libraries are <b style="color:var(--muted)">darwin/arm64 and
+          linux/arm64</b>. linux/amd64 is built in CI only, and
+          <b style="color:var(--muted)">no Windows library ships</b> — not untested, never built. The
+          sidecar has no such gap: it is the same binary, and it cross-compiles everywhere.</p>
+      </div>
+    </div>
+
+    <p class="aside rv" style="margin-top:20px">
+      <a href="./docs.html#sdks" style="color:var(--teal-ink);font-weight:600">A first call in every language →</a>
+      <a href="https://github.com/vul-os/llmux/blob/main/sdks/README.md" target="_blank" rel="noopener" style="color:var(--teal-ink);font-weight:600;margin-left:18px">The package index, and the measurement behind each recommendation →</a></p>
+  </div>
+</section>
+
+<!-- ══════ CH 04 · THE GATE — the darkest band in both themes ════════════ -->
 <section class="band ink" id="gate">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·03</span><span class="cl">The gate</span>
+    <div class="chead rv"><span class="ch">CH·04</span><span class="cl">The gate</span>
       <span class="cr"></span><span class="cm">default deny</span></div>
 
     <h2 class="sec rv">A default-deny gate runs before every dispatch.</h2>
@@ -2444,12 +2492,12 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   </div>
 </section>
 
-<!-- ══════ CH 04 · THE ROUTES ════════════════════════════════════════════ -->
+<!-- ══════ CH 05 · THE ROUTES ════════════════════════════════════════════ -->
 <section class="band alt" id="routes">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·04</span><span class="cl">The routes</span>
+    <div class="chead rv"><span class="ch">CH·05</span><span class="cl">The routes</span>
       <span class="cr"></span><span class="cm">six provider types</span></div>
 
     <h2 class="sec rv">Native translation where it earns its keep, passthrough for everything else.</h2>
@@ -2479,7 +2527,7 @@ html.js .band.hero .hero-side{animation-delay:.28s}
 
     <!-- Route resolution, in the order the router actually tries it. -->
     <div class="rv" style="margin-top:44px">
-      <div class="chead"><span class="ch">Order</span><span class="cl">How a model string resolves</span>
+      <div class="chead sub"><span class="ch">Order</span><span class="cl">How a model string resolves</span>
         <span class="cr"></span><span class="cm">first match wins</span></div>
       <div class="tscroll">
         <table class="spec">
@@ -2574,12 +2622,12 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   </div>
 </section>
 
-<!-- ══════ CH 05 · THE CONTROLS ══════════════════════════════════════════ -->
+<!-- ══════ CH 06 · THE CONTROLS ══════════════════════════════════════════ -->
 <section class="band" id="controls">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·05</span><span class="cl">The controls</span>
+    <div class="chead rv"><span class="ch">CH·06</span><span class="cl">The controls</span>
       <span class="cr"></span><span class="cm">budgets · keys · cache · cost</span></div>
 
     <h2 class="sec rv">The controls a fleet of applications actually needs — built in, not bolted on.</h2>
@@ -2708,12 +2756,12 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   </div>
 </section>
 
-<!-- ══════ CH 06 · THE PANEL ═════════════════════════════════════════════ -->
+<!-- ══════ CH 07 · THE PANEL ═════════════════════════════════════════════ -->
 <section class="band alt" id="panel">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·06</span><span class="cl">The panel</span>
+    <div class="chead rv"><span class="ch">CH·07</span><span class="cl">The panel</span>
       <span class="cr"></span><span class="cm">3,690 requests · real capture</span></div>
 
     <h2 class="sec rv">One binary, one UI. No separate service to run.</h2>
@@ -2800,12 +2848,12 @@ html.js .band.hero .hero-side{animation-delay:.28s}
   </div>
 </section>
 
-<!-- ══════ CH 07 · THE START ═════════════════════════════════════════════ -->
+<!-- ══════ CH 08 · THE START ═════════════════════════════════════════════ -->
 <section class="band" id="start">
   <div class="wrap">
     <span class="bus" aria-hidden="true"></span>
 
-    <div class="chead rv"><span class="ch">CH·07</span><span class="cl">The start</span>
+    <div class="chead rv"><span class="ch">CH·08</span><span class="cl">The start</span>
       <span class="cr"></span><span class="cm">go 1.25+, nothing else</span></div>
 
     <h2 class="sec rv">Build it, point a key at it, call it. No account to create.</h2>
@@ -2921,7 +2969,7 @@ html.js .band.hero .hero-side{animation-delay:.28s}
     </div>
 
     <div class="rv" style="margin-top:48px">
-      <div class="chead"><span class="ch">Refusals</span><span class="cl">What a rejection means</span>
+      <div class="chead sub"><span class="ch">Refusals</span><span class="cl">What a rejection means</span>
         <span class="cr"></span><span class="cm">error ledger</span></div>
       <div class="tscroll">
         <table class="spec">
