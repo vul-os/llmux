@@ -679,25 +679,25 @@ async function runDocs(browser, base, extraCss, collectOnly) {
 const SELFTEST_CASES = [
   {
     name: "opacity fade on a text element (invisible to the token gate)",
-    css: ".lead { opacity: .30 }",
+    css: ".lead { opacity: .30 !important }",
     matches: ".lead",
     expect: "contrast",
   },
   {
     name: "opacity on an ANCESTOR, fading the subtree",
-    css: "section { opacity: .35 }",
+    css: "section { opacity: .35 !important }",
     matches: "section",
     expect: "contrast",
   },
   {
     name: "text colour with a low alpha in rgba()",
-    css: "p { color: rgba(255,255,255,.22) }",
+    css: "p { color: rgba(255,255,255,.22) !important }",
     matches: "p",
     expect: "contrast",
   },
   {
     name: "a flatly illegible text colour",
-    css: "p, li { color: #2f3436 }",
+    css: "p, li { color: #2f3436 !important }",
     matches: "p, li",
     expect: "contrast",
   },
@@ -709,7 +709,7 @@ const SELFTEST_CASES = [
   },
   {
     name: "a colour function the parser does not know",
-    css: "p { color: lab(52% 40 59) }",
+    css: "p { color: lab(52% 40 59) !important }",
     matches: "p",
     expect: "colour",
   },
@@ -720,7 +720,7 @@ const SELFTEST_CASES = [
     // stops being refused, aria-hidden has become a way to switch the gate off
     // one element at a time.
     name: "aria-hidden does not exempt real prose from the measurement",
-    css: "p { color: #2f3436 }",
+    css: "p { color: #2f3436 !important }",
     attr: true,
     matches: "p",
     expect: "contrast",
@@ -730,7 +730,8 @@ const SELFTEST_CASES = [
 async function selftest(browser, base) {
   let refused = 0;
   for (const c of SELFTEST_CASES) {
-    const { ctx, page } = await openPage(browser, `${base}/index.html`, "dark", 1440, c.css);
+    // Open CLEAN, so the page can be measured before and after the mutation.
+    const { ctx, page } = await openPage(browser, `${base}/index.html`, "dark", 1440, null);
 
     // The mutation must actually land on this page, or the case proves nothing.
     const hit = await page.evaluate((sel) => document.querySelectorAll(sel).length, c.matches);
@@ -743,12 +744,37 @@ async function selftest(browser, base) {
         "either way. Point the case at markup that exists.",
       );
     }
+
+    const before = await page.evaluate(MEASURE, { normal: AA_NORMAL, large: AA_LARGE });
+    if (c.css) await page.addStyleTag({ content: c.css });
     if (c.attr) {
       await page.evaluate((sel) => {
         for (const el of document.querySelectorAll(sel)) el.setAttribute("aria-hidden", "true");
       }, c.matches);
     }
+    await page.waitForTimeout(120);
     const res = await page.evaluate(MEASURE, { normal: AA_NORMAL, large: AA_LARGE });
+
+    // ...and it must actually have CHANGED something. A selector that matches
+    // is not a declaration that wins: `p { color: … }` matches all 71
+    // paragraphs here and is then out-specified by the rule that already
+    // colours them, so the page renders identically and "not refused" is the
+    // right answer to a question nobody asked. That is the same inert-mutation
+    // trap as a selector matching nothing, one level further in, and it is why
+    // this compares the measurement rather than trusting the CSS.
+    const sig = (m) => `${m.baseOpaque}|${m.rows.length}|${m.unparseable.length}|` +
+      m.rows.map((r) => r.ratio.toFixed(4)).join(",");
+    if (sig(before) === sig(res)) {
+      await ctx.close();
+      die(
+        E_SELFTEST,
+        `selftest: "${c.name}" changed nothing that this gate can measure.`,
+        "The page renders identically with and without it — the declaration is being",
+        "out-specified, or the attribute makes no difference here. Either way the case",
+        "proves nothing about the gate. Make the mutation bite (a more specific selector,",
+        "or !important) rather than accepting the verdict.",
+      );
+    }
     await resolveHidden(page, res.rows, hoverCache);
     const problems = judge("selftest", res, MIN_ELEMENTS_LANDING, { collectOnly: true });
     await ctx.close();
